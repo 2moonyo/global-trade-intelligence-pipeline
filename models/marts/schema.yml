@@ -1,0 +1,270 @@
+version: 2
+
+models:
+  - name: mart_reporter_month_trade_summary
+    description: Reporter-by-month trade aggregates enriched with country and calendar dimensions.
+    columns:
+      - name: reporter_iso3
+        description: ISO3 code of the reporting country.
+        tests:
+          - not_null
+
+      - name: reporter_country_name
+        description: Country name for the reporting ISO3 code.
+
+      - name: reporter_region
+        description: Region of the reporting country.
+
+      - name: reporter_subregion
+        description: Subregion of the reporting country.
+
+      - name: reporter_continent
+        description: Continent of the reporting country.
+
+      - name: reporter_is_eu
+        description: True when the reporter country is in the European Union.
+
+      - name: reporter_is_oecd
+        description: True when the reporter country is in the OECD.
+
+      - name: period
+        description: Integer month key in YYYYMM format.
+        tests:
+          - not_null
+
+      - name: year_month
+        description: Canonical month key in YYYY-MM format.
+        tests:
+          - not_null
+
+      - name: month_start_date
+        description: First calendar day of the month.
+
+      - name: year
+        description: Calendar year for the reporting month.
+
+      - name: month
+        description: Calendar month number from 1 to 12.
+
+      - name: quarter
+        description: Calendar quarter number from 1 to 4.
+
+      - name: total_trade_value_usd
+        description: Total reporter trade value across all flows in current USD.
+
+      - name: export_trade_value_usd
+        description: Total reporter export trade value in current USD.
+
+      - name: import_trade_value_usd
+        description: Total reporter import trade value in current USD.
+
+      - name: total_net_weight_kg
+        description: Total reported net weight in kilograms.
+
+      - name: total_gross_weight_kg
+        description: Total reported gross weight in kilograms.
+
+      - name: source_row_count
+        description: Count of source rows represented by the aggregate record.
+
+  - name: mart_reporter_commodity_month_trade_summary
+    description: Reporter-by-commodity-by-month trade aggregates with country, commodity, and time dimensions.
+    columns:
+      - name: reporter_iso3
+        description: ISO3 code of the reporting country.
+        tests:
+          - not_null
+
+      - name: reporter_country_name
+        description: Country name for the reporting ISO3 code.
+
+      - name: cmd_code
+        description: Commodity code at source commodity grain.
+        tests:
+          - not_null
+
+      - name: commodity_name
+        description: Normalized commodity description.
+
+      - name: commodity_group
+        description: Higher-level commodity grouping used for analysis.
+
+      - name: food_flag
+        description: True when commodity is classified as food-related.
+
+      - name: energy_flag
+        description: True when commodity is classified as energy-related.
+
+      - name: industrial_flag
+        description: True when commodity is classified as industrial-related.
+
+      - name: period
+        description: Integer month key in YYYYMM format.
+        tests:
+          - not_null
+
+      - name: year_month
+        description: Canonical month key in YYYY-MM format.
+        tests:
+          - not_null
+
+      - name: month_start_date
+        description: First calendar day of the month.
+
+      - name: year
+        description: Calendar year for the reporting month.
+
+      - name: month
+        description: Calendar month number from 1 to 12.
+
+      - name: quarter
+        description: Calendar quarter number from 1 to 4.
+
+      - name: total_trade_value_usd
+        description: Total reporter commodity trade value across all flows in current USD.
+
+      - name: export_trade_value_usd
+        description: Reporter commodity export trade value in current USD.
+
+      - name: import_trade_value_usd
+        description: Reporter commodity import trade value in current USD.
+
+      - name: total_net_weight_kg
+        description: Total reported net weight for the commodity in kilograms.
+
+      - name: total_gross_weight_kg
+        description: Total reported gross weight for the commodity in kilograms.
+
+      - name: source_row_count
+        description: Count of source rows represented by the aggregate record.
+
+  - name: mart_reporter_month_chokepoint_exposure
+    description: Reporter-by-month chokepoint trade exposure with port stress and active-event severity context.
+    columns:
+      - name: reporter_iso3
+        description: ISO3 code of the reporting country.
+        tests:
+          - not_null
+
+      - name: reporter_country_name
+        description: Country name for the reporting ISO3 code.
+
+      - name: period
+        description: Integer month key in YYYYMM format.
+        tests:
+          - not_null
+
+      - name: year_month
+        description: Canonical month key in YYYY-MM format.
+        tests:
+          - not_null
+
+      - name: month_start_date
+        description: First calendar day of the month.
+
+      - name: chokepoint_name
+        description: Name of the maritime chokepoint.
+        tests:
+          - not_null
+
+      - name: route_pair_count
+        description: Number of reporter-partner route pairs mapped to the chokepoint in the month.
+
+      - name: chokepoint_trade_value_usd
+        description: Reporter trade value routed through the chokepoint in current USD.
+
+      - name: reporter_month_trade_value_usd
+        description: Reporter total trade value across all partners in the month in current USD.
+
+      - name: chokepoint_trade_exposure_ratio
+        description: Share of reporter monthly trade value exposed to the chokepoint.
+
+      - name: stress_index
+        description: PortWatch stress index for the chokepoint-month.
+
+      - name: stress_index_weighted
+        description: Capacity-weighted PortWatch stress index for the chokepoint-month.
+
+      - name: avg_n_total
+        description: Average number of tracked vessels or transits for the chokepoint-month.
+
+      - name: avg_capacity
+        description: Average transport capacity indicator for the chokepoint-month.
+
+      - name: active_event_count
+        description: Number of distinct active events associated with the chokepoint-month.
+
+      - name: max_active_event_severity
+        description: Maximum severity weight among active events for the chokepoint-month.
+
+      - name: avg_active_event_severity
+        description: Average severity weight among active events for the chokepoint-month.
+
+  - name: mart_reporter_month_chokepoint_exposure_with_brent
+    description: Chokepoint exposure mart extended with monthly Brent benchmark levels and momentum metrics.
+    columns:
+      - name: reporter_iso3
+        description: ISO3 code of the reporting country.
+
+      - name: reporter_country_name
+        description: Country name for the reporting ISO3 code.
+
+      - name: period
+        description: Integer month key in YYYYMM format.
+
+      - name: year_month
+        description: Canonical month key in YYYY-MM format.
+
+      - name: month_start_date
+        description: First calendar day of the month.
+
+      - name: chokepoint_name
+        description: Name of the maritime chokepoint.
+
+      - name: route_pair_count
+        description: Number of reporter-partner route pairs mapped to the chokepoint in the month.
+
+      - name: chokepoint_trade_value_usd
+        description: Reporter trade value routed through the chokepoint in current USD.
+
+      - name: reporter_month_trade_value_usd
+        description: Reporter total trade value across all partners in the month in current USD.
+
+      - name: chokepoint_trade_exposure_ratio
+        description: Share of reporter monthly trade value exposed to the chokepoint.
+
+      - name: stress_index
+        description: PortWatch stress index for the chokepoint-month.
+
+      - name: stress_index_weighted
+        description: Capacity-weighted PortWatch stress index for the chokepoint-month.
+
+      - name: avg_n_total
+        description: Average number of tracked vessels or transits for the chokepoint-month.
+
+      - name: avg_capacity
+        description: Average transport capacity indicator for the chokepoint-month.
+
+      - name: active_event_count
+        description: Number of distinct active events associated with the chokepoint-month.
+
+      - name: max_active_event_severity
+        description: Maximum severity weight among active events for the chokepoint-month.
+
+      - name: avg_active_event_severity
+        description: Average severity weight among active events for the chokepoint-month.
+
+      - name: brent_avg_price_usd_per_bbl
+        description: Average Brent benchmark price for the month in USD per barrel.
+
+      - name: brent_month_start_price_usd_per_bbl
+        description: Brent price on the first trading day of the month in USD per barrel.
+
+      - name: brent_month_end_price_usd_per_bbl
+        description: Brent price on the last trading day of the month in USD per barrel.
+
+      - name: brent_mom_abs_change_usd
+        description: Month-over-month absolute Brent price change in USD per barrel.
+
+      - name: brent_mom_pct_change
+        description: Month-over-month percentage Brent price change.

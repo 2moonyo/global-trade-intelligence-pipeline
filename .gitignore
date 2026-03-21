@@ -1,0 +1,14 @@
+.venv
+.vscode
+__pycache__
+/data
+/dbt_packages
+.env
+.DS_Store
+.idea
+*.pyc
+*.pyo
+*.pyd
+*.log
+*duckdb
+check_db.py

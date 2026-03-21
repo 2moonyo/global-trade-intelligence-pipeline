@@ -1,0 +1,8 @@
+capstone_monthly_duckdb:
+  target: dev
+  outputs:
+    dev:
+      type: duckdb
+      path: warehouse/analytics.duckdb
+      schema: analytics
+      threads: 4

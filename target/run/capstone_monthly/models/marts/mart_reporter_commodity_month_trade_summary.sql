@@ -1,0 +1,57 @@
+
+  
+    
+    
+
+    create  table
+      "analytics"."analytics_marts"."mart_reporter_commodity_month_trade_summary__dbt_tmp"
+  
+    as (
+      with reporter_commodity_month as (
+  select
+    f.reporter_iso3,
+    f.cmd_code,
+    f.period,
+    f.year_month,
+    f.ref_year,
+    sum(f.trade_value_usd) as total_trade_value_usd,
+    sum(case when lower(f.trade_flow) like '%export%' then f.trade_value_usd else 0 end) as export_trade_value_usd,
+    sum(case when lower(f.trade_flow) like '%import%' then f.trade_value_usd else 0 end) as import_trade_value_usd,
+    sum(f.net_weight_kg) as total_net_weight_kg,
+    sum(f.gross_weight_kg) as total_gross_weight_kg,
+    sum(f.row_count) as source_row_count
+  from "analytics"."analytics_staging"."stg_comtrade_fact" as f
+  group by 1, 2, 3, 4, 5
+)
+
+select
+  rcm.reporter_iso3,
+  c.country_name as reporter_country_name,
+  rcm.cmd_code,
+  co.commodity_name,
+  co.commodity_group,
+  co.food_flag,
+  co.energy_flag,
+  co.industrial_flag,
+  rcm.period,
+  rcm.year_month,
+  t.month_start_date,
+  t.year,
+  t.month,
+  t.quarter,
+  rcm.total_trade_value_usd,
+  rcm.export_trade_value_usd,
+  rcm.import_trade_value_usd,
+  rcm.total_net_weight_kg,
+  rcm.total_gross_weight_kg,
+  rcm.source_row_count
+from reporter_commodity_month as rcm
+left join "analytics"."analytics_staging"."stg_dim_country" as c
+  on rcm.reporter_iso3 = c.iso3
+left join "analytics"."analytics_staging"."stg_dim_commodity" as co
+  on rcm.cmd_code = co.cmd_code
+left join "analytics"."analytics_staging"."stg_dim_time" as t
+  on rcm.period = t.period
+    );
+  
+  

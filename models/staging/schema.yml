@@ -1,0 +1,312 @@
+version: 2
+
+models:
+  - name: stg_brent_monthly
+    description: Monthly Brent benchmark price series normalized for mart joins.
+    columns:
+      - name: year_month
+        description: Canonical month key in YYYY-MM format.
+        tests:
+          - not_null
+
+      - name: month_start_date
+        description: First calendar day of the month.
+        tests:
+          - not_null
+
+      - name: year
+        description: Calendar year extracted from the monthly series.
+
+      - name: month
+        description: Calendar month number from 1 to 12.
+
+      - name: benchmark_code
+        description: Short code identifying the benchmark series.
+
+      - name: benchmark_name
+        description: Human-readable benchmark name.
+
+      - name: region
+        description: Geographic region associated with the benchmark series.
+
+      - name: source_series_id
+        description: Upstream provider series identifier.
+
+      - name: avg_price_usd_per_bbl
+        description: Average monthly oil price in USD per barrel.
+
+      - name: min_price_usd_per_bbl
+        description: Lowest observed daily price in the month in USD per barrel.
+
+      - name: max_price_usd_per_bbl
+        description: Highest observed daily price in the month in USD per barrel.
+
+      - name: month_start_price_usd_per_bbl
+        description: Opening price for the first trading day of the month in USD per barrel.
+
+      - name: month_end_price_usd_per_bbl
+        description: Closing price for the last trading day of the month in USD per barrel.
+
+      - name: mom_abs_change_usd
+        description: Month-over-month absolute price change in USD per barrel.
+
+      - name: mom_pct_change
+        description: Month-over-month percentage price change.
+
+      - name: trading_day_count
+        description: Number of trading days included in the monthly aggregation.
+
+  - name: stg_comtrade_fact
+    description: >
+      Cleaned monthly Comtrade fact table at the chosen analytical grain.
+      Contains reporter-level trade observations by commodity, month, and flow.
+      Numeric measures are cast to analytics-ready types.
+    columns:
+      - name: ref_date
+        description: First day of the reference month as a date.
+        tests:
+          - not_null
+
+      - name: period
+        description: Integer month key in YYYYMM format.
+        tests:
+          - not_null
+
+      - name: year_month
+        description: Canonical month key in YYYY-MM format used for cross-source joins.
+        tests:
+          - not_null
+
+      - name: ref_year
+        description: Calendar year of the reference period.
+
+      - name: reporter_iso3
+        description: ISO3 code of the reporting country or reporting bloc.
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_dim_country')
+                field: iso3
+
+      - name: cmd_code
+        description: Commodity code at the source grain (HS hierarchy).
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_dim_commodity')
+                field: cmd_code
+
+      - name: commodity_name_raw
+        description: Raw commodity description as provided by the source.
+
+      - name: trade_flow
+        description: Source trade flow label, for example Import or Export.
+        tests:
+          - not_null
+
+      - name: trade_value_usd
+        description: Trade value in current USD.
+        tests:
+          - not_null
+
+      - name: net_weight_kg
+        description: Net traded weight in kilograms.
+
+      - name: gross_weight_kg
+        description: Gross traded weight in kilograms.
+
+      - name: row_count
+        description: Source row-count weight represented by the aggregated record.
+
+  - name: stg_dim_commodity
+    description: Commodity dimension standardized from Comtrade source metadata.
+    columns:
+      - name: cmd_code
+        description: Commodity code used as the primary commodity key.
+        tests:
+          - not_null
+
+      - name: hs2
+        description: Two-digit HS chapter code.
+
+      - name: hs4
+        description: Four-digit HS heading code.
+
+      - name: hs6
+        description: Six-digit HS subheading code.
+
+      - name: commodity_name
+        description: Normalized commodity description.
+
+      - name: commodity_group
+        description: Higher-level commodity grouping used in analysis.
+
+      - name: food_flag
+        description: True when the commodity is classified as food-related.
+
+      - name: energy_flag
+        description: True when the commodity is classified as energy-related.
+
+      - name: industrial_flag
+        description: True when the commodity is classified as industrial-related.
+
+  - name: stg_dim_country
+    description: Country dimension with region tags and analytical membership flags.
+    columns:
+      - name: country_code
+        description: Numeric country code used by the source system.
+        tests:
+          - not_null
+
+      - name: iso3
+        description: ISO 3166-1 alpha-3 country code.
+        tests:
+          - not_null
+
+      - name: country_name
+        description: Display name of the country.
+
+      - name: region
+        description: Source-provided geographic region.
+
+      - name: subregion
+        description: Source-provided geographic subregion.
+
+      - name: continent
+        description: Continent label used in dimensional rollups.
+
+      - name: is_eu
+        description: True when the country is part of the European Union.
+
+      - name: is_oecd
+        description: True when the country is part of the OECD.
+
+  - name: stg_dim_time
+    description: Canonical monthly time dimension used across marts and joins.
+    columns:
+      - name: period
+        description: Integer month key in YYYYMM format.
+        tests:
+          - not_null
+          - unique
+
+      - name: year
+        description: Calendar year as integer.
+
+      - name: month
+        description: Calendar month number from 1 to 12.
+
+      - name: quarter
+        description: Calendar quarter number from 1 to 4.
+
+      - name: year_month
+        description: Canonical month label in YYYY-MM format.
+        tests:
+          - not_null
+          - unique
+
+      - name: month_start_date
+        description: First calendar day of the month.
+
+  - name: stg_dim_trade_flow
+    description: Trade flow dimension standardized from Comtrade metadata.
+    columns:
+      - name: flow_code
+        description: Short code for trade flow type.
+        tests:
+          - not_null
+
+      - name: flow_desc
+        description: Human-readable trade flow description.
+
+      - name: flow_group
+        description: Group label for related trade flow codes.
+
+  - name: stg_route_applicability
+    description: Route applicability bridge for reporter-partner pairs.
+    columns:
+      - name: reporter_iso3
+        description: ISO3 code of the reporting country.
+        tests:
+          - not_null
+
+      - name: partner_iso3
+        description: ISO3 code of the primary trade partner country.
+
+      - name: partner2_iso3
+        description: ISO3 code of a secondary partner when present.
+
+      - name: row_count
+        description: Number of source records represented by the bridge row.
+
+      - name: trade_value_usd
+        description: Total trade value represented by the bridge row in current USD.
+
+      - name: has_sea
+        description: True when at least one sea route mode is observed.
+
+      - name: has_inland_water
+        description: True when inland waterway mode is observed.
+
+      - name: has_unknown
+        description: True when the mode-of-transport code includes unknown values.
+
+      - name: has_non_marine
+        description: True when non-marine transport modes are present.
+
+      - name: mot_codes_seen
+        description: Encoded list of mode-of-transport codes seen for the pair.
+
+      - name: route_applicability_status
+        description: Derived status describing route applicability for the pair.
+
+  - name: stg_chokepoint_bridge
+    description: Event-month chokepoint bridge with activity flags.
+    columns:
+      - name: event_id
+        description: Stable identifier for the event record.
+        tests:
+          - not_null
+
+      - name: event_name
+        description: Name of the event associated with the chokepoint.
+
+      - name: year_month
+        description: Canonical month key in YYYY-MM format.
+        tests:
+          - not_null
+
+      - name: month_start_date
+        description: First calendar day of the event month.
+
+      - name: chokepoint_name
+        description: Name of the affected maritime chokepoint.
+
+      - name: event_phase
+        description: Lifecycle phase of the event for the month.
+
+      - name: is_event_active
+        description: True when the event is active in the month.
+
+      - name: is_lead_period
+        description: True when the row belongs to the event lead window.
+
+      - name: is_lag_period
+        description: True when the row belongs to the event lag window.
+
+      - name: severity_weight
+        description: Numeric event severity weight used in exposure calculations.
+
+      - name: is_global_event
+        description: True when the event is treated as globally scoped.
+
+      - name: event_type
+        description: Event taxonomy label.
+
+      - name: event_scope
+        description: Scope label indicating geographic or analytical reach.
+
+      - name: link_role
+        description: Relationship role between event and chokepoint.

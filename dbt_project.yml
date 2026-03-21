@@ -1,0 +1,23 @@
+name: capstone_monthly
+version: '1.0.0'
+config-version: 2
+
+profile: capstone_monthly_duckdb
+
+model-paths: ['models']
+seed-paths: ['seeds']
+macro-paths: ['macros']
+test-paths: ['tests']
+
+clean-targets:
+  - target
+  - dbt_packages
+
+models:
+  capstone_monthly:
+    staging:
+      +materialized: view
+      +schema: staging
+    marts:
+      +materialized: table
+      +schema: marts

@@ -1,0 +1,14 @@
+{
+  "position": {
+    "index": 288,
+    "total": 288
+  },
+  "last_attempted": {
+    "reporters": "842",
+    "periods": "202509,202510,202511,202512",
+    "commodities": "1001,1005,1006,1201,2709,2710",
+    "flow": "X",
+    "api_key_env": "COMTRADE_API_KEY_DATA"
+  },
+  "updated_at_utc": "2026-03-12T12:30:47.848253+00:00"
+}

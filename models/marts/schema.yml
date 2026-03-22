@@ -1,6 +1,99 @@
 version: 2
 
 models:
+  - name: fct_reporter_partner_commodity_month
+    description: Canonical monthly trade fact at reporter-partner-commodity-month-flow grain.
+    columns:
+      - name: reporter_iso3
+        description: ISO3 code of the reporting country.
+        tests:
+          - not_null
+
+      - name: partner_iso3
+        description: ISO3 code of the partner country.
+        tests:
+          - not_null
+
+      - name: cmd_code
+        description: Commodity code at source commodity grain.
+        tests:
+          - not_null
+
+      - name: period
+        description: Integer month key in YYYYMM format.
+        tests:
+          - not_null
+
+      - name: year_month
+        description: Canonical month key in YYYY-MM format.
+        tests:
+          - not_null
+
+      - name: trade_flow
+        description: Standardized trade flow label.
+        tests:
+          - not_null
+
+      - name: trade_value_usd
+        description: Aggregated trade value in current USD.
+
+      - name: net_weight_kg
+        description: Aggregated net weight in kilograms.
+
+      - name: gross_weight_kg
+        description: Aggregated gross weight in kilograms.
+
+      - name: qty
+        description: Aggregated reported quantity.
+
+      - name: usd_per_kg
+        description: Unit-value ratio computed as trade_value_usd divided by net_weight_kg.
+
+      - name: record_count
+        description: Number of source records represented by each fact row.
+
+  - name: fct_reporter_partner_commodity_route_month
+    description: Route-enriched monthly trade fact joined from canonical fact to route assignment.
+    columns:
+      - name: reporter_iso3
+        description: ISO3 code of the reporting country.
+        tests:
+          - not_null
+
+      - name: partner_iso3
+        description: ISO3 code of the partner country.
+        tests:
+          - not_null
+
+      - name: cmd_code
+        description: Commodity code at source commodity grain.
+        tests:
+          - not_null
+
+      - name: period
+        description: Integer month key in YYYYMM format.
+        tests:
+          - not_null
+
+      - name: year_month
+        description: Canonical month key in YYYY-MM format.
+        tests:
+          - not_null
+
+      - name: trade_flow
+        description: Standardized trade flow label.
+        tests:
+          - not_null
+
+      - name: main_chokepoint
+        description: Primary chokepoint assigned to the route pair.
+
+      - name: route_group
+        description: Route exposure classification group.
+
+      - name: route_applicability_status
+        description: Applicability status inherited from route mapping logic.
+
   - name: mart_reporter_month_trade_summary
     description: Reporter-by-month trade aggregates enriched with country and calendar dimensions.
     columns:

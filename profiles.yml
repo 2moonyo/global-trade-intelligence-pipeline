@@ -5,4 +5,4 @@ capstone_monthly_duckdb:
       type: duckdb
       path: warehouse/analytics.duckdb
       schema: analytics
-      threads: 4
+      threads: 1

@@ -4,15 +4,7 @@ create schema if not exists analytics;
 -- Core Comtrade fact tables
 create or replace table raw.comtrade_fact as
 select *
-from read_parquet('data/silver/comtrade/comtrade_fact/cmd_month.parquet');
-
-create or replace table raw.comtrade_partner_month as
-select *
-from read_parquet('data/silver/comtrade/comtrade_fact/partner_month.parquet');
-
-create or replace table raw.comtrade_reporter_month as
-select *
-from read_parquet('data/silver/comtrade/comtrade_fact/reporter_month.parquet');
+from read_parquet('data/silver/comtrade/comtrade_fact/ref_year=*/reporter_iso3=*/*.parquet');
 
 -- Comtrade dimensions and route bridge
 create or replace table raw.dim_country as

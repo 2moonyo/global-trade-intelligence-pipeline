@@ -7,47 +7,39 @@
       "analytics"."analytics_marts"."mart_reporter_month_chokepoint_exposure__dbt_tmp"
   
     as (
-      with partner_month as (
+      with route_fact as (
   select
-    upper(trim(reporter_iso3)) as reporter_iso3,
-    upper(trim(partner_iso3)) as partner_iso3,
+    reporter_iso3,
+    partner_iso3,
+    cmd_code,
+    trade_flow,
     period,
     year_month,
-    sum(trade_value_usd) as partner_trade_value_usd
-  from "analytics"."raw"."comtrade_partner_month"
-  group by 1, 2, 3, 4
-),
-route_map as (
-  select distinct
-    upper(trim(reporter_iso3)) as reporter_iso3,
-    upper(trim(partner_iso3)) as partner_iso3,
-    trim(main_chokepoint) as chokepoint_name,
+    trade_value_usd,
+    main_chokepoint as chokepoint_name,
     route_applicability_status
-  from "analytics"."raw"."dim_trade_routes"
-  where main_chokepoint is not null
+  from "analytics"."analytics_marts"."fct_reporter_partner_commodity_route_month"
 ),
 reporter_month_total as (
   select
     reporter_iso3,
     period,
     year_month,
-    sum(partner_trade_value_usd) as reporter_month_trade_value_usd
-  from partner_month
+    sum(trade_value_usd) as reporter_month_trade_value_usd
+  from "analytics"."analytics_marts"."fct_reporter_partner_commodity_month"
   group by 1, 2, 3
 ),
 reporter_month_chokepoint as (
   select
-    pm.reporter_iso3,
-    pm.period,
-    pm.year_month,
-    rm.chokepoint_name,
-    sum(pm.partner_trade_value_usd) as chokepoint_trade_value_usd,
-    count(*) as route_pair_count
-  from partner_month as pm
-  inner join route_map as rm
-    on pm.reporter_iso3 = rm.reporter_iso3
-   and pm.partner_iso3 = rm.partner_iso3
-  where upper(rm.route_applicability_status) = 'MARITIME_ELIGIBLE'
+    rf.reporter_iso3,
+    rf.period,
+    rf.year_month,
+    rf.chokepoint_name,
+    sum(rf.trade_value_usd) as chokepoint_trade_value_usd,
+    count(distinct rf.partner_iso3) as route_pair_count
+  from route_fact as rf
+  where rf.chokepoint_name is not null
+    and upper(rf.route_applicability_status) = 'MARITIME_ELIGIBLE'
   group by 1, 2, 3, 4
 ),
 active_events as (

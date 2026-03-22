@@ -13,6 +13,7 @@ dependencies = [
     "dbt-core>=1.10.13",
     "dbt-duckdb>=1.10.0",
     "duckdb>=1.5.0",
+    "geopandas>=1.1.3",
     "harlequin>=1.16.2",
     "idna==3.11",
     "matplotlib>=3.10.8",

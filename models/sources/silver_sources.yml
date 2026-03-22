@@ -5,7 +5,6 @@ sources:
     schema: raw
     tables:
       - name: comtrade_fact
-      - name: comtrade_partner_month
       - name: dim_country
       - name: dim_time
       - name: dim_commodity

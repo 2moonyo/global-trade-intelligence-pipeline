@@ -1,0 +1,25 @@
+
+    
+    select
+      count(*) as failures,
+      count(*) != 0 as should_warn,
+      count(*) != 0 as should_error
+    from (
+      
+    
+  
+    
+    
+
+
+
+select ref_date
+from "analytics"."analytics_staging"."stg_comtrade_fact"
+where ref_date is null
+
+
+
+  
+  
+      
+    ) dbt_internal_test

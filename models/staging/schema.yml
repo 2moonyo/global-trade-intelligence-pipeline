@@ -58,9 +58,8 @@ models:
 
   - name: stg_comtrade_fact
     description: >
-      Cleaned monthly Comtrade fact table at the chosen analytical grain.
-      Contains reporter-level trade observations by commodity, month, and flow.
-      Numeric measures are cast to analytics-ready types.
+      Compatibility view over stg_comtrade_trade_base.
+      Preserves existing column naming while exposing additional partner and routing keys.
     columns:
       - name: ref_date
         description: First day of the reference month as a date.
@@ -84,19 +83,23 @@ models:
         description: ISO3 code of the reporting country or reporting bloc.
         tests:
           - not_null
-          - relationships:
-              arguments:
-                to: ref('stg_dim_country')
-                field: iso3
+
+      - name: partner_iso3
+        description: ISO3 code of the trade partner country.
+
+      - name: qty
+        description: Reported trade quantity in source units.
+
+      - name: mot_code
+        description: Source mode-of-transport code.
+
+      - name: partner2_code
+        description: Optional secondary partner code from source.
 
       - name: cmd_code
         description: Commodity code at the source grain (HS hierarchy).
         tests:
           - not_null
-          - relationships:
-              arguments:
-                to: ref('stg_dim_commodity')
-                field: cmd_code
 
       - name: commodity_name_raw
         description: Raw commodity description as provided by the source.
@@ -118,7 +121,73 @@ models:
         description: Gross traded weight in kilograms.
 
       - name: row_count
-        description: Source row-count weight represented by the aggregated record.
+        description: Row weight for compatibility with legacy marts.
+
+  - name: stg_comtrade_trade_base
+    description: >
+      Canonical cleaned Comtrade trade base at reporter-partner-commodity-month-flow grain.
+      Applies naming cleanup, type casts, month standardization, and exact-row deduplication.
+    columns:
+      - name: ref_date
+        description: First day of the reference month as a date.
+        tests:
+          - not_null
+
+      - name: period
+        description: Integer month key in YYYYMM format.
+        tests:
+          - not_null
+
+      - name: year_month
+        description: Canonical month key in YYYY-MM format.
+        tests:
+          - not_null
+
+      - name: ref_year
+        description: Calendar year of the reference period.
+
+      - name: reporter_iso3
+        description: ISO3 code of the reporting country or bloc.
+        tests:
+          - not_null
+
+      - name: partner_iso3
+        description: ISO3 code of the partner country or bloc.
+        tests:
+          - not_null
+
+      - name: cmd_code
+        description: Commodity code at source commodity grain.
+        tests:
+          - not_null
+
+      - name: commodity_name_raw
+        description: Raw commodity description as provided by source.
+
+      - name: trade_flow
+        description: Standardized trade flow label.
+        tests:
+          - not_null
+
+      - name: trade_value_usd
+        description: Trade value in current USD.
+        tests:
+          - not_null
+
+      - name: net_weight_kg
+        description: Net traded weight in kilograms.
+
+      - name: gross_weight_kg
+        description: Gross traded weight in kilograms.
+
+      - name: qty
+        description: Reported trade quantity in source units.
+
+      - name: mot_code
+        description: Source mode-of-transport code.
+
+      - name: partner2_code
+        description: Optional secondary partner code from source.
 
   - name: stg_dim_commodity
     description: Commodity dimension standardized from Comtrade source metadata.

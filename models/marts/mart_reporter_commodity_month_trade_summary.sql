@@ -10,8 +10,8 @@ with reporter_commodity_month as (
     sum(case when lower(f.trade_flow) like '%import%' then f.trade_value_usd else 0 end) as import_trade_value_usd,
     sum(f.net_weight_kg) as total_net_weight_kg,
     sum(f.gross_weight_kg) as total_gross_weight_kg,
-    sum(f.row_count) as source_row_count
-  from {{ ref('stg_comtrade_fact') }} as f
+    sum(f.record_count) as source_row_count
+  from {{ ref('fct_reporter_partner_commodity_month') }} as f
   group by 1, 2, 3, 4, 5
 )
 

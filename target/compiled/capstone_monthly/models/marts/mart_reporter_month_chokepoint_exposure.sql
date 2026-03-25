@@ -8,7 +8,8 @@ with route_fact as (
     year_month,
     trade_value_usd,
     main_chokepoint as chokepoint_name,
-    route_applicability_status
+    route_applicability_status,
+    is_maritime_routed
   from "analytics"."analytics_marts"."fct_reporter_partner_commodity_route_month"
 ),
 reporter_month_total as (
@@ -30,7 +31,7 @@ reporter_month_chokepoint as (
     count(distinct rf.partner_iso3) as route_pair_count
   from route_fact as rf
   where rf.chokepoint_name is not null
-    and upper(rf.route_applicability_status) = 'MARITIME_ELIGIBLE'
+    and coalesce(rf.is_maritime_routed, false)
   group by 1, 2, 3, 4
 ),
 active_events as (

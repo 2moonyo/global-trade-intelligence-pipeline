@@ -1,0 +1,58 @@
+version: 2
+
+models:
+  - name: dim_event
+    description: "Conformed event dimension built from silver event metadata and scoped through event bridges."
+    columns:
+      - name: event_id
+        description: "Unique identifier for an event in the conformed event dimension."
+        tests: [not_null, unique]
+      - name: event_name
+        description: "Business-readable name of the event."
+        tests: [not_null]
+      - name: event_start_date
+        description: "Date when the event begins."
+        tests: [not_null]
+      - name: event_end_date
+        description: "Date when the event ends."
+        tests: [not_null]
+      - name: severity_level
+        description: "Categorical severity bucket derived from base severity score (low, medium, high, critical)."
+        tests:
+          - accepted_values:
+              values: ['low', 'medium', 'high', 'critical']
+      - name: event_scope_type
+        description: "Derived scope classification based on chokepoint and region coverage plus global flags."
+        tests:
+          - accepted_values:
+              values: ['global', 'mixed', 'multi_chokepoint', 'chokepoint_specific', 'regional', 'unscoped']
+
+  - name: bridge_event_month
+    description: "Monthly event bridge aligned to dim_time grain."
+    columns:
+      - name: event_id
+        description: "Event identifier for the monthly bridge record."
+        tests: [not_null]
+      - name: month_key
+        description: "Surrogate month key mapped from dim_time for joining monthly fact and dimension models."
+        tests: [not_null]
+
+  - name: bridge_event_chokepoint
+    description: "Event to chokepoint relationship bridge."
+    columns:
+      - name: event_id
+        description: "Event identifier participating in the event-chokepoint relationship."
+        tests: [not_null]
+      - name: chokepoint_id
+        description: "Hashed surrogate key of normalized chokepoint_name used for consistent chokepoint joins."
+        tests: [not_null]
+
+  - name: bridge_event_region
+    description: "Event to maritime region relationship bridge."
+    columns:
+      - name: event_id
+        description: "Event identifier participating in the event-region relationship."
+        tests: [not_null]
+      - name: region_id
+        description: "Hashed surrogate key of normalized region_name used for consistent region joins."
+        tests: [not_null]

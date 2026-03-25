@@ -1,0 +1,35 @@
+version: 2
+
+models:
+  - name: stg_event_raw
+    description: "Staging view of raw event metadata loaded from silver event source files."
+    columns:
+      - name: event_id
+        description: "Unique identifier for an event, used as the primary key across event staging and marts."
+        tests: [not_null, unique]
+
+  - name: stg_event_month_chokepoint
+    description: "Monthly event-to-chokepoint staging bridge at event and month grain."
+    columns:
+      - name: event_id
+        description: "Unique event identifier linking monthly records back to the event dimension."
+        tests: [not_null]
+      - name: year_month
+        description: "Calendar month in YYYY-MM format representing when the event-chokepoint relationship is active."
+        tests: [not_null]
+      - name: chokepoint_name
+        description: "Name of the maritime chokepoint associated with the event in the given month."
+        tests: [not_null]
+
+  - name: stg_event_month_region
+    description: "Monthly event-to-region staging bridge at event and month grain."
+    columns:
+      - name: event_id
+        description: "Unique event identifier linking monthly records back to the event dimension."
+        tests: [not_null]
+      - name: year_month
+        description: "Calendar month in YYYY-MM format representing when the event-region relationship is active."
+        tests: [not_null]
+      - name: region_name
+        description: "Name of the maritime region associated with the event in the given month."
+        tests: [not_null]

@@ -1,0 +1,11 @@
+
+    
+    
+
+
+
+select reporter_iso3
+from "analytics"."analytics_marts"."mart_trade_exposure"
+where reporter_iso3 is null
+
+

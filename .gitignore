@@ -12,3 +12,5 @@ __pycache__
 *.log
 *duckdb
 check_db.py
+.github/*
+/.github

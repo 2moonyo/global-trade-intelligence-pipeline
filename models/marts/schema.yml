@@ -94,6 +94,60 @@ models:
       - name: route_applicability_status
         description: Applicability status inherited from route mapping logic.
 
+      - name: mot_code_filter_status
+        description: motCode-derived routing eligibility signal (MARITIME_EVIDENCE, UNKNOWN_MOT, NON_MARITIME_ONLY, NO_MOT_DATA).
+
+      - name: route_confidence_score
+        description: Confidence tier for modeled exposure after motCode gating (HIGH, MEDIUM, LOW, VERY_LOW).
+
+      - name: has_associated_hub_route
+        description: True when at least one partner2 (hub/transshipment) route variant exists for the reporter-partner pair.
+
+  - name: fct_reporter_partner_commodity_hub_month
+    description: Dedicated monthly hub/transshipment fact at reporter-partner-partner2-commodity-month-flow grain with allocation-safe measures.
+    columns:
+      - name: reporter_iso3
+        description: ISO3 code of the reporting country.
+        tests:
+          - not_null
+
+      - name: partner_iso3
+        description: ISO3 code of the primary trade partner country.
+        tests:
+          - not_null
+
+      - name: cmd_code
+        description: Commodity code at source commodity grain.
+        tests:
+          - not_null
+
+      - name: period
+        description: Integer month key in YYYYMM format.
+        tests:
+          - not_null
+
+      - name: year_month
+        description: Canonical month key in YYYY-MM format.
+        tests:
+          - not_null
+
+      - name: trade_flow
+        description: Standardized trade flow label.
+        tests:
+          - not_null
+
+      - name: allocation_share
+        description: Pair-level allocation factor used to split canonical trade value across partner2 variants.
+
+      - name: partner2_iso3
+        description: ISO3 code for the transshipment hub partner when available; null indicates direct or unknown path.
+
+      - name: routing_path_type
+        description: Path classification with HUB_ROUTED when partner2 is present, otherwise DIRECT_OR_UNKNOWN.
+
+      - name: has_partner2_hub
+        description: Boolean flag for whether partner2 is present on the row.
+
   - name: mart_reporter_month_trade_summary
     description: Reporter-by-month trade aggregates enriched with country and calendar dimensions.
     columns:
@@ -361,3 +415,143 @@ models:
 
       - name: brent_mom_pct_change
         description: Month-over-month percentage Brent price change.
+
+  - name: mart_trade_exposure
+    description: Reporter-chokepoint monthly exposure mart with route confidence segmentation.
+    columns:
+      - name: reporter_iso3
+        description: ISO3 code of the reporting country.
+        tests:
+          - not_null
+
+      - name: chokepoint_id
+        description: Stable hashed chokepoint identifier derived from chokepoint_name.
+        tests:
+          - not_null
+
+      - name: year_month
+        description: Canonical month key in YYYY-MM format.
+        tests:
+          - not_null
+
+      - name: route_confidence_score
+        description: Route confidence tier for exposure filtering.
+
+      - name: chokepoint_trade_exposure_ratio
+        description: Share of reporter monthly trade value exposed to the chokepoint at the confidence slice.
+
+  - name: mart_hub_dependency_month
+    description: Hub-economy monthly dependency mart that isolates partner2 transshipment exposure from canonical KPI marts.
+    columns:
+      - name: hub_iso3
+        description: ISO3 code of the hub/transshipment economy.
+        tests:
+          - not_null
+
+      - name: period
+        description: Integer month key in YYYYMM format.
+        tests:
+          - not_null
+
+      - name: year_month
+        description: Canonical month key in YYYY-MM format.
+        tests:
+          - not_null
+
+      - name: route_confidence_score
+        description: Route confidence tier inherited from hub fact routing logic.
+
+      - name: hub_routed_trade_value_usd
+        description: Monthly trade value allocated to the hub and routed through maritime-eligible paths.
+
+      - name: hub_trade_share_of_global_month
+        description: Share of total global monthly trade value represented by the hub-routed value.
+
+  - name: mart_event_impact
+    description: Event-level impact profile combining chokepoint stress, structural throughput, and confidence-filtered country exposure.
+    columns:
+      - name: event_id
+        description: Unique event identifier at final mart grain.
+        tests:
+          - not_null
+          - unique
+
+      - name: event_name
+        description: Business-readable event name from dim_event.
+
+      - name: event_type
+        description: Event taxonomy label from dim_event.
+
+      - name: severity_level
+        description: Manual severity category from dim_event.
+
+      - name: affected_country_count
+        description: Count of distinct reporter_iso3 with HIGH or MEDIUM confidence exposure in event window.
+
+      - name: affected_chokepoint_count
+        description: Count of distinct chokepoints linked to the event in the event window.
+
+      - name: mean_event_window_zscore_capacity
+        description: Average capacity-based z-score across event chokepoint-month rows.
+
+      - name: max_event_window_zscore_capacity
+        description: Maximum capacity-based z-score across event chokepoint-month rows.
+
+      - name: mean_event_window_zscore_count
+        description: Average count-based z-score across event chokepoint-month rows.
+
+      - name: mean_event_window_zscore_vessel_size
+        description: Average vessel-size z-score across event chokepoint-month rows.
+
+      - name: mean_baseline_throughput_of_affected_chokepoints
+        description: Average baseline throughput across distinct event-affected chokepoints.
+
+      - name: mean_throughput_pct_change_vs_baseline
+        description: Mean event-window throughput change ratio relative to baseline throughput.
+
+  - name: mart_reporter_energy_vulnerability
+    description: Reporter-year long-format energy vulnerability indicators with country and time attributes.
+    columns:
+      - name: reporter_iso3
+        description: ISO3 code of the reporting country or economy.
+        tests:
+          - not_null
+
+      - name: year
+        description: Calendar year of the annual vulnerability indicator.
+        tests:
+          - not_null
+
+      - name: indicator_code
+        description: Normalized indicator code at long-format grain.
+        tests:
+          - not_null
+
+      - name: country_match_status
+        description: Country dimension linkage signal (ISO3_MATCH, COUNTRY_NAME_FALLBACK, UNMATCHED).
+
+  - name: mart_reporter_month_macro_features
+    description: Reporter-month macro context combining monthly Brent and FX features with annual energy indicators broadcast by year.
+    columns:
+      - name: reporter_iso3
+        description: ISO3 code of the reporting country or economy.
+        tests:
+          - not_null
+
+      - name: period
+        description: Integer month key in YYYYMM format.
+        tests:
+          - not_null
+
+      - name: year_month
+        description: Canonical month key in YYYY-MM format.
+        tests:
+          - not_null
+
+      - name: fx_currency_code
+        description: Currency code from monthly FX feature series.
+        tests:
+          - not_null
+
+      - name: energy_join_method
+        description: Explicit join method describing annual-to-month broadcast rule for energy indicators.

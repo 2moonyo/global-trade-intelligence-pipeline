@@ -58,8 +58,8 @@ models:
 
   - name: stg_comtrade_fact
     description: >
-      Compatibility view over stg_comtrade_trade_base.
-      Preserves existing column naming while exposing additional partner and routing keys.
+      Standardized staging view over stg_comtrade_trade_base.
+      Exposes partner and routing keys used by downstream models.
     columns:
       - name: ref_date
         description: First day of the reference month as a date.
@@ -119,9 +119,6 @@ models:
 
       - name: gross_weight_kg
         description: Gross traded weight in kilograms.
-
-      - name: row_count
-        description: Row weight for compatibility with legacy marts.
 
   - name: stg_comtrade_trade_base
     description: >
@@ -322,6 +319,42 @@ models:
       - name: has_unknown
         description: True when the mode-of-transport code includes unknown values.
 
+  - name: stg_energy_vulnerability
+    description: >
+      Standardized long-format World Bank energy vulnerability indicators at
+      reporter-year-indicator grain.
+    columns:
+      - name: reporter_iso3
+        description: ISO3 code for the reporter economy from source.
+        tests:
+          - not_null
+
+      - name: year
+        description: Calendar year of the annual indicator value.
+        tests:
+          - not_null
+
+      - name: period
+        description: Synthetic compatibility period as YYYY01 for annual indicators.
+
+      - name: year_month
+        description: Synthetic compatibility month label as YYYY-01 for annual indicators.
+        tests:
+          - not_null
+
+      - name: indicator_code
+        description: Normalized indicator code used for long-format analytics joins.
+        tests:
+          - not_null
+
+      - name: indicator_value
+        description: Numeric indicator value; may be null when source has missing observations.
+
+      - name: grain_key
+        description: Surrogate grain key for reporter_iso3 + year + indicator_code.
+        tests:
+          - not_null
+
       - name: has_non_marine
         description: True when non-marine transport modes are present.
 
@@ -379,3 +412,46 @@ models:
 
       - name: link_role
         description: Relationship role between event and chokepoint.
+
+  - name: stg_chokepoint_stress_zscore
+    description: >
+      Monthly chokepoint throughput z-score model derived from PortWatch.
+      Uses avg_capacity as throughput proxy and a fixed 2020-01 to 2023-12 baseline.
+      Keeps stress_index untouched in existing marts for side-by-side comparison.
+    columns:
+      - name: chokepoint_id
+        description: Stable hashed chokepoint identifier derived from chokepoint_name.
+        tests:
+          - not_null
+
+      - name: year_month
+        description: Canonical month key in YYYY-MM format.
+        tests:
+          - not_null
+
+      - name: throughput
+        description: Monthly throughput proxy sourced from PortWatch avg_capacity.
+
+      - name: mean_throughput
+        description: Baseline mean throughput by chokepoint over fixed 2020-01 to 2023-12 window.
+
+      - name: stddev_throughput
+        description: Baseline sample standard deviation of throughput by chokepoint over fixed window.
+
+      - name: z_score
+        description: Standardized monthly deviation from baseline computed as (throughput - mean_throughput) / stddev_throughput.
+
+      - name: z_score_capacity
+        description: Capacity-based z-score alias for throughput signal, computed with the same baseline as z_score.
+
+      - name: avg_n_total
+        description: Monthly traffic count intensity from PortWatch avg_n_total.
+
+      - name: z_score_count
+        description: Count-based z-score computed as (avg_n_total - mean(avg_n_total)) / stddev(avg_n_total) over the fixed baseline window.
+
+      - name: vessel_size_index
+        description: Capacity-per-movement indicator computed as throughput / avg_n_total with safe zero handling.
+
+      - name: z_score_vessel_size
+        description: Z-score of vessel_size_index over the same fixed 2020-01 to 2023-12 baseline window.

@@ -47,3 +47,35 @@ from read_parquet('data/silver/brent/brent_daily.parquet');
 create or replace table raw.brent_monthly as
 select *
 from read_parquet('data/silver/brent/brent_monthly.parquet');
+
+-- ECB FX daily feed from bronze batch exports.
+create or replace table raw.ecb_fx_eu_daily as
+select
+	cast("date" as date) as date,
+	upper(trim(cast(quote_ccy as varchar))) as quote_ccy,
+	upper(trim(cast(base_ccy as varchar))) as base_ccy,
+	cast(rate as double) as rate,
+	cast(load_ts as varchar) as load_ts
+from read_csv_auto('data/bronze/ecb_fx_eu/Batch/*.csv', header=true);
+
+-- World Bank energy vulnerability indicators from bronze batch exports.
+create or replace table raw.energy_vulnerability as
+select
+	cast(dt as date) as dt,
+	cast(year as integer) as year,
+	cast(dataset as varchar) as dataset,
+	cast(source as varchar) as source,
+	cast(ingest_ts as varchar) as ingest_ts,
+	cast(indicator_alias as varchar) as indicator_alias,
+	cast(indicator_id as varchar) as indicator_id,
+	cast(indicator_name as varchar) as indicator_name,
+	cast(metric_name as varchar) as metric_name,
+	cast(unit_hint as varchar) as unit_hint,
+	cast(country_name as varchar) as country_name,
+	cast(country_id as varchar) as country_id,
+	upper(trim(cast(country_iso3 as varchar))) as country_iso3,
+	cast(value as double) as value,
+	cast(wb_unit as varchar) as wb_unit,
+	cast(obs_status as varchar) as obs_status,
+	cast(decimal_places as integer) as decimal_places
+from read_csv_auto('data/bronze/worldbank_energy/Batch/*.csv', header=true);

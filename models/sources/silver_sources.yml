@@ -15,3 +15,5 @@ sources:
       - name: portwatch_monthly
       - name: brent_daily
       - name: brent_monthly
+      - name: ecb_fx_eu_daily
+      - name: energy_vulnerability

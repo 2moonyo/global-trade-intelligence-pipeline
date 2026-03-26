@@ -1,0 +1,22 @@
+
+    
+    
+
+with all_values as (
+
+    select
+        event_scope_type as value_field,
+        count(*) as n_records
+
+    from "analytics"."analytics_analytics_marts"."dim_event"
+    group by event_scope_type
+
+)
+
+select *
+from all_values
+where value_field not in (
+    'global','mixed','multi_chokepoint','chokepoint_specific','regional','unscoped'
+)
+
+

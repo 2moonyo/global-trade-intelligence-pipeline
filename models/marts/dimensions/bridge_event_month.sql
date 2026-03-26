@@ -64,7 +64,19 @@ time_map as (
 
 select
     d.event_id,
-    t.month_key,
+    -- Keep event-month rows joinable even when dim_time coverage lags event windows.
+    coalesce(
+        t.month_key,
+        case
+            when regexp_full_match(d.year_month, '^\\d{4}-\\d{2}$')
+                then try_cast(replace(d.year_month, '-', '') as integer)
+            when d.month_start_date is not null
+                then
+                    cast(extract(year from d.month_start_date) as integer) * 100
+                    + cast(extract(month from d.month_start_date) as integer)
+            else null
+        end
+    ) as month_key,
     d.year_month,
     d.month_start_date,
     cast(d.has_active_phase as boolean) as has_active_phase,

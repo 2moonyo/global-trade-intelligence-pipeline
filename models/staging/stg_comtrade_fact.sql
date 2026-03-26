@@ -13,6 +13,5 @@ select
   gross_weight_kg,
   qty,
   mot_code,
-  partner2_code,
-  cast(1 as bigint) as row_count
+  partner2_code
 from {{ ref('stg_comtrade_trade_base') }}

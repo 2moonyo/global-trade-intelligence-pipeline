@@ -3,15 +3,6 @@
     schema='analytics_staging'
 ) }}
 
-with src as (
-
-    select *
-    from read_csv_auto(
-        '{{ env_var("PROJECT_ROOT") }}/silver/events/bridge_event_month_maritime_region.csv',
-        header=true
-    )
-
-)
 
 select
     trim(event_id) as event_id,
@@ -32,5 +23,4 @@ select
     trim(event_type) as event_type,
     trim(event_scope) as raw_event_scope,
     trim(link_role) as link_role
-
-from src
+from raw.bridge_event_month_maritime_region

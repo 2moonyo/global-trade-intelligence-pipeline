@@ -3,15 +3,6 @@
     schema='analytics_staging'
 ) }}
 
-with src as (
-
-    select *
-    from read_csv_auto(
-        '{{ env_var("PROJECT_ROOT") }}/silver/events/dim_event.csv',
-        header=true
-    )
-
-)
 
 select
     trim(event_id) as event_id,
@@ -29,5 +20,4 @@ select
     trim(event_scope) as raw_event_scope,
     trim(description) as description,
     trim(source_class) as source_class
-
-from src
+from raw.dim_event

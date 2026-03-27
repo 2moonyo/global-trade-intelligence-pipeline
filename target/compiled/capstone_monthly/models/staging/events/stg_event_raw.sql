@@ -1,14 +1,5 @@
 
 
-with src as (
-
-    select *
-    from read_csv_auto(
-        '/Users/chromazone/Documents/Python/Data Enginering Zoomcamp/Capstone_monthly/data/silver/events/dim_event.csv',
-        header=true
-    )
-
-)
 
 select
     trim(event_id) as event_id,
@@ -26,5 +17,4 @@ select
     trim(event_scope) as raw_event_scope,
     trim(description) as description,
     trim(source_class) as source_class
-
-from src
+from raw.dim_event

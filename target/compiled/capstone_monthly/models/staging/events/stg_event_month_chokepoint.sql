@@ -1,14 +1,5 @@
 
 
-with src as (
-
-    select *
-    from read_csv_auto(
-        '/Users/chromazone/Documents/Python/Data Enginering Zoomcamp/Capstone_monthly/data/silver/events/bridge_event_month_chokepoint_core.csv',
-        header=true
-    )
-
-)
 
 select
     trim(event_id) as event_id,
@@ -29,5 +20,4 @@ select
     trim(event_type) as event_type,
     trim(event_scope) as raw_event_scope,
     trim(link_role) as link_role
-
-from src
+from raw.bridge_event_month_chokepoint_core

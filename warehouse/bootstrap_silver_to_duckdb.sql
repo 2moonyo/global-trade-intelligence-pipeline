@@ -79,3 +79,18 @@ select
 	cast(obs_status as varchar) as obs_status,
 	cast(decimal_places as integer) as decimal_places
 from read_csv_auto('data/bronze/worldbank_energy/Batch/*.csv', header=true);
+
+-- Event bridge: chokepoint core (monthly, wide)
+create or replace table raw.bridge_event_month_chokepoint_core as
+select *
+from read_csv_auto('data/silver/events/bridge_event_month_chokepoint_core.csv', header=true);
+
+-- Event bridge: maritime region (monthly, wide)
+create or replace table raw.bridge_event_month_maritime_region as
+select *
+from read_csv_auto('data/silver/events/bridge_event_month_maritime_region.csv', header=true);
+
+-- Event dimension
+create or replace table raw.dim_event as
+select *
+from read_csv_auto('data/silver/events/dim_event.csv', header=true);

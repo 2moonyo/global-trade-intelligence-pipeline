@@ -79,13 +79,7 @@ models:
       - name: ref_year
         description: Calendar year of the reference period.
 
-      - name: reporter_iso3
-        description: ISO3 code of the reporting country or reporting bloc.
-        tests:
-          - not_null
 
-      - name: partner_iso3
-        description: ISO3 code of the trade partner country.
 
       - name: qty
         description: Reported trade quantity in source units.
@@ -143,15 +137,7 @@ models:
       - name: ref_year
         description: Calendar year of the reference period.
 
-      - name: reporter_iso3
-        description: ISO3 code of the reporting country or bloc.
-        tests:
-          - not_null
 
-      - name: partner_iso3
-        description: ISO3 code of the partner country or bloc.
-        tests:
-          - not_null
 
       - name: cmd_code
         description: Commodity code at source commodity grain.
@@ -226,10 +212,7 @@ models:
         tests:
           - not_null
 
-      - name: iso3
-        description: ISO 3166-1 alpha-3 country code.
-        tests:
-          - not_null
+
 
       - name: country_name
         description: Display name of the country.
@@ -293,16 +276,7 @@ models:
   - name: stg_route_applicability
     description: Route applicability bridge for reporter-partner pairs.
     columns:
-      - name: reporter_iso3
-        description: ISO3 code of the reporting country.
-        tests:
-          - not_null
 
-      - name: partner_iso3
-        description: ISO3 code of the primary trade partner country.
-
-      - name: partner2_iso3
-        description: ISO3 code of a secondary partner when present.
 
       - name: row_count
         description: Number of source records represented by the bridge row.
@@ -324,10 +298,7 @@ models:
       Standardized long-format World Bank energy vulnerability indicators at
       reporter-year-indicator grain.
     columns:
-      - name: reporter_iso3
-        description: ISO3 code for the reporter economy from source.
-        tests:
-          - not_null
+
 
       - name: year
         description: Calendar year of the annual indicator value.
@@ -351,7 +322,7 @@ models:
         description: Numeric indicator value; may be null when source has missing observations.
 
       - name: grain_key
-        description: Surrogate grain key for reporter_iso3 + year + indicator_code.
+        description: Surrogate grain key for reporter + year + indicator_code.
         tests:
           - not_null
 

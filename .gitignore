@@ -14,3 +14,10 @@ __pycache__
 check_db.py
 .github/*
 /.github
+.gitignore
+/.codex/*
+/.codex
+/.vscode/*
+/.idea/*
+deep*.md
+/warehouse/end-*.md

@@ -59,8 +59,14 @@ models:
   - name: stg_comtrade_fact
     description: >
       Standardized staging view over stg_comtrade_trade_base.
-      Exposes partner and routing keys used by downstream models.
+      Exposes partner and routing keys used by downstream models while preserving
+      the stable canonical grain key used for downstream lineage joins.
     columns:
+      - name: canonical_grain_key
+        description: Stable hashed key for reporter-partner-commodity-month-flow, reused by marts and provenance models.
+        tests:
+          - not_null
+
       - name: ref_date
         description: First day of the reference month as a date.
         tests:
@@ -117,8 +123,14 @@ models:
   - name: stg_comtrade_trade_base
     description: >
       Canonical cleaned Comtrade trade base at reporter-partner-commodity-month-flow grain.
-      Applies naming cleanup, type casts, month standardization, and exact-row deduplication.
+      Applies naming cleanup, type casts, month standardization, exact-row deduplication,
+      and stable canonical grain key generation for downstream facts and provenance.
     columns:
+      - name: canonical_grain_key
+        description: Stable hashed key for reporter-partner-commodity-month-flow used to join the canonical fact back to provenance.
+        tests:
+          - not_null
+
       - name: ref_date
         description: First day of the reference month as a date.
         tests:
@@ -233,7 +245,10 @@ models:
         description: True when the country is part of the OECD.
 
   - name: stg_dim_time
-    description: Canonical monthly time dimension used across marts and joins.
+    description: >
+      Canonical monthly time dimension generated in dbt from the observed month
+      coverage of trade, PortWatch, Brent, FX, energy, and event sources, with
+      configurable lead and lag month buffers.
     columns:
       - name: period
         description: Integer month key in YYYYMM format.
@@ -257,7 +272,7 @@ models:
           - unique
 
       - name: month_start_date
-        description: First calendar day of the month.
+        description: First calendar day of the month generated for the conformed monthly calendar.
 
   - name: stg_dim_trade_flow
     description: Trade flow dimension standardized from Comtrade metadata.

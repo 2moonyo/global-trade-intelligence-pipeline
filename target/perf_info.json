@@ -1,0 +1,56 @@
+{
+    "path_count": 183,
+    "parsed_path_count": 183,
+    "static_analysis_path_count": 36,
+    "static_analysis_parsed_path_count": 35,
+    "is_partial_parse_enabled": true,
+    "is_static_analysis_enabled": true,
+    "read_files_elapsed": 0.01492487500217976,
+    "load_macros_elapsed": 0.3739136670046719,
+    "parse_project_elapsed": 0.4314043330014101,
+    "patch_sources_elapsed": 0.01344937500107335,
+    "process_manifest_elapsed": 0.08529545900091762,
+    "load_all_elapsed": 1.0222325840004487,
+    "projects": [
+        {
+            "project_name": "capstone_monthly",
+            "elapsed": 0.42781937600375386,
+            "parsers": [
+                {
+                    "parser": "model",
+                    "elapsed": 0.13790337499813177,
+                    "parsed_path_count": 36
+                },
+                {
+                    "parser": "test",
+                    "elapsed": 0.057552166006644256,
+                    "parsed_path_count": 11
+                },
+                {
+                    "parser": "test",
+                    "elapsed": 0.2307527500015567,
+                    "parsed_path_count": 5
+                }
+            ],
+            "parsed_path_count": 52
+        },
+        {
+            "project_name": "dbt_duckdb",
+            "elapsed": 0.0016994170000543818,
+            "parsers": [],
+            "parsed_path_count": 0
+        },
+        {
+            "project_name": "dbt",
+            "elapsed": 0.0017115000009653158,
+            "parsers": [
+                {
+                    "parser": "doc",
+                    "elapsed": 0.00013333300012163818,
+                    "parsed_path_count": 1
+                }
+            ],
+            "parsed_path_count": 1
+        }
+    ]
+}

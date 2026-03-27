@@ -9,7 +9,7 @@ models:
         tests: [not_null, unique]
 
   - name: stg_event_month_chokepoint
-    description: "Monthly event-to-chokepoint staging bridge at event and month grain."
+    description: "Monthly event-to-chokepoint staging bridge at event and month grain for core chokepoint-linked event exposure."
     columns:
       - name: event_id
         description: "Unique event identifier linking monthly records back to the event dimension."
@@ -20,9 +20,14 @@ models:
       - name: chokepoint_name
         description: "Name of the maritime chokepoint associated with the event in the given month."
         tests: [not_null]
+      - name: location_type
+        description: "Normalized semantic type for the related location; chokepoint rows are typed as chokepoint."
+        tests: [not_null]
+      - name: location_layer
+        description: "Source layer used when normalizing location semantics, such as core_chokepoint."
 
   - name: stg_event_month_region
-    description: "Monthly event-to-region staging bridge at event and month grain."
+    description: "Monthly event-to-noncore-location staging bridge at event and month grain, preserving the legacy raw feed while normalizing it to generic location semantics."
     columns:
       - name: event_id
         description: "Unique event identifier linking monthly records back to the event dimension."
@@ -31,5 +36,32 @@ models:
         description: "Calendar month in YYYY-MM format representing when the event-region relationship is active."
         tests: [not_null]
       - name: region_name
-        description: "Name of the maritime region associated with the event in the given month."
+        description: "Normalized non-core location name used by downstream regional and generic location bridges."
         tests: [not_null]
+      - name: location_type
+        description: "Normalized semantic type for the related location, such as maritime_region, maritime_passage, coastal_region, or port."
+        tests: [not_null]
+      - name: location_layer
+        description: "Source layer used when normalizing non-core event geography, such as maritime_region."
+
+  - name: stg_event_location
+    description: "Generic monthly event-to-location staging bridge that unifies core chokepoints and non-core maritime locations under one normalized location contract."
+    columns:
+      - name: event_id
+        description: "Unique event identifier linking location records back to the event dimension."
+        tests: [not_null]
+      - name: year_month
+        description: "Calendar month in YYYY-MM format representing when the event-location relationship is active."
+        tests: [not_null]
+      - name: location_name
+        description: "Normalized business-readable maritime location name."
+        tests: [not_null]
+      - name: location_type
+        description: "Semantic type of the location, such as chokepoint, maritime_region, coastal_region, maritime_passage, or port."
+        tests: [not_null]
+      - name: location_layer
+        description: "Normalized source-layer grouping describing whether the location came from the core chokepoint or non-core maritime location feed."
+      - name: is_core_chokepoint
+        description: "True when the location is one of the core chokepoints used directly in trade exposure models."
+      - name: link_role
+        description: "Role label describing how the source linked the event to the location."

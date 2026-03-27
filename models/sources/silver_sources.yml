@@ -12,6 +12,9 @@ sources:
       - name: route_applicability
       - name: dim_trade_routes
       - name: chokepoint_bridge
+      - name: bridge_event_month_chokepoint_core
+      - name: bridge_event_month_maritime_region
+      - name: dim_event
       - name: portwatch_monthly
       - name: brent_daily
       - name: brent_monthly

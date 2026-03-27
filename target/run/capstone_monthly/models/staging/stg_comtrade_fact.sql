@@ -2,6 +2,7 @@
   
   create view "analytics"."analytics_staging"."stg_comtrade_fact__dbt_tmp" as (
     select
+  canonical_grain_key,
   ref_date,
   period,
   year_month,

@@ -4,6 +4,11 @@ models:
   - name: fct_reporter_partner_commodity_month
     description: Canonical monthly trade fact at reporter-partner-commodity-month-flow grain.
     columns:
+      - name: canonical_grain_key
+        description: Stable hashed grain key for reporter-partner-commodity-month-flow, used for provenance joins.
+        tests:
+          - not_null
+
       - name: reporter_iso3
         description: ISO3 code of the reporting country.
         tests:
@@ -52,9 +57,74 @@ models:
       - name: record_count
         description: Number of source records represented by each fact row.
 
+  - name: fct_reporter_partner_commodity_month_provenance
+    description: Canonical-grain provenance rollup exposing source batch, file, and extraction lineage for each aggregated trade fact row.
+    columns:
+      - name: canonical_grain_key
+        description: Stable hashed grain key matching the canonical monthly trade fact.
+        tests:
+          - not_null
+          - unique
+
+      - name: reporter_iso3
+        description: ISO3 code of the reporting country.
+        tests:
+          - not_null
+
+      - name: partner_iso3
+        description: ISO3 code of the partner country.
+        tests:
+          - not_null
+
+      - name: cmd_code
+        description: Commodity code at source commodity grain.
+        tests:
+          - not_null
+
+      - name: period
+        description: Integer month key in YYYYMM format.
+        tests:
+          - not_null
+
+      - name: year_month
+        description: Canonical month key in YYYY-MM format.
+        tests:
+          - not_null
+
+      - name: trade_flow
+        description: Standardized trade flow label.
+        tests:
+          - not_null
+
+      - name: raw_row_count
+        description: Number of raw source rows contributing to the canonical fact row.
+
+      - name: distinct_load_batch_count
+        description: Count of distinct ingestion load batches contributing to the canonical fact row.
+
+      - name: distinct_source_file_count
+        description: Count of distinct source files contributing to the canonical fact row.
+
+      - name: first_bronze_extracted_at
+        description: Earliest observed bronze extraction timestamp among the contributing raw rows.
+
+      - name: last_bronze_extracted_at
+        description: Latest observed bronze extraction timestamp among the contributing raw rows.
+
+      - name: load_batch_ids
+        description: Distinct list of contributing load batch identifiers retained for drill-back and auditability.
+
+      - name: source_files
+        description: Distinct list of contributing source file names retained for drill-back and auditability.
+
   - name: fct_reporter_partner_commodity_route_month
     description: Route-enriched monthly trade fact joined from canonical fact to route assignment.
     columns:
+      - name: canonical_grain_key
+        description: Stable hashed key inherited from the canonical trade fact so route rows can be matched back to provenance.
+        tests:
+          - not_null
+
       - name: reporter_iso3
         description: ISO3 code of the reporting country.
         tests:
@@ -106,6 +176,11 @@ models:
   - name: fct_reporter_partner_commodity_hub_month
     description: Dedicated monthly hub/transshipment fact at reporter-partner-partner2-commodity-month-flow grain with allocation-safe measures.
     columns:
+      - name: canonical_grain_key
+        description: Stable hashed key inherited from the canonical trade fact, identifying the parent reporter-partner-commodity-month-flow row before hub expansion.
+        tests:
+          - not_null
+
       - name: reporter_iso3
         description: ISO3 code of the reporting country.
         tests:
@@ -327,10 +402,10 @@ models:
         description: Share of reporter monthly trade value exposed to the chokepoint.
 
       - name: stress_index
-        description: PortWatch stress index for the chokepoint-month.
+        description: Upstream PortWatch stress index for the chokepoint-month.
 
       - name: stress_index_weighted
-        description: Capacity-weighted PortWatch stress index for the chokepoint-month.
+        description: Capacity-weighted upstream PortWatch stress index for the chokepoint-month.
 
       - name: avg_n_total
         description: Average number of tracked vessels or transits for the chokepoint-month.

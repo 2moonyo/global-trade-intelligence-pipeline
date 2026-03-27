@@ -20,19 +20,21 @@ chokepoint_coverage as (
 
     select
         event_id,
-        count(distinct chokepoint_name) as chokepoint_count,
+        count(distinct location_name) as chokepoint_count,
         max(case when is_global_event then 1 else 0 end) as has_global_flag
-    from "analytics"."analytics_analytics_staging"."stg_event_month_chokepoint"
+    from "analytics"."analytics_analytics_staging"."stg_event_location"
+    where location_type = 'chokepoint'
     group by 1
 
 ),
 
-region_coverage as (
+noncore_location_coverage as (
 
     select
         event_id,
-        count(distinct region_name) as region_count
-    from "analytics"."analytics_analytics_staging"."stg_event_month_region"
+        count(distinct location_name) as noncore_location_count
+    from "analytics"."analytics_analytics_staging"."stg_event_location"
+    where location_type <> 'chokepoint'
     group by 1
 
 ),
@@ -56,10 +58,10 @@ final as (
 
         case
             when coalesce(c.has_global_flag, 0) = 1 then 'global'
-            when coalesce(c.chokepoint_count, 0) > 0 and coalesce(r.region_count, 0) > 0 then 'mixed'
+            when coalesce(c.chokepoint_count, 0) > 0 and coalesce(r.noncore_location_count, 0) > 0 then 'mixed'
             when coalesce(c.chokepoint_count, 0) > 1 then 'multi_chokepoint'
             when coalesce(c.chokepoint_count, 0) = 1 then 'chokepoint_specific'
-            when coalesce(r.region_count, 0) > 0 then 'regional'
+            when coalesce(r.noncore_location_count, 0) > 0 then 'regional'
             else 'unscoped'
         end as event_scope_type,
 
@@ -74,7 +76,7 @@ final as (
     from base b
     left join chokepoint_coverage c
         on b.event_id = c.event_id
-    left join region_coverage r
+    left join noncore_location_coverage r
         on b.event_id = r.event_id
 
 )

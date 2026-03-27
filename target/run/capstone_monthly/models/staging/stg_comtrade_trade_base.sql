@@ -51,6 +51,13 @@ source_data as (
 
 select
   distinct
+  md5(
+    coalesce(reporter_iso3, '') || '|' ||
+    coalesce(partner_iso3, '') || '|' ||
+    coalesce(cmd_code, '') || '|' ||
+    cast(period as varchar) || '|' ||
+    coalesce(trade_flow, '')
+  ) as canonical_grain_key,
   ref_date,
   period,
   year_month,

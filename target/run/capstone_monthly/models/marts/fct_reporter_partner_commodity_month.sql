@@ -9,6 +9,7 @@
     as (
       with base as (
   select
+    canonical_grain_key,
     reporter_iso3,
     partner_iso3,
     cmd_code,
@@ -24,6 +25,7 @@
 )
 
 select
+  canonical_grain_key,
   reporter_iso3,
   partner_iso3,
   cmd_code,
@@ -42,6 +44,7 @@ select
   count(*) as record_count
 from base
 group by
+  canonical_grain_key,
   reporter_iso3,
   partner_iso3,
   cmd_code,

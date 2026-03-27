@@ -100,6 +100,7 @@ pair_applicability as (
 ),
 base_fact as (
   select
+    f.canonical_grain_key,
     f.reporter_iso3,
     f.partner_iso3,
     f.cmd_code,
@@ -160,6 +161,7 @@ base_fact as (
 )
 
 select
+  b.canonical_grain_key,
   b.reporter_iso3,
   b.partner_iso3,
   b.cmd_code,

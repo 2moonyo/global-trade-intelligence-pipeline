@@ -7,9 +7,10 @@ with base as (
 
     select distinct
         event_id,
-        chokepoint_name,
+        location_name as chokepoint_name,
         link_role
-    from {{ ref('stg_event_month_chokepoint') }}
+    from {{ ref('stg_event_location') }}
+    where location_type = 'chokepoint'
 
 )
 

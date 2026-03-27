@@ -13,9 +13,10 @@ with base as (
 
     select distinct
         event_id,
-        chokepoint_name,
+        location_name as chokepoint_name,
         link_role
-    from "analytics"."analytics_analytics_staging"."stg_event_month_chokepoint"
+    from "analytics"."analytics_analytics_staging"."stg_event_location"
+    where location_type = 'chokepoint'
 
 )
 

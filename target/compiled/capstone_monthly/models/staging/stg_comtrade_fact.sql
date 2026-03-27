@@ -1,4 +1,5 @@
 select
+  canonical_grain_key,
   ref_date,
   period,
   year_month,

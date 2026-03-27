@@ -11,6 +11,10 @@ select
     cast(trim(year_month) || '-01' as date) as month_start_date,
 
     trim(chokepoint_name) as chokepoint_name,
+    trim(chokepoint_name) as location_name,
+    'chokepoint' as location_type,
+    'core_chokepoint' as location_layer,
+    true as is_core_chokepoint,
     trim(event_phase) as event_phase,
 
     cast(event_active_flag as boolean) as is_event_active,

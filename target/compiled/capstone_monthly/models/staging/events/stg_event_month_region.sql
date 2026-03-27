@@ -8,6 +8,15 @@ select
     cast(trim(year_month) || '-01' as date) as month_start_date,
 
     trim(chokepoint_name) as region_name,
+    trim(chokepoint_name) as location_name,
+    case
+        when lower(trim(chokepoint_name)) = 'port of baltimore' then 'port'
+        when lower(trim(chokepoint_name)) = 'us east coast' then 'coastal_region'
+        when lower(trim(chokepoint_name)) = 'turkish straits' then 'maritime_passage'
+        else 'maritime_region'
+    end as location_type,
+    'noncore_location' as location_layer,
+    false as is_core_chokepoint,
     trim(event_phase) as event_phase,
 
     cast(event_active_flag as boolean) as is_event_active,

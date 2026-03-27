@@ -139,6 +139,7 @@ resolved_allocation as (
 ),
 base_fact as (
   select
+    f.canonical_grain_key,
     f.reporter_iso3,
     f.partner_iso3,
     ra.partner2_iso3,
@@ -183,6 +184,7 @@ base_fact as (
 )
 
 select
+  canonical_grain_key,
   reporter_iso3,
   partner_iso3,
   partner2_iso3,

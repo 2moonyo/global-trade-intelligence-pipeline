@@ -12,21 +12,7 @@ with event_months_union as (
         is_lag_period,
         severity_weight,
         is_global_event
-    from "analytics"."analytics_analytics_staging"."stg_event_month_chokepoint"
-
-    union all
-
-    select
-        event_id,
-        year_month,
-        month_start_date,
-        event_phase,
-        is_event_active,
-        is_lead_period,
-        is_lag_period,
-        severity_weight,
-        is_global_event
-    from "analytics"."analytics_analytics_staging"."stg_event_month_region"
+    from "analytics"."analytics_analytics_staging"."stg_event_location"
 
 ),
 

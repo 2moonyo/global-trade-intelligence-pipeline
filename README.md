@@ -145,3 +145,67 @@ from analytics_marts.mart_event_impact
 order by event_start_month desc
 limit 20;
 ```
+
+## Streamlit dashboard
+
+The repository includes a production-minded Streamlit frontend under `app/` with five narrative pages:
+
+- Executive Overview
+- Trade Dependence
+- Chokepoint Stress & Exposure
+- Events & Commodity Impact
+- Energy Vulnerability Context
+
+The app reads DuckDB in read-only mode, caches the connection with `st.cache_resource`, caches query results with `st.cache_data`, uses parameterised SQL throughout, and degrades gracefully when optional fact or event tables are missing.
+
+### Local run
+
+Install the frontend dependencies:
+
+```bash
+python -m pip install -r requirements-streamlit.txt
+```
+
+Or with `uv`:
+
+```bash
+uv venv
+source .venv/bin/activate
+uv pip install -r requirements-streamlit.txt
+```
+
+Run the dashboard from project root:
+
+```bash
+streamlit run app/streamlit_app.py
+```
+
+If you want to point the app at a different DuckDB file, set `TRADE_DUCKDB_PATH` first:
+
+```bash
+export TRADE_DUCKDB_PATH=/path/to/analytics.duckdb
+streamlit run app/streamlit_app.py
+```
+
+### Docker run
+
+Build the image from project root:
+
+```bash
+docker build -f docker/streamlit/Dockerfile -t capstone-streamlit .
+```
+
+Run the container:
+
+```bash
+docker run --rm -p 8501:8501 capstone-streamlit
+```
+
+Then open `http://localhost:8501`.
+
+### Dashboard notes
+
+- Reporter filters are limited to the countries that actually appear in the trade marts.
+- The overview and dependence pages prioritise dbt marts and only fall back to lower-grain facts where the selected filters require that grain.
+- Chokepoint traffic comes from `raw.portwatch_monthly`, so it covers fewer chokepoints than the exposure marts.
+- The events page uses true event bridge tables when available and falls back to commodity and traffic trends when they are not.

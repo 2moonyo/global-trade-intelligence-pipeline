@@ -68,15 +68,15 @@ cloud-bootstrap: check-tfvars deps-sync gcp-auth infra-init infra-apply env-file
 	@echo "Cloud bootstrap complete."
 
 portwatch-silver:
-	uv run python ingest/portwatch/portwatch_silver.py
+	PYTHONPATH="$(PROJECT_ROOT)" uv run python ingest/portwatch/portwatch_silver.py
 
 portwatch-cloud-dry-run: check-tfvars
-	uv run python warehouse/publish_portwatch_to_gcs.py --include-auxiliary --dry-run
-	uv run python warehouse/load_portwatch_to_bigquery.py --dry-run
+	PYTHONPATH="$(PROJECT_ROOT)" uv run python warehouse/publish_portwatch_to_gcs.py --include-auxiliary --dry-run
+	PYTHONPATH="$(PROJECT_ROOT)" uv run python warehouse/load_portwatch_to_bigquery.py --dry-run
 
 portwatch-cloud: check-tfvars
-	uv run python warehouse/publish_portwatch_to_gcs.py --include-auxiliary
-	uv run python warehouse/load_portwatch_to_bigquery.py
+	PYTHONPATH="$(PROJECT_ROOT)" uv run python warehouse/publish_portwatch_to_gcs.py --include-auxiliary
+	PYTHONPATH="$(PROJECT_ROOT)" uv run python warehouse/load_portwatch_to_bigquery.py
 
 portwatch-refresh-cloud: portwatch-silver portwatch-cloud
 

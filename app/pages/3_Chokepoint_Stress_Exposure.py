@@ -182,7 +182,7 @@ else:
 
 render_methodology_expander(
     [
-        "Traffic and weighted stress come from `raw.portwatch_monthly`, after canonicalizing PortWatch chokepoint names to align with the marts.",
+        "Traffic and weighted stress come from `analytics_staging.stg_portwatch_stress_metrics`, derived from the raw PortWatch monthly fact and aligned to the marts by canonicalized chokepoint names.",
         "Reporter exposure comes from `analytics_marts.mart_reporter_month_chokepoint_exposure` and is evaluated at the latest filtered exposure month.",
         "Route-level commodity evidence uses `analytics_marts.fct_reporter_partner_commodity_route_month` when that optional fact is present.",
         "The raw PortWatch feed covers fewer chokepoints than the exposure marts, so some chokepoints may appear in exposure views without a matching traffic trend.",

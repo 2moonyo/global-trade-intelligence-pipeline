@@ -2,7 +2,7 @@ name: capstone_monthly
 version: '1.0.0'
 config-version: 2
 
-profile: capstone_monthly_duckdb
+profile: capstone_monthly
 
 model-paths: ['models']
 seed-paths: ['seeds']

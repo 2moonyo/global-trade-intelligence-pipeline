@@ -17,7 +17,7 @@ FACT_TABLE = f"{MARTS_SCHEMA}.fct_reporter_partner_commodity_month"
 ROUTE_FACT_TABLE = f"{MARTS_SCHEMA}.fct_reporter_partner_commodity_route_month"
 EVENT_IMPACT_TABLE = f"{MARTS_SCHEMA}.mart_event_impact"
 
-PORTWATCH_TABLE = "raw.portwatch_monthly"
+PORTWATCH_TABLE = "analytics_staging.stg_portwatch_stress_metrics"
 COUNTRY_DIM_TABLE = "analytics_staging.stg_dim_country"
 COMMODITY_DIM_TABLE = "analytics_staging.stg_dim_commodity"
 EVENT_DIM_TABLE = "analytics_analytics_marts.dim_event"

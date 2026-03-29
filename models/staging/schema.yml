@@ -399,14 +399,67 @@ models:
       - name: link_role
         description: Relationship role between event and chokepoint.
 
-  - name: stg_chokepoint_stress_zscore
+  - name: stg_portwatch_stress_metrics
     description: >
-      Monthly chokepoint throughput z-score model derived from PortWatch.
-      Uses avg_capacity as throughput proxy and a fixed 2020-01 to 2023-12 baseline.
-      Keeps stress_index untouched in existing marts for side-by-side comparison.
+      Canonical PortWatch stress metrics model derived in dbt from the raw monthly
+      PortWatch fact. Produces expanding point-in-time component z-scores and
+      stress indices, plus rolling 6-month companion metrics for short-horizon
+      monitoring. Backfills automatically change forward-looking rows because the
+      expanding and rolling windows are rebuilt from the raw monthly history.
     columns:
       - name: chokepoint_id
-        description: Stable hashed chokepoint identifier derived from chokepoint_name.
+        description: Canonical analytics chokepoint identifier derived from chokepoint_name for consistent joins to event and exposure marts.
+        tests:
+          - not_null
+
+      - name: portwatch_source_chokepoint_id
+        description: Source PortWatch chokepoint identifier carried through from the raw monthly fact for lineage and backfill audits.
+        tests:
+          - not_null
+
+      - name: year_month
+        description: Canonical month key in YYYY-MM format.
+        tests:
+          - not_null
+
+      - name: month_start_date
+        description: First calendar day of the month.
+
+      - name: avg_n_total
+        description: Monthly traffic count intensity from PortWatch.
+
+      - name: avg_capacity
+        description: Monthly throughput proxy from PortWatch.
+
+      - name: z_score_capacity
+        description: Expanding point-in-time z-score for throughput.
+
+      - name: z_score_count
+        description: Expanding point-in-time z-score for traffic count.
+
+      - name: z_score_vessel_size
+        description: Expanding point-in-time z-score for capacity-per-movement.
+
+      - name: stress_index
+        description: Expanding blended stress index computed as 0.5 * z_score_count + 0.5 * z_score_capacity.
+
+      - name: stress_index_weighted
+        description: Expanding stress index weighted by the chokepoint-specific priority vessel share.
+
+      - name: stress_index_rolling_6m
+        description: Rolling 6-month blended stress index using only prior calendar months.
+
+      - name: stress_index_weighted_rolling_6m
+        description: Rolling 6-month weighted stress index using the same vessel-share weighting logic.
+
+  - name: stg_chokepoint_stress_zscore
+    description: >
+      Compatibility projection over stg_portwatch_stress_metrics.
+      Exposes the expanding point-in-time component z-scores used by event-impact
+      analytics while keeping the existing model interface stable.
+    columns:
+      - name: chokepoint_id
+        description: Stable chokepoint identifier derived from the raw monthly PortWatch fact.
         tests:
           - not_null
 
@@ -419,25 +472,25 @@ models:
         description: Monthly throughput proxy sourced from PortWatch avg_capacity.
 
       - name: mean_throughput
-        description: Baseline mean throughput by chokepoint over fixed 2020-01 to 2023-12 window.
+        description: Expanding point-in-time baseline mean throughput by chokepoint using prior months only.
 
       - name: stddev_throughput
-        description: Baseline sample standard deviation of throughput by chokepoint over fixed window.
+        description: Expanding point-in-time population standard deviation of throughput by chokepoint using prior months only.
 
       - name: z_score
-        description: Standardized monthly deviation from baseline computed as (throughput - mean_throughput) / stddev_throughput.
+        description: Expanding point-in-time throughput z-score computed as (throughput - mean_throughput) / stddev_throughput.
 
       - name: z_score_capacity
-        description: Capacity-based z-score alias for throughput signal, computed with the same baseline as z_score.
+        description: Capacity-based z-score alias for throughput signal, computed with the same expanding point-in-time baseline as z_score.
 
       - name: avg_n_total
         description: Monthly traffic count intensity from PortWatch avg_n_total.
 
       - name: z_score_count
-        description: Count-based z-score computed as (avg_n_total - mean(avg_n_total)) / stddev(avg_n_total) over the fixed baseline window.
+        description: Expanding point-in-time count-based z-score computed from prior months only.
 
       - name: vessel_size_index
         description: Capacity-per-movement indicator computed as throughput / avg_n_total with safe zero handling.
 
       - name: z_score_vessel_size
-        description: Z-score of vessel_size_index over the same fixed 2020-01 to 2023-12 baseline window.
+        description: Expanding point-in-time z-score of vessel_size_index over prior months only.

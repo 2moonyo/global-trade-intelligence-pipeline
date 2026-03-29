@@ -23,3 +23,18 @@ deep*.md
 /warehouse/end-*.md
 *.zip
 
+
+.bruin.yml
+/logs/portwatch/
+/.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+/infra/terraform/.terraform/
+/infra/terraform/terraform.tfvars.json
+/infra/terraform/*.tfplan

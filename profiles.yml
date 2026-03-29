@@ -1,8 +1,16 @@
-capstone_monthly_duckdb:
-  target: dev
+capstone_monthly:
+  target: duckdb_dev
   outputs:
-    dev:
+    duckdb_dev:
       type: duckdb
       path: warehouse/analytics.duckdb
       schema: analytics
       threads: 1
+    bigquery_dev:
+      type: bigquery
+      method: oauth
+      project: "{{ env_var('GCP_PROJECT_ID') }}"
+      dataset: "{{ env_var('DBT_BIGQUERY_DATASET', env_var('GCP_BIGQUERY_ANALYTICS_DATASET', 'analytics')) }}"
+      location: "{{ env_var('GCP_LOCATION', 'EU') }}"
+      priority: interactive
+      threads: 4

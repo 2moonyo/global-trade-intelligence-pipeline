@@ -50,9 +50,11 @@ portwatch as (
     chokepoint_name,
     stress_index,
     stress_index_weighted,
+    stress_index_rolling_6m,
+    stress_index_weighted_rolling_6m,
     avg_n_total,
     avg_capacity
-  from {{ source('raw', 'portwatch_monthly') }}
+  from {{ ref('stg_portwatch_stress_metrics') }}
 )
 
 select
@@ -71,6 +73,8 @@ select
   end as chokepoint_trade_exposure_ratio,
   p.stress_index,
   p.stress_index_weighted,
+  p.stress_index_rolling_6m,
+  p.stress_index_weighted_rolling_6m,
   p.avg_n_total,
   p.avg_capacity,
   coalesce(a.active_event_count, 0) as active_event_count,

@@ -402,10 +402,16 @@ models:
         description: Share of reporter monthly trade value exposed to the chokepoint.
 
       - name: stress_index
-        description: Upstream PortWatch stress index for the chokepoint-month.
+        description: dbt-derived expanding point-in-time PortWatch stress index for the chokepoint-month.
 
       - name: stress_index_weighted
-        description: Capacity-weighted upstream PortWatch stress index for the chokepoint-month.
+        description: dbt-derived expanding point-in-time weighted PortWatch stress index for the chokepoint-month.
+
+      - name: stress_index_rolling_6m
+        description: Rolling 6-month PortWatch stress index for the chokepoint-month using only prior calendar months.
+
+      - name: stress_index_weighted_rolling_6m
+        description: Rolling 6-month weighted PortWatch stress index for the chokepoint-month.
 
       - name: avg_n_total
         description: Average number of tracked vessels or transits for the chokepoint-month.
@@ -456,10 +462,16 @@ models:
         description: Share of reporter monthly trade value exposed to the chokepoint.
 
       - name: stress_index
-        description: PortWatch stress index for the chokepoint-month.
+        description: dbt-derived expanding point-in-time PortWatch stress index for the chokepoint-month.
 
       - name: stress_index_weighted
-        description: Capacity-weighted PortWatch stress index for the chokepoint-month.
+        description: dbt-derived expanding point-in-time weighted PortWatch stress index for the chokepoint-month.
+
+      - name: stress_index_rolling_6m
+        description: Rolling 6-month PortWatch stress index for the chokepoint-month using only prior calendar months.
+
+      - name: stress_index_weighted_rolling_6m
+        description: Rolling 6-month weighted PortWatch stress index for the chokepoint-month.
 
       - name: avg_n_total
         description: Average number of tracked vessels or transits for the chokepoint-month.

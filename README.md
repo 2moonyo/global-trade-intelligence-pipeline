@@ -2,6 +2,34 @@
 
 This repository contains the implemented DuckDB warehouse and dbt project for the capstone analytics stack. The current build is larger than the original bootstrap: it includes core trade facts, route and hub enrichments, macro and energy marts, event impact modelling, canonical-grain provenance, a dbt-generated time dimension, and a generic event location layer.
 
+The repo now also includes a first-pass cloud path for the PortWatch vertical slice:
+
+1. publish local PortWatch bronze and silver parquet assets to GCS
+2. load `silver/portwatch/portwatch_monthly` into BigQuery `raw.portwatch_monthly`
+3. point dbt at either DuckDB or BigQuery via `--target`
+
+## Terraform-First Quick Start
+
+Once you have filled in `infra/terraform/terraform.tfvars.json`, the intended flow is:
+
+```bash
+make cloud-bootstrap
+make portwatch-refresh-cloud
+```
+
+Or, if you want to preview the cloud publish/load before writing anything:
+
+```bash
+make cloud-bootstrap
+make portwatch-cloud-dry-run
+```
+
+If you later want to tear the Terraform-managed cloud resources back down, set `"allow_force_destroy": true` in `infra/terraform/terraform.tfvars.json` and then run:
+
+```bash
+make infra-destroy
+```
+
 ## Warehouse shape
 
 The live warehouse is organized as:
@@ -96,10 +124,99 @@ uv run dbt build --profiles-dir .
 Or run targeted areas:
 
 ```bash
-uv run dbt run --profiles-dir . --select staging
-uv run dbt run --profiles-dir . --select marts
-uv run dbt test --profiles-dir .
+uv run dbt run --profiles-dir . --target duckdb_dev --select staging
+uv run dbt run --profiles-dir . --target duckdb_dev --select marts
+uv run dbt test --profiles-dir . --target duckdb_dev
 ```
+
+### 3. Publish the PortWatch slice to GCS
+
+Populate the cloud settings in one of two ways:
+
+- local `.env` copied from `.env.example`
+- `infra/terraform/terraform.tfvars.json` if you are using the Terraform scaffold
+
+For local development, prefer Application Default Credentials instead of a service-account key:
+
+```bash
+gcloud auth application-default login
+```
+
+Then publish the PortWatch assets:
+
+```bash
+uv run python warehouse/publish_portwatch_to_gcs.py --include-auxiliary
+```
+
+Preview the upload plan without calling GCS:
+
+```bash
+uv run python warehouse/publish_portwatch_to_gcs.py --include-auxiliary --dry-run
+```
+
+### 4. Load PortWatch monthly into BigQuery
+
+After the canonical monthly silver partitions are in GCS:
+
+```bash
+uv run python warehouse/load_portwatch_to_bigquery.py
+```
+
+Preview the touched month partitions and GCS URIs first:
+
+```bash
+uv run python warehouse/load_portwatch_to_bigquery.py --dry-run
+```
+
+The loader replaces only the touched `month_start_date` partitions by default. Use `--append-only` only for controlled one-off loads.
+
+### 4a. Makefile workflow
+
+The repo now includes a root `Makefile` so the terraform-first flow is mostly two commands after you fill in the tfvars file:
+
+```bash
+make tfvars-init
+make cloud-bootstrap
+make portwatch-cloud-dry-run
+make portwatch-refresh-cloud
+```
+
+Useful targets:
+
+- `make cloud-bootstrap`
+- `make infra-destroy`
+- `make portwatch-cloud-dry-run`
+- `make portwatch-cloud`
+- `make portwatch-refresh-cloud`
+- `make dbt-bigquery-debug`
+- `make dbt-bigquery-build`
+
+### 5. BigQuery dbt target
+
+The profile now supports both local DuckDB and BigQuery:
+
+```bash
+uv run dbt debug --profiles-dir . --target bigquery_dev
+uv run dbt build --profiles-dir . --target bigquery_dev
+```
+
+If you are using Terraform as the source of truth for names, you can generate `.env` from your Terraform vars file:
+
+```bash
+python infra/terraform/render_dotenv.py > .env
+```
+
+Or let the `Makefile` inject the Terraform-derived values directly for dbt:
+
+```bash
+make dbt-bigquery-debug
+make dbt-bigquery-build
+```
+
+Current limitation:
+
+- The BigQuery profile is ready, but a number of models still contain DuckDB-specific SQL such as `strptime`, `strftime`, `generate_series`, `varchar`, and `double`.
+- That means the profile swap is scaffolded, but the full dbt project will still need SQL adapter refactors before a successful BigQuery build.
 
 ## Useful dbt vars
 
@@ -115,7 +232,7 @@ Default behavior already uses a 12-month lag and 12-month lead.
 
 - `canonical_grain_key` is carried through staged and fact trade models to support downstream lineage joins.
 - `fct_reporter_partner_commodity_month_provenance` is the canonical-grain provenance table for auditability and future ingest-log integration.
-- PortWatch exposure and event impact both use chokepoint stress signals, but they are not the same metric family: exposure marts use upstream stress indices, while event impact uses dbt-computed z-scores from `stg_chokepoint_stress_zscore`.
+- PortWatch exposure and event impact both use dbt-derived chokepoint stress signals: exposure marts consume the expanding `stress_index` family, while event impact consumes the expanding component z-scores exposed through `stg_chokepoint_stress_zscore`.
 - The event location layer now separates generic location semantics from chokepoint-only logic. Legacy raw event input still includes a column named `chokepoint_name` for some non-core locations.
 
 ## Query examples
@@ -207,5 +324,5 @@ Then open `http://localhost:8501`.
 
 - Reporter filters are limited to the countries that actually appear in the trade marts.
 - The overview and dependence pages prioritise dbt marts and only fall back to lower-grain facts where the selected filters require that grain.
-- Chokepoint traffic comes from `raw.portwatch_monthly`, so it covers fewer chokepoints than the exposure marts.
+- Chokepoint traffic stress comes from `analytics_staging.stg_portwatch_stress_metrics`, derived from the raw PortWatch monthly fact, so it covers fewer chokepoints than the exposure marts.
 - The events page uses true event bridge tables when available and falls back to commodity and traffic trends when they are not.

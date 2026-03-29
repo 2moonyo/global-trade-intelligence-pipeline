@@ -204,7 +204,7 @@ if has_event_support and get_event_options():
         [
             "Event windows come from `analytics_analytics_marts.bridge_event_month`, with event metadata from `analytics_analytics_marts.dim_event`.",
             "Commodity trade is aggregated from `analytics_marts.fct_reporter_partner_commodity_month` inside the selected event window.",
-            "Affected chokepoints are mapped through `analytics_analytics_marts.bridge_event_chokepoint` and then aligned to `raw.portwatch_monthly` with canonicalized names.",
+            "Affected chokepoints are mapped through `analytics_analytics_marts.bridge_event_chokepoint` and then aligned to `analytics_staging.stg_portwatch_stress_metrics` through canonical chokepoint ids derived from names.",
             "The page uses truthful event overlays only when the event bridge tables and affected-chokepoint mappings are actually present.",
         ]
     )
@@ -289,6 +289,6 @@ else:
         [
             "Fallback mode is activated only when the event dimension or bridge tables are missing or incomplete.",
             "Commodity trade still comes from `analytics_marts.fct_reporter_partner_commodity_month` and remains fully filterable.",
-            "Traffic context still comes from `raw.portwatch_monthly`, but without event shading because no trustworthy event scaffold is available.",
+            "Traffic context still comes from `analytics_staging.stg_portwatch_stress_metrics`, but without event shading because no trustworthy event scaffold is available.",
         ]
     )

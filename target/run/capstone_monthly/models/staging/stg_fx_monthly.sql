@@ -1,7 +1,8 @@
 
-  
-  create view "analytics"."analytics_staging"."stg_fx_monthly__dbt_tmp" as (
-    -- Grain: one row per year_month + fx_currency_code.
+
+  create or replace view `capfractal`.`analytics_staging`.`stg_fx_monthly`
+  OPTIONS()
+  as -- Grain: one row per year_month + fx_currency_code.
 -- Converts ECB quote-per-EUR rates into USD-per-currency and computes monthly momentum.
 
 with raw_fx as (
@@ -11,7 +12,7 @@ with raw_fx as (
     upper(trim(base_ccy)) as base_ccy,
     cast(rate as double) as quote_per_base_rate,
     load_ts
-  from "analytics"."raw"."ecb_fx_eu_daily"
+  from `capfractal`.`raw`.`ecb_fx_eu_daily`
   where date is not null
     and quote_ccy is not null
     and base_ccy is not null
@@ -93,5 +94,5 @@ select
     when prev_month_rate_to_usd is null or prev_month_rate_to_usd = 0 then null
     else (fx_rate_to_usd - prev_month_rate_to_usd) / prev_month_rate_to_usd
   end as fx_mom_change
-from monthly_with_prev
-  );
+from monthly_with_prev;
+

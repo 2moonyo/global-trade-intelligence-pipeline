@@ -1,40 +1,40 @@
 with raw_source as (
   select
     cast(ref_date as date) as ref_date,
-    try_cast(period as integer) as period,
+    {{ safe_cast('period', dbt.type_int()) }} as period,
     case
-      when regexp_full_match(cast(year_month as varchar), '^\\d{4}-\\d{2}$') then cast(year_month as varchar)
-      when try_cast(period as integer) is not null then substr(cast(period as varchar), 1, 4) || '-' || substr(cast(period as varchar), 5, 2)
+      when {{ regex_full_match('year_month', '^\\d{4}-\\d{2}$') }} then {{ cast_string('year_month') }}
+      when {{ safe_cast('period', dbt.type_int()) }} is not null then substr({{ cast_string('period') }}, 1, 4) || '-' || substr({{ cast_string('period') }}, 5, 2)
       else null
     end as year_month,
     coalesce(
-      try_cast(ref_year as integer),
-      try_cast(substr(cast(period as varchar), 1, 4) as integer)
+      {{ safe_cast('ref_year', dbt.type_int()) }},
+      {{ safe_cast('substr(' ~ cast_string('period') ~ ', 1, 4)', dbt.type_int()) }}
     ) as ref_year,
-    upper(trim(cast(reporter_iso3 as varchar))) as reporter_iso3,
-    upper(trim(cast(partner_iso3 as varchar))) as partner_iso3,
-    trim(cast(cmdCode as varchar)) as cmd_code,
+    upper(trim({{ cast_string('reporter_iso3') }})) as reporter_iso3,
+    upper(trim({{ cast_string('partner_iso3') }})) as partner_iso3,
+    trim({{ cast_string('cmdCode') }}) as cmd_code,
     case
-      when upper(trim(cast(flowCode as varchar))) = 'M' then 'Import'
-      when upper(trim(cast(flowCode as varchar))) = 'X' then 'Export'
-      when flowCode is not null then trim(cast(flowCode as varchar))
+      when upper(trim({{ cast_string('flowCode') }})) = 'M' then 'Import'
+      when upper(trim({{ cast_string('flowCode') }})) = 'X' then 'Export'
+      when flowCode is not null then trim({{ cast_string('flowCode') }})
       else null
     end as trade_flow,
-    cast(load_batch_id as varchar) as load_batch_id,
-    cast(source_file as varchar) as source_file,
-    cast(bronze_extracted_at as timestamp with time zone) as bronze_extracted_at
+    {{ cast_string('load_batch_id') }} as load_batch_id,
+    {{ cast_string('source_file') }} as source_file,
+    cast(bronze_extracted_at as timestamp) as bronze_extracted_at
   from {{ source('raw', 'comtrade_fact') }}
 ),
 
 filtered as (
   select
-    md5(
-      coalesce(reporter_iso3, '') || '|' ||
-      coalesce(partner_iso3, '') || '|' ||
-      coalesce(cmd_code, '') || '|' ||
-      cast(period as varchar) || '|' ||
-      coalesce(trade_flow, '')
-    ) as canonical_grain_key,
+    {{ hash_text(
+      "coalesce(reporter_iso3, '') || '|' || "
+      ~ "coalesce(partner_iso3, '') || '|' || "
+      ~ "coalesce(cmd_code, '') || '|' || "
+      ~ cast_string('period') ~ " || '|' || "
+      ~ "coalesce(trade_flow, '')"
+    ) }} as canonical_grain_key,
     reporter_iso3,
     partner_iso3,
     cmd_code,
@@ -69,8 +69,8 @@ aggregated as (
     count(distinct source_file) as distinct_source_file_count,
     min(bronze_extracted_at) as first_bronze_extracted_at,
     max(bronze_extracted_at) as last_bronze_extracted_at,
-    list(distinct load_batch_id) as load_batch_ids,
-    list(distinct source_file) as source_files
+    {{ array_agg_distinct('load_batch_id') }} as load_batch_ids,
+    {{ array_agg_distinct('source_file') }} as source_files
   from filtered
   group by 1, 2, 3, 4, 5, 6, 7, 8
 )

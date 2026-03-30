@@ -6,14 +6,16 @@ with base as (
         event_id,
         location_name as region_name,
         link_role
-    from "analytics"."analytics_analytics_staging"."stg_event_location"
+    from `capfractal`.`analytics_analytics_staging`.`stg_event_location`
     where location_type <> 'chokepoint'
 
 )
 
 select
     event_id,
-    md5(lower(trim(region_name))) as region_id,
+    
+    to_hex(md5(cast(lower(trim(region_name)) as string)))
+   as region_id,
     region_name,
     link_role
 from base

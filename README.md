@@ -154,6 +154,35 @@ Preview the upload plan without calling GCS:
 uv run python warehouse/publish_portwatch_to_gcs.py --include-auxiliary --dry-run
 ```
 
+### 3a. Run the PortWatch extract with per-run logs
+
+The bronze extract now writes a rolling log and a JSONL manifest entry on every run:
+
+- `logs/portwatch/portwatch_extract.log`
+- `logs/portwatch/portwatch_extract_manifest.jsonl`
+
+Each manifest row captures:
+
+- requested start and end dates
+- selected chokepoints and derived region fields
+- processed dates, dates with rows, and null dates
+- per-day row counts and elapsed seconds
+- monthly row-count summaries
+- files written and total extracted rows
+- run duration and failure summary if the run errors
+
+Run it directly:
+
+```bash
+uv run python ingest/portwatch/portwatch_extract.py --start-date 2026-01-01 --end-date 2026-01-31
+```
+
+Or via `make`:
+
+```bash
+make portwatch-extract
+```
+
 ### 4. Load PortWatch monthly into BigQuery
 
 After the canonical monthly silver partitions are in GCS:
@@ -185,6 +214,7 @@ Useful targets:
 
 - `make cloud-bootstrap`
 - `make infra-destroy`
+- `make portwatch-extract`
 - `make portwatch-cloud-dry-run`
 - `make portwatch-cloud`
 - `make portwatch-refresh-cloud`

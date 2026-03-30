@@ -1,7 +1,8 @@
 
-  
-  create view "analytics"."analytics_analytics_staging"."stg_event_raw__dbt_tmp" as (
-    
+
+  create or replace view `capfractal`.`analytics_analytics_staging`.`stg_event_raw`
+  OPTIONS()
+  as 
 
 
 select
@@ -20,5 +21,5 @@ select
     trim(event_scope) as raw_event_scope,
     trim(description) as description,
     trim(source_class) as source_class
-from raw.dim_event
-  );
+from raw.dim_event;
+

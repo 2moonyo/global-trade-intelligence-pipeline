@@ -10,7 +10,7 @@ with route_fact as (
     main_chokepoint as chokepoint_name,
     route_applicability_status,
     is_maritime_routed
-  from "analytics"."analytics_marts"."fct_reporter_partner_commodity_route_month"
+  from `capfractal`.`analytics_marts`.`fct_reporter_partner_commodity_route_month`
 ),
 reporter_month_total as (
   select
@@ -18,7 +18,7 @@ reporter_month_total as (
     period,
     year_month,
     sum(trade_value_usd) as reporter_month_trade_value_usd
-  from "analytics"."analytics_marts"."fct_reporter_partner_commodity_month"
+  from `capfractal`.`analytics_marts`.`fct_reporter_partner_commodity_month`
   group by 1, 2, 3
 ),
 reporter_month_chokepoint as (
@@ -41,7 +41,7 @@ active_events as (
     count(distinct event_id) filter (where is_event_active) as active_event_count,
     max(severity_weight) filter (where is_event_active) as max_active_event_severity,
     avg(severity_weight) filter (where is_event_active) as avg_active_event_severity
-  from "analytics"."analytics_staging"."stg_chokepoint_bridge"
+  from `capfractal`.`analytics_staging`.`stg_chokepoint_bridge`
   group by 1, 2
 ),
 portwatch as (
@@ -54,7 +54,7 @@ portwatch as (
     stress_index_weighted_rolling_6m,
     avg_n_total,
     avg_capacity
-  from "analytics"."analytics_staging"."stg_portwatch_stress_metrics"
+  from `capfractal`.`analytics_staging`.`stg_portwatch_stress_metrics`
 )
 
 select
@@ -85,9 +85,9 @@ inner join reporter_month_total as rmt
   on rmc.reporter_iso3 = rmt.reporter_iso3
  and rmc.period = rmt.period
  and rmc.year_month = rmt.year_month
-left join "analytics"."analytics_staging"."stg_dim_country" as c
+left join `capfractal`.`analytics_staging`.`stg_dim_country` as c
   on rmc.reporter_iso3 = c.iso3
-left join "analytics"."analytics_staging"."stg_dim_time" as t
+left join `capfractal`.`analytics_staging`.`stg_dim_time` as t
   on rmc.period = t.period
 left join portwatch as p
   on rmc.year_month = p.year_month

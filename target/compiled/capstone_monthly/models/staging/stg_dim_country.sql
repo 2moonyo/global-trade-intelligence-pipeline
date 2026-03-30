@@ -7,4 +7,4 @@ select
   continent,
   cast(is_eu as boolean) as is_eu,
   cast(is_oecd as boolean) as is_oecd
-from "analytics"."raw"."dim_country"
+from `capfractal`.`raw`.`dim_country`

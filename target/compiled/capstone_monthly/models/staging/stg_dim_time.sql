@@ -4,54 +4,74 @@
 with observed_months as (
 
   select distinct
-    cast(strptime(year_month || '-01', '%Y-%m-%d') as date) as month_start_date
-  from "analytics"."raw"."comtrade_fact"
+    
+    safe_cast(concat(cast(year_month as string), '-01') as date)
+   as month_start_date
+  from `capfractal`.`raw`.`comtrade_fact`
   where year_month is not null
-    and regexp_full_match(year_month, '^\\d{4}-\\d{2}$')
+    and 
+    regexp_contains(cast(year_month as string), r'^\d{4}-\d{2}$')
+  
 
-  union
+  union distinct
 
   select distinct
-    cast(strptime(year_month || '-01', '%Y-%m-%d') as date) as month_start_date
-  from "analytics"."raw"."portwatch_monthly"
+    
+    safe_cast(concat(cast(year_month as string), '-01') as date)
+   as month_start_date
+  from `capfractal`.`raw`.`portwatch_monthly`
   where year_month is not null
-    and regexp_full_match(year_month, '^\\d{4}-\\d{2}$')
+    and 
+    regexp_contains(cast(year_month as string), r'^\d{4}-\d{2}$')
+  
 
-  union
+  union distinct
 
   select distinct
     cast(month_start_date as date) as month_start_date
-  from "analytics"."raw"."brent_monthly"
+  from `capfractal`.`raw`.`brent_monthly`
   where month_start_date is not null
 
-  union
+  union distinct
 
   select distinct
-    cast(date_trunc('month', cast(date as date)) as date) as month_start_date
-  from "analytics"."raw"."ecb_fx_eu_daily"
+    
+    cast(date_trunc(cast(date as date), month) as date)
+   as month_start_date
+  from `capfractal`.`raw`.`ecb_fx_eu_daily`
   where date is not null
 
-  union
+  union distinct
 
   select distinct
-    cast(strptime(year_month || '-01', '%Y-%m-%d') as date) as month_start_date
-  from "analytics"."raw"."bridge_event_month_chokepoint_core"
+    
+    safe_cast(concat(cast(year_month as string), '-01') as date)
+   as month_start_date
+  from `capfractal`.`raw`.`bridge_event_month_chokepoint_core`
   where year_month is not null
-    and regexp_full_match(year_month, '^\\d{4}-\\d{2}$')
+    and 
+    regexp_contains(cast(year_month as string), r'^\d{4}-\d{2}$')
+  
 
-  union
+  union distinct
 
   select distinct
-    cast(strptime(year_month || '-01', '%Y-%m-%d') as date) as month_start_date
-  from "analytics"."raw"."bridge_event_month_maritime_region"
+    
+    safe_cast(concat(cast(year_month as string), '-01') as date)
+   as month_start_date
+  from `capfractal`.`raw`.`bridge_event_month_maritime_region`
   where year_month is not null
-    and regexp_full_match(year_month, '^\\d{4}-\\d{2}$')
+    and 
+    regexp_contains(cast(year_month as string), r'^\d{4}-\d{2}$')
+  
 
-  union
+  union distinct
 
   select distinct
-    cast(strptime(cast(year as varchar) || '-01-01', '%Y-%m-%d') as date) as month_start_date
-  from "analytics"."raw"."energy_vulnerability"
+    
+    safe_cast(concat(cast(year as string), '-01-01') as date)
+   as month_start_date
+  from `capfractal`.`raw`.`energy_vulnerability`
   where year is not null
 
 ),
@@ -68,21 +88,27 @@ bounds as (
 calendar as (
 
   select
-    cast(generate_series as date) as month_start_date
+    month_start_date
   from bounds,
-  generate_series(
-    min_month_start - (12 * interval 1 month),
-    max_month_start + (12 * interval 1 month),
-    interval 1 month
-  )
+  
+    unnest(generate_date_array(cast(
+    date_sub(cast(min_month_start as date), interval 12 month)
+   as date), cast(
+    date_add(cast(max_month_start as date), interval 12 month)
+   as date), interval 1 month)) as month_start_date
+  
 
 )
 
 select
-  cast(strftime(month_start_date, '%Y%m') as integer) as period,
-  cast(extract(year from month_start_date) as integer) as year,
-  cast(extract(month from month_start_date) as integer) as month,
-  cast(((extract(month from month_start_date) - 1) / 3) + 1 as integer) as quarter,
-  strftime(month_start_date, '%Y-%m') as year_month,
+  
+    cast(format_date('%Y%m', cast(month_start_date as date)) as INT64)
+   as period,
+  cast(extract(year from cast(month_start_date as date)) as INT64) as year,
+  cast(extract(month from cast(month_start_date as date)) as INT64) as month,
+  cast(extract(quarter from cast(month_start_date as date)) as INT64) as quarter,
+  
+    format_date('%Y-%m', cast(month_start_date as date))
+   as year_month,
   month_start_date
 from calendar

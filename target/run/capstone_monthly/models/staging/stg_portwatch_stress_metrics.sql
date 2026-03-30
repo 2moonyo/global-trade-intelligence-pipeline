@@ -1,32 +1,39 @@
 
   
     
+
+    create or replace table `capfractal`.`analytics_staging`.`stg_portwatch_stress_metrics`
+      
+    
     
 
-    create  table
-      "analytics"."analytics_staging"."stg_portwatch_stress_metrics__dbt_tmp"
-  
+    
+    OPTIONS()
     as (
       
 
 with raw_portwatch as (
   select
-    cast(chokepoint_id as varchar) as portwatch_source_chokepoint_id,
-    md5(lower(trim(cast(chokepoint_name as varchar)))) as chokepoint_id,
-    cast(chokepoint_name as varchar) as chokepoint_name,
+    cast(chokepoint_id as string) as portwatch_source_chokepoint_id,
+    
+    to_hex(md5(cast(lower(trim(cast(chokepoint_name as string))) as string)))
+   as chokepoint_id,
+    cast(chokepoint_name as string) as chokepoint_name,
     cast(
       coalesce(
         cast(month_start_date as date),
-        cast(strptime(year_month || '-01', '%Y-%m-%d') as date)
+        
+    safe_cast(concat(cast(year_month as string), '-01') as date)
+  
       ) as date
     ) as month_start_date,
-    cast(year_month as varchar) as year_month,
-    cast(avg_n_total as double) as avg_n_total,
-    cast(avg_capacity as double) as avg_capacity,
-    cast(tanker_share as double) as tanker_share,
-    cast(container_share as double) as container_share,
-    cast(dry_bulk_share as double) as dry_bulk_share
-  from "analytics"."raw"."portwatch_monthly"
+    cast(year_month as string) as year_month,
+    cast(avg_n_total as FLOAT64) as avg_n_total,
+    cast(avg_capacity as FLOAT64) as avg_capacity,
+    cast(tanker_share as FLOAT64) as tanker_share,
+    cast(container_share as FLOAT64) as container_share,
+    cast(dry_bulk_share as FLOAT64) as dry_bulk_share
+  from `capfractal`.`raw`.`portwatch_monthly`
   where year_month is not null
     and chokepoint_name is not null
 ),
@@ -45,13 +52,11 @@ calendar as (
     b.chokepoint_id,
     b.portwatch_source_chokepoint_id,
     b.chokepoint_name,
-    cast(gs.generate_series as date) as month_start_date
+    month_start_date
   from chokepoint_bounds as b,
-  generate_series(
-    b.min_month_start,
-    b.max_month_start,
-    interval 1 month
-  ) as gs(generate_series)
+  
+    unnest(generate_date_array(cast(b.min_month_start as date), cast(b.max_month_start as date), interval 1 month)) as month_start_date
+  
 ),
 scaffolded as (
   select
@@ -59,9 +64,11 @@ scaffolded as (
     coalesce(r.portwatch_source_chokepoint_id, c.portwatch_source_chokepoint_id) as portwatch_source_chokepoint_id,
     coalesce(r.chokepoint_name, c.chokepoint_name) as chokepoint_name,
     c.month_start_date,
-    strftime(c.month_start_date, '%Y-%m') as year_month,
-    cast(strftime(c.month_start_date, '%Y') as integer) as year,
-    strftime(c.month_start_date, '%m') as month,
+    
+    format_date('%Y-%m', cast(c.month_start_date as date))
+   as year_month,
+    cast(extract(year from cast(c.month_start_date as date)) as INT64) as year,
+    lpad(cast(cast(extract(month from cast(c.month_start_date as date)) as INT64) as string), 2, '0') as month,
     r.avg_n_total,
     r.avg_capacity,
     r.tanker_share,
@@ -254,5 +261,4 @@ select *
 from final
 where has_portwatch_data_flag = 1
     );
-  
   

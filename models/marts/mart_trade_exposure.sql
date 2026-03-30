@@ -26,7 +26,7 @@ reporter_month_totals as (
 reporter_chokepoint_confidence as (
   select
     rt.reporter_iso3,
-    md5(lower(trim(rt.main_chokepoint))) as chokepoint_id,
+    {{ hash_text('lower(trim(rt.main_chokepoint))') }} as chokepoint_id,
     rt.main_chokepoint as chokepoint_name,
     rt.period,
     rt.year_month,

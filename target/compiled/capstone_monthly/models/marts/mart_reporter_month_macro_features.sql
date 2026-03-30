@@ -16,7 +16,7 @@ with reporter_month as (
     month,
     quarter,
     month_start_date
-  from "analytics"."analytics_marts"."mart_reporter_month_trade_summary"
+  from `capfractal`.`analytics_marts`.`mart_reporter_month_trade_summary`
 ),
 macro_monthly as (
   select
@@ -26,7 +26,7 @@ macro_monthly as (
     brent_mom_change,
     fx_rate_to_usd,
     fx_mom_change
-  from "analytics"."analytics_marts"."mart_macro_monthly_features"
+  from `capfractal`.`analytics_marts`.`mart_macro_monthly_features`
 ),
 energy_annual_pivot as (
   select
@@ -38,7 +38,7 @@ energy_annual_pivot as (
     max(case when indicator_code = 'oil_electricity_share' then indicator_value end) as oil_electricity_share,
     max(case when indicator_code = 'gas_electricity_share' then indicator_value end) as gas_electricity_share,
     max(case when indicator_code = 'coal_electricity_share' then indicator_value end) as coal_electricity_share
-  from "analytics"."analytics_marts"."mart_reporter_energy_vulnerability"
+  from `capfractal`.`analytics_marts`.`mart_reporter_energy_vulnerability`
   group by 1, 2
 )
 

@@ -1,7 +1,8 @@
 
-  
-  create view "analytics"."analytics_staging"."stg_route_applicability__dbt_tmp" as (
-    select
+
+  create or replace view `capfractal`.`analytics_staging`.`stg_route_applicability`
+  OPTIONS()
+  as select
   upper(trim(reporter_iso3)) as reporter_iso3,
   upper(trim(partner_iso3)) as partner_iso3,
   upper(trim(partner2_iso3)) as partner2_iso3,
@@ -13,5 +14,5 @@
   cast(has_non_marine as boolean) as has_non_marine,
   mot_codes_seen,
   route_applicability_status
-from "analytics"."raw"."route_applicability"
-  );
+from `capfractal`.`raw`.`route_applicability`;
+

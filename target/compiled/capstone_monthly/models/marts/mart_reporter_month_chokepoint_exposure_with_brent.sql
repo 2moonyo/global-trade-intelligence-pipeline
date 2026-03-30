@@ -1,9 +1,9 @@
 with exposure as (
-  select * from "analytics"."analytics_marts"."mart_reporter_month_chokepoint_exposure"
+  select * from `capfractal`.`analytics_marts`.`mart_reporter_month_chokepoint_exposure`
 ),
 brent as (
   select *
-  from "analytics"."analytics_staging"."stg_brent_monthly"
+  from `capfractal`.`analytics_staging`.`stg_brent_monthly`
   where benchmark_code = 'BRENT_EU'
 )
 

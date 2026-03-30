@@ -322,7 +322,7 @@ def build_contract_monthly(
     monthly_contract = monthly_legacy.merge(chokepoint_lookup, on="chokepoint_name", how="left", validate="many_to_one")
     monthly_contract["month_start_date"] = pd.PeriodIndex(
         monthly_contract["year_month"], freq="M"
-    ).to_timestamp()
+    ).to_timestamp().date
 
     contract_cols = [
         "month_start_date",
@@ -558,6 +558,7 @@ def run(
                 "status": "completed",
                 "finished_at": finished_at.isoformat(),
                 "output_row_count": len(monthly_contract),
+                "touched_year_months": sorted(monthly_contract["year_month"].dropna().unique().tolist()),
                 "partitions_written": partitions_written,
                 "output_counts": {
                     "monthly_legacy": len(monthly_legacy),

@@ -1,7 +1,8 @@
 
-  
-  create view "analytics"."analytics_staging"."stg_comtrade_trade_base__dbt_tmp" as (
-    with raw_source as (
+
+  create or replace view `capfractal`.`analytics_staging`.`stg_comtrade_trade_base`
+  OPTIONS()
+  as with raw_source as (
   select
     cast(ref_date as date) as ref_date,
     cast(period as varchar) as period_raw,
@@ -18,7 +19,7 @@
     cast(qty as double) as qty,
     cast(motCode as integer) as mot_code,
     cast(partner2Code as integer) as partner2_code
-  from "analytics"."raw"."comtrade_fact"
+  from `capfractal`.`raw`.`comtrade_fact`
 ),
 source_data as (
   select
@@ -79,5 +80,5 @@ where period is not null
   and partner_iso3 is not null
   and cmd_code is not null
   and year_month is not null
-  and trade_flow is not null
-  );
+  and trade_flow is not null;
+

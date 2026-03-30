@@ -2,13 +2,20 @@
     
     
 
+with dbt_test__target as (
+
+  select period as unique_field
+  from `capfractal`.`analytics_staging`.`stg_dim_time`
+  where period is not null
+
+)
+
 select
-    period as unique_field,
+    unique_field,
     count(*) as n_records
 
-from "analytics"."analytics_staging"."stg_dim_time"
-where period is not null
-group by period
+from dbt_test__target
+group by unique_field
 having count(*) > 1
 
 

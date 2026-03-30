@@ -6,9 +6,9 @@ with raw_fx as (
     cast(date as date) as fx_date,
     upper(trim(quote_ccy)) as quote_ccy,
     upper(trim(base_ccy)) as base_ccy,
-    cast(rate as double) as quote_per_base_rate,
+    cast(rate as FLOAT64) as quote_per_base_rate,
     load_ts
-  from "analytics"."raw"."ecb_fx_eu_daily"
+  from `capfractal`.`raw`.`ecb_fx_eu_daily`
   where date is not null
     and quote_ccy is not null
     and base_ccy is not null
@@ -52,7 +52,9 @@ daily_with_usd_per_base as (
 ),
 daily_usd_converted as (
   select
-    strftime(fx_date, '%Y-%m') as year_month,
+    
+    format_date('%Y-%m', cast(fx_date as date))
+   as year_month,
     quote_ccy as fx_currency_code,
     case
       when quote_ccy = 'USD' then 1.0

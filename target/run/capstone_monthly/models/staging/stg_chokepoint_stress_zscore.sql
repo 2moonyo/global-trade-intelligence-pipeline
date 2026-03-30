@@ -1,7 +1,8 @@
 
-  
-  create view "analytics"."analytics_staging"."stg_chokepoint_stress_zscore__dbt_tmp" as (
-    -- Compatibility layer over the canonical PortWatch stress metrics model.
+
+  create or replace view `capfractal`.`analytics_staging`.`stg_chokepoint_stress_zscore`
+  OPTIONS()
+  as -- Compatibility layer over the canonical PortWatch stress metrics model.
 -- Keeps the existing event-impact interface stable while sourcing all z-scores
 -- from the dbt-derived point-in-time expanding baseline.
 
@@ -17,5 +18,5 @@ select
   z_score_count,
   vessel_size_index,
   z_score_vessel_size
-from "analytics"."analytics_staging"."stg_portwatch_stress_metrics"
-  );
+from `capfractal`.`analytics_staging`.`stg_portwatch_stress_metrics`;
+

@@ -1,7 +1,8 @@
 
-  
-  create view "analytics"."analytics_staging"."stg_dim_commodity__dbt_tmp" as (
-    select
+
+  create or replace view `capfractal`.`analytics_staging`.`stg_dim_commodity`
+  OPTIONS()
+  as select
   cmdCode as cmd_code,
   hs2,
   hs4,
@@ -11,5 +12,5 @@
   cast(food_flag as boolean) as food_flag,
   cast(energy_flag as boolean) as energy_flag,
   cast(industrial_flag as boolean) as industrial_flag
-from "analytics"."raw"."dim_commodity"
-  );
+from `capfractal`.`raw`.`dim_commodity`;
+

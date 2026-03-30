@@ -16,7 +16,7 @@ with base as (
 
 select
     event_id,
-    md5(lower(trim(chokepoint_name))) as chokepoint_id,
+    {{ hash_text('lower(trim(chokepoint_name))') }} as chokepoint_id,
     chokepoint_name,
     link_role
 from base

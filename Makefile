@@ -7,15 +7,18 @@ TFVARS_EXAMPLE := $(TF_DIR)/terraform.tfvars.json.example
 
 .DEFAULT_GOAL := help
 
-.PHONY: help tfvars-init check-tfvars deps-sync gcp-auth infra-init infra-plan infra-apply infra-destroy env-file env-print cloud-bootstrap portwatch-silver portwatch-cloud-dry-run portwatch-cloud portwatch-refresh-cloud dbt-bigquery-debug dbt-bigquery-build
+.PHONY: help tfvars-init check-tfvars deps-sync gcp-auth infra-init infra-plan infra-apply infra-destroy env-file env-print cloud-bootstrap portwatch-extract portwatch-silver portwatch-cloud-dry-run portwatch-cloud portwatch-cloud-dry-run-with-bronze portwatch-cloud-with-bronze portwatch-refresh-cloud dbt-bigquery-debug dbt-bigquery-build
 
 help:
 	@printf "%s\n" \
 		"make tfvars-init             Copy the Terraform vars example if needed." \
 		"make cloud-bootstrap         ADC auth if needed, terraform init/apply, and render .env." \
 		"make infra-destroy           Destroy Terraform-managed cloud resources after confirmation." \
-		"make portwatch-cloud-dry-run Preview the GCS publish and BigQuery load steps." \
-		"make portwatch-cloud         Publish PortWatch assets to GCS and load raw.portwatch_monthly." \
+		"make portwatch-extract       Run the PortWatch bronze extract with per-run logs and manifest output." \
+		"make portwatch-cloud-dry-run Preview the silver-only GCS publish and BigQuery load steps." \
+		"make portwatch-cloud         Publish silver PortWatch assets to GCS and load raw.portwatch_monthly." \
+		"make portwatch-cloud-dry-run-with-bronze Preview the GCS publish/load steps including bronze." \
+		"make portwatch-cloud-with-bronze Publish PortWatch bronze and silver assets, then load raw.portwatch_monthly." \
 		"make portwatch-refresh-cloud Rebuild PortWatch silver, then publish and load it." \
 		"make dbt-bigquery-debug      Run dbt debug with env vars derived from Terraform." \
 		"make dbt-bigquery-build      Run dbt build with env vars derived from Terraform."
@@ -67,14 +70,25 @@ env-print: check-tfvars
 cloud-bootstrap: check-tfvars deps-sync gcp-auth infra-init infra-apply env-file
 	@echo "Cloud bootstrap complete."
 
+portwatch-extract:
+	PYTHONPATH="$(PROJECT_ROOT)" uv run python ingest/portwatch/portwatch_extract.py
+
 portwatch-silver:
 	PYTHONPATH="$(PROJECT_ROOT)" uv run python ingest/portwatch/portwatch_silver.py
 
 portwatch-cloud-dry-run: check-tfvars
-	PYTHONPATH="$(PROJECT_ROOT)" uv run python warehouse/publish_portwatch_to_gcs.py --include-auxiliary --dry-run
+	PYTHONPATH="$(PROJECT_ROOT)" uv run python warehouse/publish_portwatch_to_gcs.py --skip-bronze --include-auxiliary --dry-run
 	PYTHONPATH="$(PROJECT_ROOT)" uv run python warehouse/load_portwatch_to_bigquery.py --dry-run
 
 portwatch-cloud: check-tfvars
+	PYTHONPATH="$(PROJECT_ROOT)" uv run python warehouse/publish_portwatch_to_gcs.py --skip-bronze --include-auxiliary
+	PYTHONPATH="$(PROJECT_ROOT)" uv run python warehouse/load_portwatch_to_bigquery.py
+
+portwatch-cloud-dry-run-with-bronze: check-tfvars
+	PYTHONPATH="$(PROJECT_ROOT)" uv run python warehouse/publish_portwatch_to_gcs.py --include-auxiliary --dry-run
+	PYTHONPATH="$(PROJECT_ROOT)" uv run python warehouse/load_portwatch_to_bigquery.py --dry-run
+
+portwatch-cloud-with-bronze: check-tfvars
 	PYTHONPATH="$(PROJECT_ROOT)" uv run python warehouse/publish_portwatch_to_gcs.py --include-auxiliary
 	PYTHONPATH="$(PROJECT_ROOT)" uv run python warehouse/load_portwatch_to_bigquery.py
 

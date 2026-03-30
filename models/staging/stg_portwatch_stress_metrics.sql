@@ -2,21 +2,21 @@
 
 with raw_portwatch as (
   select
-    cast(chokepoint_id as varchar) as portwatch_source_chokepoint_id,
-    md5(lower(trim(cast(chokepoint_name as varchar)))) as chokepoint_id,
-    cast(chokepoint_name as varchar) as chokepoint_name,
+    {{ cast_string('chokepoint_id') }} as portwatch_source_chokepoint_id,
+    {{ hash_text("lower(trim(" ~ cast_string('chokepoint_name') ~ "))") }} as chokepoint_id,
+    {{ cast_string('chokepoint_name') }} as chokepoint_name,
     cast(
       coalesce(
         cast(month_start_date as date),
-        cast(strptime(year_month || '-01', '%Y-%m-%d') as date)
+        {{ month_start_from_year_month('year_month') }}
       ) as date
     ) as month_start_date,
-    cast(year_month as varchar) as year_month,
-    cast(avg_n_total as double) as avg_n_total,
-    cast(avg_capacity as double) as avg_capacity,
-    cast(tanker_share as double) as tanker_share,
-    cast(container_share as double) as container_share,
-    cast(dry_bulk_share as double) as dry_bulk_share
+    {{ cast_string('year_month') }} as year_month,
+    {{ cast_float('avg_n_total') }} as avg_n_total,
+    {{ cast_float('avg_capacity') }} as avg_capacity,
+    {{ cast_float('tanker_share') }} as tanker_share,
+    {{ cast_float('container_share') }} as container_share,
+    {{ cast_float('dry_bulk_share') }} as dry_bulk_share
   from {{ source('raw', 'portwatch_monthly') }}
   where year_month is not null
     and chokepoint_name is not null
@@ -36,13 +36,9 @@ calendar as (
     b.chokepoint_id,
     b.portwatch_source_chokepoint_id,
     b.chokepoint_name,
-    cast(gs.generate_series as date) as month_start_date
+    month_start_date
   from chokepoint_bounds as b,
-  generate_series(
-    b.min_month_start,
-    b.max_month_start,
-    interval 1 month
-  ) as gs(generate_series)
+  {{ month_series('b.min_month_start', 'b.max_month_start') }}
 ),
 scaffolded as (
   select
@@ -50,9 +46,9 @@ scaffolded as (
     coalesce(r.portwatch_source_chokepoint_id, c.portwatch_source_chokepoint_id) as portwatch_source_chokepoint_id,
     coalesce(r.chokepoint_name, c.chokepoint_name) as chokepoint_name,
     c.month_start_date,
-    strftime(c.month_start_date, '%Y-%m') as year_month,
-    cast(strftime(c.month_start_date, '%Y') as integer) as year,
-    strftime(c.month_start_date, '%m') as month,
+    {{ year_month_from_date('c.month_start_date') }} as year_month,
+    {{ year_int_from_date('c.month_start_date') }} as year,
+    lpad(cast({{ month_int_from_date('c.month_start_date') }} as {{ dbt.type_string() }}), 2, '0') as month,
     r.avg_n_total,
     r.avg_capacity,
     r.tanker_share,

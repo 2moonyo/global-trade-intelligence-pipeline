@@ -7,8 +7,10 @@ with hub_presence as (
     period,
     year_month,
     trade_flow,
-    bool_or(has_partner2_hub) as expected_has_hub
-  from "analytics"."analytics_marts"."fct_reporter_partner_commodity_hub_month"
+    
+    logical_or(has_partner2_hub)
+   as expected_has_hub
+  from `capfractal`.`analytics_marts`.`fct_reporter_partner_commodity_hub_month`
   group by 1, 2, 3, 4, 5, 6
 ),
 route_rows as (
@@ -20,7 +22,7 @@ route_rows as (
     year_month,
     trade_flow,
     has_associated_hub_route
-  from "analytics"."analytics_marts"."fct_reporter_partner_commodity_route_month"
+  from `capfractal`.`analytics_marts`.`fct_reporter_partner_commodity_route_month`
 )
 
 select

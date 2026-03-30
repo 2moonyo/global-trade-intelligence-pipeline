@@ -7,7 +7,7 @@ with hub_presence as (
     period,
     year_month,
     trade_flow,
-    bool_or(has_partner2_hub) as expected_has_hub
+    {{ bool_or('has_partner2_hub') }} as expected_has_hub
   from {{ ref('fct_reporter_partner_commodity_hub_month') }}
   group by 1, 2, 3, 4, 5, 6
 ),

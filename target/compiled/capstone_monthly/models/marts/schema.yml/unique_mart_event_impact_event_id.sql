@@ -2,13 +2,20 @@
     
     
 
+with dbt_test__target as (
+
+  select event_id as unique_field
+  from `capfractal`.`analytics_marts`.`mart_event_impact`
+  where event_id is not null
+
+)
+
 select
-    event_id as unique_field,
+    unique_field,
     count(*) as n_records
 
-from "analytics"."analytics_marts"."mart_event_impact"
-where event_id is not null
-group by event_id
+from dbt_test__target
+group by unique_field
 having count(*) > 1
 
 

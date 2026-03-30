@@ -20,7 +20,7 @@ with route_candidates as (
         end,
         route_scenario
     ) as _rn
-  from "analytics"."raw"."dim_trade_routes"
+  from `capfractal`.`raw`.`dim_trade_routes`
 ),
 route_map as (
   select
@@ -44,18 +44,34 @@ hub_applicability as (
     partner_iso3,
     partner2_iso3,
     sum(coalesce(trade_value_usd, 0)) as partner2_trade_value_usd,
-    bool_or(coalesce(has_sea, false)) as has_sea,
-    bool_or(coalesce(has_inland_water, false)) as has_inland_water,
-    bool_or(coalesce(has_unknown, false)) as has_unknown,
-    bool_or(coalesce(has_non_marine, false)) as has_non_marine,
+    
+    logical_or(coalesce(has_sea, false))
+   as has_sea,
+    
+    logical_or(coalesce(has_inland_water, false))
+   as has_inland_water,
+    
+    logical_or(coalesce(has_unknown, false))
+   as has_unknown,
+    
+    logical_or(coalesce(has_non_marine, false))
+   as has_non_marine,
     case
-      when bool_or(upper(trim(coalesce(route_applicability_status, ''))) = 'MARITIME_ELIGIBLE') then 'MARITIME_ELIGIBLE'
-      when bool_or(upper(trim(coalesce(route_applicability_status, ''))) = 'NON_MARITIME_ONLY') then 'NON_MARITIME_ONLY'
-      when bool_or(upper(trim(coalesce(route_applicability_status, ''))) = 'UNKNOWN_MOT') then 'UNKNOWN_MOT'
-      when bool_or(upper(trim(coalesce(route_applicability_status, ''))) = 'NO_MOT_DATA') then 'NO_MOT_DATA'
+      when 
+    logical_or(upper(trim(coalesce(route_applicability_status, ''))) = 'MARITIME_ELIGIBLE')
+   then 'MARITIME_ELIGIBLE'
+      when 
+    logical_or(upper(trim(coalesce(route_applicability_status, ''))) = 'NON_MARITIME_ONLY')
+   then 'NON_MARITIME_ONLY'
+      when 
+    logical_or(upper(trim(coalesce(route_applicability_status, ''))) = 'UNKNOWN_MOT')
+   then 'UNKNOWN_MOT'
+      when 
+    logical_or(upper(trim(coalesce(route_applicability_status, ''))) = 'NO_MOT_DATA')
+   then 'NO_MOT_DATA'
       else null
     end as route_applicability_status
-  from "analytics"."analytics_staging"."stg_route_applicability"
+  from `capfractal`.`analytics_staging`.`stg_route_applicability`
   group by 1, 2, 3
 ),
 pair_applicability_totals as (
@@ -91,13 +107,13 @@ base_pairs as (
   select distinct
     reporter_iso3,
     partner_iso3
-  from "analytics"."analytics_marts"."fct_reporter_partner_commodity_month"
+  from `capfractal`.`analytics_marts`.`fct_reporter_partner_commodity_month`
 ),
 fallback_allocation as (
   select
     bp.reporter_iso3,
     bp.partner_iso3,
-    cast(null as varchar) as partner2_iso3,
+    cast(null as string) as partner2_iso3,
     1.0 as allocation_share,
     false as has_sea,
     false as has_inland_water,
@@ -174,7 +190,7 @@ base_fact as (
       when upper(trim(coalesce(rm.route_applicability_status, ra.route_applicability_status, ''))) = 'MARITIME_ELIGIBLE' then true
       else false
     end as _is_maritime_routed_base
-  from "analytics"."analytics_marts"."fct_reporter_partner_commodity_month" as f
+  from `capfractal`.`analytics_marts`.`fct_reporter_partner_commodity_month` as f
   inner join resolved_allocation as ra
     on f.reporter_iso3 = ra.reporter_iso3
    and f.partner_iso3 = ra.partner_iso3

@@ -74,16 +74,16 @@ pair_applicability as (
   select
     reporter_iso3,
     partner_iso3,
-    bool_or(coalesce(has_sea, false)) as has_sea,
-    bool_or(coalesce(has_inland_water, false)) as has_inland_water,
-    bool_or(coalesce(has_unknown, false)) as has_unknown,
-    bool_or(coalesce(has_non_marine, false)) as has_non_marine,
-    bool_or(partner2_iso3 is not null) as has_associated_hub_route,
+    {{ bool_or('coalesce(has_sea, false)') }} as has_sea,
+    {{ bool_or('coalesce(has_inland_water, false)') }} as has_inland_water,
+    {{ bool_or('coalesce(has_unknown, false)') }} as has_unknown,
+    {{ bool_or('coalesce(has_non_marine, false)') }} as has_non_marine,
+    {{ bool_or('partner2_iso3 is not null') }} as has_associated_hub_route,
     case
-      when bool_or(upper(trim(coalesce(route_applicability_status, ''))) = 'MARITIME_ELIGIBLE') then 'MARITIME_ELIGIBLE'
-      when bool_or(upper(trim(coalesce(route_applicability_status, ''))) = 'NON_MARITIME_ONLY') then 'NON_MARITIME_ONLY'
-      when bool_or(upper(trim(coalesce(route_applicability_status, ''))) = 'UNKNOWN_MOT') then 'UNKNOWN_MOT'
-      when bool_or(upper(trim(coalesce(route_applicability_status, ''))) = 'NO_MOT_DATA') then 'NO_MOT_DATA'
+      when {{ bool_or("upper(trim(coalesce(route_applicability_status, ''))) = 'MARITIME_ELIGIBLE'") }} then 'MARITIME_ELIGIBLE'
+      when {{ bool_or("upper(trim(coalesce(route_applicability_status, ''))) = 'NON_MARITIME_ONLY'") }} then 'NON_MARITIME_ONLY'
+      when {{ bool_or("upper(trim(coalesce(route_applicability_status, ''))) = 'UNKNOWN_MOT'") }} then 'UNKNOWN_MOT'
+      when {{ bool_or("upper(trim(coalesce(route_applicability_status, ''))) = 'NO_MOT_DATA'") }} then 'NO_MOT_DATA'
       else null
     end as pair_route_applicability_status
   from {{ ref('stg_route_applicability') }}

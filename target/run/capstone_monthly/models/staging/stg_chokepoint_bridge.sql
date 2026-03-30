@@ -1,7 +1,8 @@
 
-  
-  create view "analytics"."analytics_staging"."stg_chokepoint_bridge__dbt_tmp" as (
-    select
+
+  create or replace view `capfractal`.`analytics_staging`.`stg_chokepoint_bridge`
+  OPTIONS()
+  as select
   event_id,
   event_name,
   year_month,
@@ -16,5 +17,5 @@
   event_type,
   event_scope,
   link_role
-from "analytics"."raw"."chokepoint_bridge"
-  );
+from `capfractal`.`raw`.`chokepoint_bridge`;
+

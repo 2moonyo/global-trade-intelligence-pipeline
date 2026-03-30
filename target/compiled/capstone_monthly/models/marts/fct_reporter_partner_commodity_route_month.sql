@@ -36,7 +36,7 @@ with route_candidates as (
         end,
         route_scenario
     ) as _rn
-  from "analytics"."raw"."dim_trade_routes"
+  from `capfractal`.`raw`.`dim_trade_routes`
 ),
 route_map as (
   select
@@ -74,19 +74,37 @@ pair_applicability as (
   select
     reporter_iso3,
     partner_iso3,
-    bool_or(coalesce(has_sea, false)) as has_sea,
-    bool_or(coalesce(has_inland_water, false)) as has_inland_water,
-    bool_or(coalesce(has_unknown, false)) as has_unknown,
-    bool_or(coalesce(has_non_marine, false)) as has_non_marine,
-    bool_or(partner2_iso3 is not null) as has_associated_hub_route,
+    
+    logical_or(coalesce(has_sea, false))
+   as has_sea,
+    
+    logical_or(coalesce(has_inland_water, false))
+   as has_inland_water,
+    
+    logical_or(coalesce(has_unknown, false))
+   as has_unknown,
+    
+    logical_or(coalesce(has_non_marine, false))
+   as has_non_marine,
+    
+    logical_or(partner2_iso3 is not null)
+   as has_associated_hub_route,
     case
-      when bool_or(upper(trim(coalesce(route_applicability_status, ''))) = 'MARITIME_ELIGIBLE') then 'MARITIME_ELIGIBLE'
-      when bool_or(upper(trim(coalesce(route_applicability_status, ''))) = 'NON_MARITIME_ONLY') then 'NON_MARITIME_ONLY'
-      when bool_or(upper(trim(coalesce(route_applicability_status, ''))) = 'UNKNOWN_MOT') then 'UNKNOWN_MOT'
-      when bool_or(upper(trim(coalesce(route_applicability_status, ''))) = 'NO_MOT_DATA') then 'NO_MOT_DATA'
+      when 
+    logical_or(upper(trim(coalesce(route_applicability_status, ''))) = 'MARITIME_ELIGIBLE')
+   then 'MARITIME_ELIGIBLE'
+      when 
+    logical_or(upper(trim(coalesce(route_applicability_status, ''))) = 'NON_MARITIME_ONLY')
+   then 'NON_MARITIME_ONLY'
+      when 
+    logical_or(upper(trim(coalesce(route_applicability_status, ''))) = 'UNKNOWN_MOT')
+   then 'UNKNOWN_MOT'
+      when 
+    logical_or(upper(trim(coalesce(route_applicability_status, ''))) = 'NO_MOT_DATA')
+   then 'NO_MOT_DATA'
       else null
     end as pair_route_applicability_status
-  from "analytics"."analytics_staging"."stg_route_applicability"
+  from `capfractal`.`analytics_staging`.`stg_route_applicability`
   group by 1, 2
 ),
 base_fact as (
@@ -141,7 +159,7 @@ base_fact as (
       when upper(trim(coalesce(rm.route_applicability_status, pa.pair_route_applicability_status, ''))) = 'MARITIME_ELIGIBLE' then true
       else false
     end as _is_maritime_routed_base
-  from "analytics"."analytics_marts"."fct_reporter_partner_commodity_month" as f
+  from `capfractal`.`analytics_marts`.`fct_reporter_partner_commodity_month` as f
   -- Pair-level motCode evidence comes from route applicability and is used for routing confidence gating.
   left join route_map as rm
     on f.reporter_iso3 = rm.reporter_iso3

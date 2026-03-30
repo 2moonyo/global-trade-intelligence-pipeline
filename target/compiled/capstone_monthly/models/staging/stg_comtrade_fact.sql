@@ -15,4 +15,4 @@ select
   qty,
   mot_code,
   partner2_code
-from "analytics"."analytics_staging"."stg_comtrade_trade_base"
+from `capfractal`.`analytics_staging`.`stg_comtrade_trade_base`

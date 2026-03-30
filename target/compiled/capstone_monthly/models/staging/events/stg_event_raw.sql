@@ -12,7 +12,7 @@ select
 
     cast(lead_months as integer) as lead_months,
     cast(lag_months as integer) as lag_months,
-    cast(base_severity as double) as base_severity_score,
+    cast(base_severity as FLOAT64) as base_severity_score,
 
     trim(event_scope) as raw_event_scope,
     trim(description) as description,

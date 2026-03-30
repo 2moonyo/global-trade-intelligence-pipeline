@@ -1,7 +1,7 @@
 with raw_portwatch as (
   select
-    cast(chokepoint_id as varchar) as portwatch_source_chokepoint_id,
-    cast(year_month as varchar) as year_month
+    {{ cast_string('chokepoint_id') }} as portwatch_source_chokepoint_id,
+    {{ cast_string('year_month') }} as year_month
   from {{ source('raw', 'portwatch_monthly') }}
   where year_month is not null
     and chokepoint_name is not null

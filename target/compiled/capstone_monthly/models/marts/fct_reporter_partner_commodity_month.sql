@@ -12,7 +12,7 @@ with base as (
     net_weight_kg,
     gross_weight_kg,
     qty
-  from "analytics"."analytics_staging"."stg_comtrade_trade_base"
+  from `capfractal`.`analytics_staging`.`stg_comtrade_trade_base`
 )
 
 select

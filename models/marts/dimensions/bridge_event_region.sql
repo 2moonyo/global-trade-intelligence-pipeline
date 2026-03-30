@@ -16,7 +16,7 @@ with base as (
 
 select
     event_id,
-    md5(lower(trim(region_name))) as region_id,
+    {{ hash_text('lower(trim(region_name))') }} as region_id,
     region_name,
     link_role
 from base

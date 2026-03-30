@@ -1,7 +1,8 @@
 
-  
-  create view "analytics"."analytics_analytics_staging"."stg_event_month_region__dbt_tmp" as (
-    
+
+  create or replace view `capfractal`.`analytics_analytics_staging`.`stg_event_month_region`
+  OPTIONS()
+  as 
 
 
 select
@@ -32,5 +33,5 @@ select
     trim(event_type) as event_type,
     trim(event_scope) as raw_event_scope,
     trim(link_role) as link_role
-from raw.bridge_event_month_maritime_region
-  );
+from raw.bridge_event_month_maritime_region;
+

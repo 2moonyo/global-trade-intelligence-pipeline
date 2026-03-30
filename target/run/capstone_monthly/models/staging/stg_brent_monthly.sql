@@ -1,7 +1,8 @@
 
-  
-  create view "analytics"."analytics_staging"."stg_brent_monthly__dbt_tmp" as (
-    select
+
+  create or replace view `capfractal`.`analytics_staging`.`stg_brent_monthly`
+  OPTIONS()
+  as select
   year_month,
   try_cast(month_start_date as date) as month_start_date,
   try_cast(year as integer) as year_num,
@@ -18,5 +19,5 @@
   try_cast(mom_abs_change_usd as double) as mom_abs_change_usd,
   try_cast(mom_pct_change as double) as mom_pct_change,
   try_cast(trading_day_count as integer) as trading_day_count
-from "analytics"."raw"."brent_monthly"
-  );
+from `capfractal`.`raw`.`brent_monthly`;
+

@@ -8,7 +8,7 @@ with all_values as (
         severity_level as value_field,
         count(*) as n_records
 
-    from "analytics"."analytics_analytics_marts"."dim_event"
+    from `capfractal`.`analytics_analytics_marts`.`dim_event`
     group by severity_level
 
 )

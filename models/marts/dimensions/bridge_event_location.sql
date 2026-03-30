@@ -17,7 +17,7 @@ with base as (
 
 select
     event_id,
-    md5(lower(trim(location_name)) || '|' || lower(trim(location_type))) as location_id,
+    {{ hash_text("lower(trim(location_name)) || '|' || lower(trim(location_type))") }} as location_id,
     location_name,
     location_type,
     location_layer,

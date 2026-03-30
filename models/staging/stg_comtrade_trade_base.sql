@@ -1,18 +1,18 @@
 with raw_source as (
   select
     cast(ref_date as date) as ref_date,
-    cast(period as varchar) as period_raw,
-    cast(ref_year as varchar) as ref_year_raw,
-    cast(year_month as varchar) as year_month_raw,
-    cast(reporter_iso3 as varchar) as reporter_iso3_raw,
-    cast(partner_iso3 as varchar) as partner_iso3_raw,
-    cast(cmdCode as varchar) as cmd_code_raw,
-    cast(cmdDesc as varchar) as commodity_name_raw,
-    cast(flowCode as varchar) as flow_code_raw,
-    cast(trade_value_usd as double) as trade_value_usd,
-    cast(netWgt as double) as net_weight_kg,
-    cast(grossWgt as double) as gross_weight_kg,
-    cast(qty as double) as qty,
+    {{ cast_string('period') }} as period_raw,
+    {{ cast_string('ref_year') }} as ref_year_raw,
+    {{ cast_string('year_month') }} as year_month_raw,
+    {{ cast_string('reporter_iso3') }} as reporter_iso3_raw,
+    {{ cast_string('partner_iso3') }} as partner_iso3_raw,
+    {{ cast_string('cmdCode') }} as cmd_code_raw,
+    {{ cast_string('cmdDesc') }} as commodity_name_raw,
+    {{ cast_string('flowCode') }} as flow_code_raw,
+    {{ cast_float('trade_value_usd') }} as trade_value_usd,
+    {{ cast_float('netWgt') }} as net_weight_kg,
+    {{ cast_float('grossWgt') }} as gross_weight_kg,
+    {{ cast_float('qty') }} as qty,
     cast(motCode as integer) as mot_code,
     cast(partner2Code as integer) as partner2_code
   from {{ source('raw', 'comtrade_fact') }}
@@ -20,13 +20,16 @@ with raw_source as (
 source_data as (
   select
     ref_date,
-    try_cast(period_raw as integer) as period,
+    {{ safe_cast('period_raw', dbt.type_int()) }} as period,
     case
-      when regexp_full_match(year_month_raw, '^\\d{4}-\\d{2}$') then year_month_raw
-      when try_cast(period_raw as integer) is not null then substr(period_raw, 1, 4) || '-' || substr(period_raw, 5, 2)
+      when {{ regex_full_match('year_month_raw', '^\\d{4}-\\d{2}$') }} then year_month_raw
+      when {{ safe_cast('period_raw', dbt.type_int()) }} is not null then substr(period_raw, 1, 4) || '-' || substr(period_raw, 5, 2)
       else null
     end as year_month,
-    coalesce(try_cast(ref_year_raw as integer), try_cast(substr(period_raw, 1, 4) as integer)) as ref_year,
+    coalesce(
+      {{ safe_cast('ref_year_raw', dbt.type_int()) }},
+      {{ safe_cast('substr(period_raw, 1, 4)', dbt.type_int()) }}
+    ) as ref_year,
     upper(trim(reporter_iso3_raw)) as reporter_iso3,
     upper(trim(partner_iso3_raw)) as partner_iso3,
     trim(cmd_code_raw) as cmd_code,
@@ -48,13 +51,13 @@ source_data as (
 
 select
   distinct
-  md5(
-    coalesce(reporter_iso3, '') || '|' ||
-    coalesce(partner_iso3, '') || '|' ||
-    coalesce(cmd_code, '') || '|' ||
-    cast(period as varchar) || '|' ||
-    coalesce(trade_flow, '')
-  ) as canonical_grain_key,
+  {{ hash_text(
+    "coalesce(reporter_iso3, '') || '|' || "
+    ~ "coalesce(partner_iso3, '') || '|' || "
+    ~ "coalesce(cmd_code, '') || '|' || "
+    ~ cast_string('period') ~ " || '|' || "
+    ~ "coalesce(trade_flow, '')"
+  ) }} as canonical_grain_key,
   ref_date,
   period,
   year_month,

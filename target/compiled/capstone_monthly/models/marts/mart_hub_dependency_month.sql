@@ -10,7 +10,7 @@ with hub_trade as (
     year_month,
     route_confidence_score,
     trade_value_usd
-  from "analytics"."analytics_marts"."fct_reporter_partner_commodity_hub_month"
+  from `capfractal`.`analytics_marts`.`fct_reporter_partner_commodity_hub_month`
   where has_partner2_hub
     and coalesce(is_maritime_routed, false)
 ),
@@ -19,7 +19,7 @@ monthly_total_trade as (
     period,
     year_month,
     sum(trade_value_usd) as total_trade_value_usd
-  from "analytics"."analytics_marts"."fct_reporter_partner_commodity_month"
+  from `capfractal`.`analytics_marts`.`fct_reporter_partner_commodity_month`
   group by 1, 2
 ),
 hub_month_confidence as (
@@ -55,5 +55,5 @@ from hub_month_confidence as hmc
 left join monthly_total_trade as mtt
   on hmc.period = mtt.period
  and hmc.year_month = mtt.year_month
-left join "analytics"."analytics_staging"."stg_dim_country" as c
+left join `capfractal`.`analytics_staging`.`stg_dim_country` as c
   on hmc.hub_iso3 = c.iso3

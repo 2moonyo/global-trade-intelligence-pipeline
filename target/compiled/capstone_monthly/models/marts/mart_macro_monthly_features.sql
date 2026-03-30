@@ -6,7 +6,7 @@ with brent_monthly as (
     year_month,
     avg_price_usd_per_bbl as brent_price_usd,
     mom_pct_change as brent_mom_change
-  from "analytics"."analytics_staging"."stg_brent_monthly"
+  from `capfractal`.`analytics_staging`.`stg_brent_monthly`
   where benchmark_code = 'BRENT_EU'
 ),
 fx_monthly as (
@@ -15,7 +15,7 @@ fx_monthly as (
     fx_currency_code,
     fx_rate_to_usd,
     fx_mom_change
-  from "analytics"."analytics_staging"."stg_fx_monthly"
+  from `capfractal`.`analytics_staging`.`stg_fx_monthly`
 )
 
 select

@@ -4,9 +4,6 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Sequence
 
-from google.cloud import storage
-
-
 @dataclass(frozen=True)
 class GcsUploadResult:
     uri: str
@@ -17,6 +14,17 @@ def _blob_name(destination_prefix: str, relative_path: str) -> str:
     if destination_prefix:
         return str(PurePosixPath(destination_prefix) / PurePosixPath(relative_path))
     return str(PurePosixPath(relative_path))
+
+
+def _storage_module():
+    try:
+        from google.cloud import storage
+    except ModuleNotFoundError as exc:
+        raise ModuleNotFoundError(
+            "google-cloud-storage is required for GCS upload/list operations. "
+            "Install it in the active environment before running this command."
+        ) from exc
+    return storage
 
 
 def upload_file(
@@ -36,6 +44,7 @@ def upload_file(
     if dry_run:
         return GcsUploadResult(uri=uri, action="planned")
 
+    storage = _storage_module()
     client = storage.Client(project=project_id)
     bucket = client.bucket(bucket_name)
     blob = bucket.blob(destination_blob_name)
@@ -67,6 +76,7 @@ def upload_tree(
     if not files:
         return []
 
+    storage = _storage_module() if not dry_run else None
     client = None if dry_run else storage.Client(project=project_id)
     bucket = None if dry_run else client.bucket(bucket_name)
 
@@ -96,6 +106,7 @@ def list_blob_uris(
     project_id: str,
     suffix: str | None = None,
 ) -> list[str]:
+    storage = _storage_module()
     client = storage.Client(project=project_id)
     bucket = client.bucket(bucket_name)
     uris: list[str] = []

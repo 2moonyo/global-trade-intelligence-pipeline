@@ -42,7 +42,7 @@ The live warehouse is organized as:
 This is not a strict in-database medallion layout. In practice:
 
 - trade, routing, PortWatch, Brent, and event raw tables are loaded mostly from curated silver outputs
-- ECB FX and World Bank energy raw tables are loaded from bronze CSV batches
+- ECB FX raw tables are loaded from bronze CSV batches, while World Bank energy now lands through annual silver parquet partitions
 - `raw` is therefore a mixed landing layer, not a pure bronze mirror
 
 ## Core model families

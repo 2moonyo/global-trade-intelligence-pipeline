@@ -3,31 +3,27 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from dataclasses import dataclass
 from datetime import date, datetime, timezone
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from ingest.common.cloud_config import GcpCloudConfig
-from ingest.common.gcs_io import GcsUploadResult, upload_file
 from ingest.common.run_artifacts import append_manifest, build_run_id, configure_logger, json_ready
+from warehouse.gcs_publish_common import (
+    UploadSpec,
+    path_year_month,
+    publish_directory_spec,
+    publish_file_spec,
+)
 
 
 LOGGER_NAME = "portwatch.publish_gcs"
 LOG_DIR = PROJECT_ROOT / "logs" / "portwatch"
 LOG_PATH = LOG_DIR / "publish_portwatch_to_gcs.log"
 MANIFEST_PATH = LOG_DIR / "publish_portwatch_to_gcs_manifest.jsonl"
-
-
-@dataclass(frozen=True)
-class UploadSpec:
-    name: str
-    local_path: Path
-    destination_parts: tuple[str, ...]
-    optional: bool = False
 
 
 def _parse_year_month(value: str) -> str:
@@ -41,6 +37,7 @@ def _build_specs(include_bronze: bool, include_silver: bool, include_auxiliary: 
             name="metadata_portwatch",
             local_path=PROJECT_ROOT / "data" / "metadata" / "portwatch",
             destination_parts=("metadata", "portwatch"),
+            include_suffixes=(".json",),
             optional=True,
         ),
     ]
@@ -51,6 +48,8 @@ def _build_specs(include_bronze: bool, include_silver: bool, include_auxiliary: 
                 name="bronze_portwatch",
                 local_path=PROJECT_ROOT / "data" / "bronze" / "portwatch",
                 destination_parts=("bronze", "portwatch"),
+                include_suffixes=(".parquet",),
+                partition_value_resolver=path_year_month,
             )
         )
 
@@ -60,6 +59,8 @@ def _build_specs(include_bronze: bool, include_silver: bool, include_auxiliary: 
                 name="silver_portwatch_monthly",
                 local_path=PROJECT_ROOT / "data" / "silver" / "portwatch" / "portwatch_monthly",
                 destination_parts=("silver", "portwatch", "portwatch_monthly"),
+                include_suffixes=(".parquet",),
+                partition_value_resolver=path_year_month,
             )
         )
 
@@ -70,6 +71,7 @@ def _build_specs(include_bronze: bool, include_silver: bool, include_auxiliary: 
                     name="silver_portwatch_dimensions",
                     local_path=PROJECT_ROOT / "data" / "silver" / "portwatch" / "dimensions",
                     destination_parts=("silver", "portwatch", "dimensions"),
+                    include_suffixes=(".parquet",),
                     optional=True,
                 ),
                 UploadSpec(
@@ -90,68 +92,6 @@ def _build_specs(include_bronze: bool, include_silver: bool, include_auxiliary: 
         )
 
     return specs
-
-
-def _path_year_month(path: Path, root: Path) -> str | None:
-    year = None
-    month = None
-    for part in path.relative_to(root).parts:
-        if part.startswith("year="):
-            year = int(part.split("=", 1)[1])
-        elif part.startswith("month="):
-            month = int(part.split("=", 1)[1])
-    if year is None or month is None:
-        return None
-    return f"{year:04d}-{month:02d}"
-
-
-def _matches_year_month_filters(
-    *,
-    year_month: str | None,
-    selected_year_months: set[str],
-    since_year_month: str | None,
-    until_year_month: str | None,
-) -> bool:
-    if year_month is None:
-        return True
-    if selected_year_months and year_month not in selected_year_months:
-        return False
-    if since_year_month and year_month < since_year_month:
-        return False
-    if until_year_month and year_month > until_year_month:
-        return False
-    return True
-
-
-def _candidate_files(
-    *,
-    local_root: Path,
-    include_suffixes: tuple[str, ...],
-    selected_year_months: set[str],
-    since_year_month: str | None,
-    until_year_month: str | None,
-) -> list[Path]:
-    files = sorted(path for path in local_root.rglob("*") if path.is_file())
-    files = [path for path in files if path.suffix in include_suffixes]
-    return [
-        path
-        for path in files
-        if _matches_year_month_filters(
-            year_month=_path_year_month(path, local_root),
-            selected_year_months=selected_year_months,
-            since_year_month=since_year_month,
-            until_year_month=until_year_month,
-        )
-    ]
-
-
-def _status_counts(results: list[GcsUploadResult]) -> dict[str, int]:
-    counts = {"uploaded": 0, "skipped_existing": 0, "planned": 0}
-    for result in results:
-        if result.action in counts:
-            counts[result.action] += 1
-    return counts
-
 
 def publish_portwatch_assets(
     *,
@@ -213,7 +153,6 @@ def publish_portwatch_assets(
         uploads: dict[str, object] = {}
 
         for spec in specs:
-            destination_prefix = config.blob_path(*spec.destination_parts)
             if not spec.local_path.exists():
                 if spec.optional:
                     uploads[spec.name] = {
@@ -222,7 +161,10 @@ def publish_portwatch_assets(
                         "gcs_destination": config.gcs_uri(*spec.destination_parts),
                         "files_uploaded": 0,
                         "files_considered": 0,
+                        "files_skipped_existing": 0,
+                        "files_planned": 0,
                         "touched_year_months": [],
+                        "sample_uris": [],
                     }
                     continue
                 if spec.name == "bronze_portwatch":
@@ -233,78 +175,46 @@ def publish_portwatch_assets(
                 raise FileNotFoundError(f"Missing required PortWatch source path: {spec.local_path}")
 
             if spec.local_path.is_dir():
-                candidate_files = _candidate_files(
-                    local_root=spec.local_path,
-                    include_suffixes=(".parquet",),
-                    selected_year_months=selected_year_months,
-                    since_year_month=since_year_month,
-                    until_year_month=until_year_month,
+                upload_summary, _, spec_touched_months = publish_directory_spec(
+                    spec=spec,
+                    config=config,
+                    skip_existing=skip_existing,
+                    dry_run=dry_run,
+                    selected_partition_values=selected_year_months,
+                    since_partition_value=since_year_month,
+                    until_partition_value=until_year_month,
                 )
-                results: list[GcsUploadResult] = []
-                spec_touched_months = sorted(
-                    {
-                        year_month
-                        for path in candidate_files
-                        if (year_month := _path_year_month(path, spec.local_path)) is not None
-                    }
-                )
-                for path in candidate_files:
-                    relative_path = path.relative_to(spec.local_path).as_posix()
-                    destination_blob_name = str(PurePosixPath(destination_prefix) / PurePosixPath(relative_path))
-                    results.append(
-                        upload_file(
-                            path,
-                            bucket_name=config.gcs_bucket,
-                            destination_blob_name=destination_blob_name,
-                            project_id=config.gcp_project_id,
-                            skip_if_exists=skip_existing,
-                            dry_run=dry_run,
-                        )
-                    )
-
-                status_counts = _status_counts(results)
                 touched_year_months.update(spec_touched_months)
                 uploads[spec.name] = {
-                    "status": "completed" if not dry_run else "planned",
-                    "local_path": str(spec.local_path),
-                    "gcs_destination": config.gcs_uri(*spec.destination_parts),
-                    "files_uploaded": status_counts["uploaded"],
-                    "files_skipped_existing": status_counts["skipped_existing"],
-                    "files_planned": status_counts["planned"],
-                    "files_considered": len(results),
+                    **upload_summary,
                     "touched_year_months": spec_touched_months,
-                    "sample_uris": [result.uri for result in results[:10]],
                 }
                 logger.info(
                     "Spec=%s considered=%s uploaded=%s skipped_existing=%s touched_months=%s",
                     spec.name,
-                    len(results),
-                    status_counts["uploaded"],
-                    status_counts["skipped_existing"],
+                    upload_summary["files_considered"],
+                    upload_summary["files_uploaded"],
+                    upload_summary["files_skipped_existing"],
                     spec_touched_months,
                 )
                 continue
 
-            result = upload_file(
-                spec.local_path,
-                bucket_name=config.gcs_bucket,
-                destination_blob_name=destination_prefix,
-                project_id=config.gcp_project_id,
-                skip_if_exists=skip_existing,
+            upload_summary = publish_file_spec(
+                spec=spec,
+                config=config,
+                skip_existing=skip_existing,
                 dry_run=dry_run,
             )
             uploads[spec.name] = {
-                "status": result.action,
-                "local_path": str(spec.local_path),
-                "gcs_destination": result.uri,
-                "files_uploaded": 1 if result.action == "uploaded" else 0,
-                "files_skipped_existing": 1 if result.action == "skipped_existing" else 0,
-                "files_planned": 1 if result.action == "planned" else 0,
-                "files_considered": 1,
+                **upload_summary,
                 "touched_year_months": [],
-                "sample_uris": [result.uri],
             }
-            logger.info("Spec=%s action=%s uri=%s", spec.name, result.action, result.uri)
+            logger.info(
+                "Spec=%s action=%s uri=%s",
+                spec.name,
+                upload_summary["status"],
+                upload_summary["gcs_destination"],
+            )
 
         finished_at = datetime.now(timezone.utc)
         summary["uploads"] = uploads

@@ -4,7 +4,7 @@ create schema if not exists analytics;
 -- Core Comtrade fact tables
 create or replace table raw.comtrade_fact as
 select *
-from read_parquet('data/silver/comtrade/comtrade_fact/ref_year=*/reporter_iso3=*/*.parquet');
+from read_parquet('data/silver/comtrade/comtrade_fact/year=*/month=*/reporter_iso3=*/cmd_code=*/flow_code=*/comtrade_fact.parquet');
 
 -- Comtrade dimensions and route bridge
 create or replace table raw.dim_country as
@@ -42,11 +42,11 @@ from read_parquet('data/silver/portwatch/portwatch_chokepoint_stress_monthly_all
 
 create or replace table raw.brent_daily as
 select *
-from read_parquet('data/silver/brent/brent_daily.parquet');
+from read_parquet('data/silver/brent/brent_daily/year=*/month=*/brent_daily.parquet');
 
 create or replace table raw.brent_monthly as
 select *
-from read_parquet('data/silver/brent/brent_monthly.parquet');
+from read_parquet('data/silver/brent/brent_monthly/year=*/month=*/brent_monthly.parquet');
 
 -- ECB FX daily feed from bronze batch exports.
 create or replace table raw.ecb_fx_eu_daily as

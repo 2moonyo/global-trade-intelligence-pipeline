@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import sys
 import uuid
 from datetime import date, datetime, timezone
 from pathlib import Path
@@ -40,6 +41,36 @@ def configure_logger(
     file_handler.setFormatter(formatter)
     logger.addHandler(file_handler)
     return logger
+
+
+def duration_seconds(started_at: datetime, finished_at: datetime | None = None) -> float:
+    finished_at = finished_at or datetime.now(timezone.utc)
+    return round((finished_at - started_at).total_seconds(), 3)
+
+
+def iter_progress(
+    iterable,
+    *,
+    desc: str,
+    total: int | None = None,
+    unit: str = "item",
+    disable: bool | None = None,
+):
+    try:
+        from tqdm.auto import tqdm
+    except ModuleNotFoundError:
+        return iterable
+
+    resolved_disable = disable if disable is not None else not sys.stderr.isatty()
+    return tqdm(
+        iterable,
+        total=total,
+        desc=desc,
+        unit=unit,
+        dynamic_ncols=True,
+        leave=False,
+        disable=resolved_disable,
+    )
 
 
 def append_manifest(path: Path, entry: dict[str, Any]) -> None:

@@ -1,7 +1,8 @@
 
-  
-  create view "analytics"."analytics_staging"."stg_comtrade_fact__dbt_tmp" as (
-    select
+
+  create or replace view `capfractal`.`analytics_staging`.`stg_comtrade_fact`
+  OPTIONS()
+  as select
   canonical_grain_key,
   ref_date,
   period,
@@ -18,5 +19,5 @@
   qty,
   mot_code,
   partner2_code
-from "analytics"."analytics_staging"."stg_comtrade_trade_base"
-  );
+from `capfractal`.`analytics_staging`.`stg_comtrade_trade_base`;
+

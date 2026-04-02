@@ -1,11 +1,14 @@
 
   
     
+
+    create or replace table `capfractal`.`analytics_marts`.`fct_reporter_partner_commodity_hub_month`
+      
+    
     
 
-    create  table
-      "analytics"."analytics_marts"."fct_reporter_partner_commodity_hub_month__dbt_tmp"
-  
+    
+    OPTIONS()
     as (
       with route_candidates as (
   select
@@ -14,6 +17,7 @@
     main_chokepoint,
     route_status,
     route_confidence,
+    transport_evidence,
     routing_decision,
     route_applicability_status,
     route_scenario,
@@ -29,7 +33,7 @@
         end,
         route_scenario
     ) as _rn
-  from "analytics"."raw"."dim_trade_routes"
+  from `capfractal`.`raw`.`dim_trade_routes`
 ),
 route_map as (
   select
@@ -38,6 +42,7 @@ route_map as (
     main_chokepoint,
     route_status,
     route_confidence,
+    transport_evidence,
     routing_decision,
     route_applicability_status,
     route_scenario,
@@ -53,18 +58,34 @@ hub_applicability as (
     partner_iso3,
     partner2_iso3,
     sum(coalesce(trade_value_usd, 0)) as partner2_trade_value_usd,
-    bool_or(coalesce(has_sea, false)) as has_sea,
-    bool_or(coalesce(has_inland_water, false)) as has_inland_water,
-    bool_or(coalesce(has_unknown, false)) as has_unknown,
-    bool_or(coalesce(has_non_marine, false)) as has_non_marine,
+    
+    logical_or(coalesce(has_sea, false))
+   as has_sea,
+    
+    logical_or(coalesce(has_inland_water, false))
+   as has_inland_water,
+    
+    logical_or(coalesce(has_unknown, false))
+   as has_unknown,
+    
+    logical_or(coalesce(has_non_marine, false))
+   as has_non_marine,
     case
-      when bool_or(upper(trim(coalesce(route_applicability_status, ''))) = 'MARITIME_ELIGIBLE') then 'MARITIME_ELIGIBLE'
-      when bool_or(upper(trim(coalesce(route_applicability_status, ''))) = 'NON_MARITIME_ONLY') then 'NON_MARITIME_ONLY'
-      when bool_or(upper(trim(coalesce(route_applicability_status, ''))) = 'UNKNOWN_MOT') then 'UNKNOWN_MOT'
-      when bool_or(upper(trim(coalesce(route_applicability_status, ''))) = 'NO_MOT_DATA') then 'NO_MOT_DATA'
+      when 
+    logical_or(upper(trim(coalesce(route_applicability_status, ''))) = 'MARITIME_ELIGIBLE')
+   then 'MARITIME_ELIGIBLE'
+      when 
+    logical_or(upper(trim(coalesce(route_applicability_status, ''))) = 'NON_MARITIME_ONLY')
+   then 'NON_MARITIME_ONLY'
+      when 
+    logical_or(upper(trim(coalesce(route_applicability_status, ''))) = 'UNKNOWN_MOT')
+   then 'UNKNOWN_MOT'
+      when 
+    logical_or(upper(trim(coalesce(route_applicability_status, ''))) = 'NO_MOT_DATA')
+   then 'NO_MOT_DATA'
       else null
     end as route_applicability_status
-  from "analytics"."analytics_staging"."stg_route_applicability"
+  from `capfractal`.`analytics_staging`.`stg_route_applicability`
   group by 1, 2, 3
 ),
 pair_applicability_totals as (
@@ -100,13 +121,13 @@ base_pairs as (
   select distinct
     reporter_iso3,
     partner_iso3
-  from "analytics"."analytics_marts"."fct_reporter_partner_commodity_month"
+  from `capfractal`.`analytics_marts`.`fct_reporter_partner_commodity_month`
 ),
 fallback_allocation as (
   select
     bp.reporter_iso3,
     bp.partner_iso3,
-    cast(null as varchar) as partner2_iso3,
+    cast(null as string) as partner2_iso3,
     1.0 as allocation_share,
     false as has_sea,
     false as has_inland_water,
@@ -167,23 +188,74 @@ base_fact as (
     rm.main_chokepoint,
     rm.route_status,
     rm.route_confidence,
+    rm.transport_evidence,
     rm.routing_decision,
-    coalesce(rm.route_applicability_status, ra.route_applicability_status) as route_applicability_status,
+    case
+      when coalesce(ra.has_sea, false)
+        or coalesce(ra.has_inland_water, false)
+        or lower(trim(coalesce(rm.transport_evidence, rm.route_applicability_status, ''))) = 'sea_observed'
+        or upper(trim(coalesce(rm.route_applicability_status, ''))) in ('MARITIME_ELIGIBLE', 'INLAND_WATER_ONLY')
+        then 'MARITIME_ELIGIBLE'
+      when (coalesce(ra.has_non_marine, false) or upper(trim(coalesce(rm.route_applicability_status, ''))) = 'NON_MARITIME_ONLY')
+        and not (
+          coalesce(ra.has_sea, false)
+          or coalesce(ra.has_inland_water, false)
+          or lower(trim(coalesce(rm.transport_evidence, rm.route_applicability_status, ''))) = 'sea_observed'
+          or upper(trim(coalesce(rm.route_applicability_status, ''))) in ('MARITIME_ELIGIBLE', 'INLAND_WATER_ONLY')
+        )
+        then 'NON_MARITIME_ONLY'
+      when (
+        coalesce(ra.has_unknown, false)
+        or lower(trim(coalesce(rm.transport_evidence, rm.route_applicability_status, ''))) = 'transport_unknown'
+        or upper(trim(coalesce(rm.route_applicability_status, ra.route_applicability_status, ''))) in ('UNKNOWN_MOT', 'UNKNOWN_ONLY')
+      )
+        and not (
+          coalesce(ra.has_sea, false)
+          or coalesce(ra.has_inland_water, false)
+          or lower(trim(coalesce(rm.transport_evidence, rm.route_applicability_status, ''))) = 'sea_observed'
+          or upper(trim(coalesce(rm.route_applicability_status, ''))) in ('MARITIME_ELIGIBLE', 'INLAND_WATER_ONLY')
+        )
+        and not (
+          coalesce(ra.has_non_marine, false)
+          or upper(trim(coalesce(rm.route_applicability_status, ''))) = 'NON_MARITIME_ONLY'
+        )
+        then 'UNKNOWN_MOT'
+      else 'NO_MOT_DATA'
+    end as route_applicability_status,
     rm.route_scenario,
     rm.used_transshipment_hub,
     rm.hub_port,
     coalesce(rm.hub_iso3, ra.partner2_iso3) as hub_iso3,
-    ra.has_sea,
-    ra.has_inland_water,
-    ra.has_unknown,
-    ra.has_non_marine,
+    (
+      coalesce(ra.has_sea, false)
+      or lower(trim(coalesce(rm.transport_evidence, rm.route_applicability_status, ''))) = 'sea_observed'
+      or upper(trim(coalesce(rm.route_applicability_status, ''))) = 'MARITIME_ELIGIBLE'
+    ) as has_sea,
+    (
+      coalesce(ra.has_inland_water, false)
+      or upper(trim(coalesce(rm.route_applicability_status, ''))) = 'INLAND_WATER_ONLY'
+    ) as has_inland_water,
+    (
+      coalesce(ra.has_unknown, false)
+      or lower(trim(coalesce(rm.transport_evidence, rm.route_applicability_status, ''))) = 'transport_unknown'
+      or upper(trim(coalesce(rm.route_applicability_status, ''))) = 'UNKNOWN_ONLY'
+    ) as has_unknown,
+    (
+      coalesce(ra.has_non_marine, false)
+      or upper(trim(coalesce(rm.route_applicability_status, ''))) = 'NON_MARITIME_ONLY'
+    ) as has_non_marine,
     case
       when lower(trim(coalesce(rm.route_status, ''))) = 'routed' then true
       when lower(trim(coalesce(rm.routing_decision, ''))) in ('route_by_observed_sea', 'route_by_inference') then true
-      when upper(trim(coalesce(rm.route_applicability_status, ra.route_applicability_status, ''))) = 'MARITIME_ELIGIBLE' then true
+      when (
+        coalesce(ra.has_sea, false)
+        or coalesce(ra.has_inland_water, false)
+        or lower(trim(coalesce(rm.transport_evidence, rm.route_applicability_status, ''))) = 'sea_observed'
+        or upper(trim(coalesce(rm.route_applicability_status, ra.route_applicability_status, ''))) in ('MARITIME_ELIGIBLE', 'INLAND_WATER_ONLY')
+      ) then true
       else false
     end as _is_maritime_routed_base
-  from "analytics"."analytics_marts"."fct_reporter_partner_commodity_month" as f
+  from `capfractal`.`analytics_marts`.`fct_reporter_partner_commodity_month` as f
   inner join resolved_allocation as ra
     on f.reporter_iso3 = ra.reporter_iso3
    and f.partner_iso3 = ra.partner_iso3
@@ -217,10 +289,10 @@ select
   case
     when coalesce(has_non_marine, false) and not coalesce(has_sea, false) and not coalesce(has_inland_water, false)
       then 'NON_MARITIME_ONLY'
-    when coalesce(has_unknown, false)
-      then 'UNKNOWN_MOT'
     when coalesce(has_sea, false) or coalesce(has_inland_water, false)
       then 'MARITIME_EVIDENCE'
+    when coalesce(has_unknown, false)
+      then 'UNKNOWN_MOT'
     else 'NO_MOT_DATA'
   end as mot_code_filter_status,
   case
@@ -231,8 +303,6 @@ select
   case
     when coalesce(has_non_marine, false) and not coalesce(has_sea, false) and not coalesce(has_inland_water, false)
       then 'VERY_LOW'
-    when coalesce(has_unknown, false)
-      then 'LOW'
     when not _is_maritime_routed_base
       then 'LOW'
     when lower(trim(coalesce(route_confidence, ''))) in ('high', 'very_high')
@@ -241,6 +311,8 @@ select
       then 'HIGH'
     when _is_maritime_routed_base and (coalesce(has_sea, false) or coalesce(has_inland_water, false))
       then 'MEDIUM'
+    when coalesce(has_unknown, false)
+      then 'LOW'
     else 'LOW'
   end as route_confidence_score,
   case
@@ -254,5 +326,4 @@ select
   hub_iso3
 from base_fact
     );
-  
   

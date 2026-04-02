@@ -25,7 +25,7 @@ source_data as (
    as period,
     case
       when 
-    regexp_contains(cast(year_month_raw as string), '^\d{4}-\d{2}$')
+    regexp_contains(cast(year_month_raw as string), r'^\d{4}-\d{2}$')
    then year_month_raw
       when 
     safe_cast(period_raw as INT64)

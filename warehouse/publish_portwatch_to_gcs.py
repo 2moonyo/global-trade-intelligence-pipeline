@@ -11,7 +11,13 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from ingest.common.cloud_config import GcpCloudConfig
-from ingest.common.run_artifacts import append_manifest, build_run_id, configure_logger, json_ready
+from ingest.common.run_artifacts import (
+    append_manifest,
+    build_run_id,
+    configure_logger,
+    duration_seconds,
+    json_ready,
+)
 from warehouse.gcs_publish_common import (
     UploadSpec,
     path_year_month,
@@ -136,6 +142,7 @@ def publish_portwatch_assets(
         "status": "running",
         "started_at": started_at.isoformat(),
         "finished_at": None,
+        "duration_seconds": None,
         "skip_existing": skip_existing,
         "selected_year_months": sorted(selected_year_months),
         "since_year_month": since_year_month,
@@ -163,8 +170,18 @@ def publish_portwatch_assets(
                         "files_considered": 0,
                         "files_skipped_existing": 0,
                         "files_planned": 0,
+                        "checksum_aware": True,
+                        "checksum_verified_file_count": 0,
+                        "files_checksum_matched": 0,
+                        "files_checksum_mismatched": 0,
+                        "files_checksum_unverified": 0,
+                        "files_uploaded_missing_remote": 0,
+                        "files_uploaded_checksum_mismatch": 0,
+                        "files_uploaded_remote_checksum_unavailable": 0,
+                        "all_compared_checksums_match": None,
                         "touched_year_months": [],
                         "sample_uris": [],
+                        "sample_results": [],
                     }
                     continue
                 if spec.name == "bronze_portwatch":
@@ -183,6 +200,7 @@ def publish_portwatch_assets(
                     selected_partition_values=selected_year_months,
                     since_partition_value=since_year_month,
                     until_partition_value=until_year_month,
+                    logger=logger,
                 )
                 touched_year_months.update(spec_touched_months)
                 uploads[spec.name] = {
@@ -190,11 +208,13 @@ def publish_portwatch_assets(
                     "touched_year_months": spec_touched_months,
                 }
                 logger.info(
-                    "Spec=%s considered=%s uploaded=%s skipped_existing=%s touched_months=%s",
+                    "Spec=%s considered=%s uploaded=%s skipped_existing=%s checksum_matched=%s checksum_mismatched=%s touched_months=%s",
                     spec.name,
                     upload_summary["files_considered"],
                     upload_summary["files_uploaded"],
                     upload_summary["files_skipped_existing"],
+                    upload_summary["files_checksum_matched"],
+                    upload_summary["files_checksum_mismatched"],
                     spec_touched_months,
                 )
                 continue
@@ -210,9 +230,11 @@ def publish_portwatch_assets(
                 "touched_year_months": [],
             }
             logger.info(
-                "Spec=%s action=%s uri=%s",
+                "Spec=%s action=%s checksum_match=%s upload_reason=%s uri=%s",
                 spec.name,
                 upload_summary["status"],
+                upload_summary["checksum_match"],
+                upload_summary["upload_reason"],
                 upload_summary["gcs_destination"],
             )
 
@@ -220,23 +242,44 @@ def publish_portwatch_assets(
         summary["uploads"] = uploads
         summary["touched_year_months"] = sorted(touched_year_months)
         summary["status"] = "completed" if not dry_run else "planned"
+        summary["duration_seconds"] = duration_seconds(started_at, finished_at)
         manifest_entry.update(
             {
                 "status": summary["status"],
                 "finished_at": finished_at.isoformat(),
+                "duration_seconds": duration_seconds(started_at, finished_at),
                 "touched_year_months": sorted(touched_year_months),
                 "uploads": uploads,
             }
         )
         append_manifest(MANIFEST_PATH, manifest_entry)
-        logger.info("Finished PortWatch GCS publish run_id=%s", run_id)
+        logger.info(
+            "Finished PortWatch GCS publish run_id=%s touched_year_months=%s duration_s=%.3f",
+            run_id,
+            len(touched_year_months),
+            manifest_entry["duration_seconds"],
+        )
         return json_ready(summary)
+    except KeyboardInterrupt:
+        finished_at = datetime.now(timezone.utc)
+        manifest_entry.update(
+            {
+                "status": "cancelled",
+                "finished_at": finished_at.isoformat(),
+                "duration_seconds": duration_seconds(started_at, finished_at),
+                "error_summary": "Interrupted by user",
+            }
+        )
+        append_manifest(MANIFEST_PATH, manifest_entry)
+        logger.warning("PortWatch GCS publish cancelled run_id=%s", run_id)
+        raise
     except Exception as exc:
         finished_at = datetime.now(timezone.utc)
         manifest_entry.update(
             {
                 "status": "failed",
                 "finished_at": finished_at.isoformat(),
+                "duration_seconds": duration_seconds(started_at, finished_at),
                 "error_summary": str(exc),
             }
         )

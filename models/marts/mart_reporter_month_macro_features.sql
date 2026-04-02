@@ -24,6 +24,8 @@ macro_monthly as (
     fx_currency_code,
     brent_price_usd,
     brent_mom_change,
+    wti_price_usd,
+    brent_wti_spread_usd,
     fx_rate_to_usd,
     fx_mom_change
   from {{ ref('mart_macro_monthly_features') }}
@@ -59,6 +61,8 @@ select
   mm.fx_currency_code,
   mm.brent_price_usd,
   mm.brent_mom_change,
+  mm.wti_price_usd,
+  mm.brent_wti_spread_usd,
   mm.fx_rate_to_usd,
   mm.fx_mom_change,
   eap.renewables_share,

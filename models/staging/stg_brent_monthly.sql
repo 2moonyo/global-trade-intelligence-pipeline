@@ -1,8 +1,8 @@
 select
   year_month,
   {{ safe_cast('month_start_date', 'date') }} as month_start_date,
-  {{ safe_cast('year', dbt.type_int()) }} as year_num,
-  {{ safe_cast('month', dbt.type_int()) }} as month_num,
+  {{ safe_cast('year', dbt.type_int()) }} as year,
+  {{ safe_cast('month', dbt.type_int()) }} as month,
   benchmark_code,
   benchmark_name,
   region,

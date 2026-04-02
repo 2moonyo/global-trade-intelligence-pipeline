@@ -1,11 +1,14 @@
 
   
     
+
+    create or replace table `capfractal`.`analytics_marts`.`fct_reporter_partner_commodity_month`
+      
+    
     
 
-    create  table
-      "analytics"."analytics_marts"."fct_reporter_partner_commodity_month__dbt_tmp"
-  
+    
+    OPTIONS()
     as (
       with base as (
   select
@@ -21,7 +24,7 @@
     net_weight_kg,
     gross_weight_kg,
     qty
-  from "analytics"."analytics_staging"."stg_comtrade_trade_base"
+  from `capfractal`.`analytics_staging`.`stg_comtrade_trade_base`
 )
 
 select
@@ -53,5 +56,4 @@ group by
   ref_year,
   trade_flow
     );
-  
   

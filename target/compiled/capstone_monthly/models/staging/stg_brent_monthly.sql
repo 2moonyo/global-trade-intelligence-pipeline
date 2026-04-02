@@ -5,10 +5,10 @@ select
    as month_start_date,
   
     safe_cast(year as INT64)
-   as year_num,
+   as year,
   
     safe_cast(month as INT64)
-   as month_num,
+   as month,
   benchmark_code,
   benchmark_name,
   region,

@@ -1,11 +1,14 @@
 
   
     
+
+    create or replace table `capfractal`.`analytics_analytics_marts`.`bridge_event_chokepoint`
+      
+    
     
 
-    create  table
-      "analytics"."analytics_analytics_marts"."bridge_event_chokepoint__dbt_tmp"
-  
+    
+    OPTIONS()
     as (
       
 
@@ -15,17 +18,18 @@ with base as (
         event_id,
         location_name as chokepoint_name,
         link_role
-    from "analytics"."analytics_analytics_staging"."stg_event_location"
+    from `capfractal`.`analytics_analytics_staging`.`stg_event_location`
     where location_type = 'chokepoint'
 
 )
 
 select
     event_id,
-    md5(lower(trim(chokepoint_name))) as chokepoint_id,
+    
+    to_hex(md5(cast(lower(trim(chokepoint_name)) as string)))
+   as chokepoint_id,
     chokepoint_name,
     link_role
 from base
     );
-  
   

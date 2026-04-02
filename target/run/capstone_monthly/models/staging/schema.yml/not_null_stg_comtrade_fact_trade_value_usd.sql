@@ -14,7 +14,7 @@
 
 
 select trade_value_usd
-from "analytics"."analytics_staging"."stg_comtrade_fact"
+from `capfractal`.`analytics_staging`.`stg_comtrade_fact`
 where trade_value_usd is null
 
 

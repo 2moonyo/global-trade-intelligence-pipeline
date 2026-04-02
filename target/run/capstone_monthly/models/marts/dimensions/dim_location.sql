@@ -1,11 +1,14 @@
 
   
     
+
+    create or replace table `capfractal`.`analytics_analytics_marts`.`dim_location`
+      
+    
     
 
-    create  table
-      "analytics"."analytics_analytics_marts"."dim_location__dbt_tmp"
-  
+    
+    OPTIONS()
     as (
       
 
@@ -16,17 +19,18 @@ with base as (
         location_type,
         location_layer,
         is_core_chokepoint
-    from "analytics"."analytics_analytics_staging"."stg_event_location"
+    from `capfractal`.`analytics_analytics_staging`.`stg_event_location`
 
 )
 
 select
-    md5(lower(trim(location_name)) || '|' || lower(trim(location_type))) as location_id,
+    
+    to_hex(md5(cast(lower(trim(location_name)) || '|' || lower(trim(location_type)) as string)))
+   as location_id,
     location_name,
     location_type,
     location_layer,
     is_core_chokepoint
 from base
     );
-  
   

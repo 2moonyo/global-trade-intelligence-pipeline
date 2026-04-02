@@ -15,8 +15,21 @@ from google.api_core.exceptions import NotFound
 from google.cloud import bigquery
 
 from ingest.common.cloud_config import GcpCloudConfig
-from ingest.common.gcs_io import list_blob_uris
-from ingest.common.run_artifacts import append_manifest, build_run_id, configure_logger, json_ready
+from ingest.common.gcs_io import list_blob_metadata, list_blob_uris
+from ingest.common.run_artifacts import (
+    append_manifest,
+    build_run_id,
+    configure_logger,
+    duration_seconds,
+    json_ready,
+)
+from warehouse.bigquery_load_state import (
+    LoadStateRecord,
+    blob_name_from_gcs_uri,
+    ensure_load_state_table,
+    fetch_load_state_checksums,
+    replace_load_state_rows,
+)
 
 
 DEFAULT_LOCAL_SILVER_ROOT = PROJECT_ROOT / "data" / "silver" / "portwatch" / "portwatch_monthly"
@@ -27,6 +40,7 @@ LOG_DIR = PROJECT_ROOT / "logs" / "portwatch"
 LOG_PATH = LOG_DIR / "load_portwatch_to_bigquery.log"
 MANIFEST_PATH = LOG_DIR / "load_portwatch_to_bigquery_manifest.jsonl"
 AUDIT_TABLE_NAME = "portwatch_monthly_load_audit"
+STATE_TABLE_NAME = "portwatch_monthly_load_state"
 
 
 def _parse_year_month(value: str) -> str:
@@ -214,28 +228,59 @@ def _existing_loaded_months(
 
 def _selected_uris_by_month(
     *,
-    candidate_uris: list[str],
+    month_state: dict[str, LoadStateRecord],
     include_loaded_months: bool,
-    table_exists: bool,
+    state_checksums: dict[str, str],
     client: bigquery.Client | None,
-    table_id: str,
-    location: str,
-) -> tuple[list[str], list[date], list[date]]:
-    month_to_uri = {_month_start_from_gcs_uri(uri): uri for uri in candidate_uris}
-    candidate_months = sorted(month_to_uri.keys())
+    table_exists: bool,
+) -> tuple[list[str], list[str]]:
+    candidate_months = sorted(month_state.keys())
 
     if include_loaded_months or not table_exists or client is None:
-        return [month_to_uri[month] for month in candidate_months], candidate_months, []
+        return candidate_months, []
 
-    loaded_months = _existing_loaded_months(
-        client,
-        table_id=table_id,
-        location=location,
-        candidate_months=candidate_months,
+    selected_months = []
+    skipped_months = []
+    for month in candidate_months:
+        prior_checksum = state_checksums.get(month)
+        if prior_checksum is not None and prior_checksum == month_state[month].source_checksum:
+            skipped_months.append(month)
+        else:
+            selected_months.append(month)
+    return selected_months, skipped_months
+
+
+def _source_state_by_month(
+    *,
+    config: GcpCloudConfig,
+    resolved_gcs_prefix: str,
+    candidate_uris: list[str],
+    table_id: str,
+) -> dict[str, LoadStateRecord]:
+    metadata_by_name = list_blob_metadata(
+        bucket_name=config.gcs_bucket,
+        prefix=resolved_gcs_prefix,
+        project_id=config.gcp_project_id,
+        suffix=PARTITION_FILENAME,
     )
-    selected_months = [month for month in candidate_months if month not in loaded_months]
-    skipped_months = [month for month in candidate_months if month in loaded_months]
-    return [month_to_uri[month] for month in selected_months], selected_months, skipped_months
+    month_state: dict[str, LoadStateRecord] = {}
+    for uri in candidate_uris:
+        blob_name = blob_name_from_gcs_uri(uri)
+        blob_metadata = metadata_by_name.get(blob_name)
+        if blob_metadata is None:
+            raise FileNotFoundError(f"Expected GCS object for PortWatch load source {uri}")
+        if not blob_metadata.md5_hash:
+            raise ValueError(f"GCS object {uri} is missing an md5 checksum; cannot perform checksum-aware load.")
+        month_key = _year_month_from_date(_month_start_from_gcs_uri(uri))
+        month_state[month_key] = LoadStateRecord(
+            entity_type="fact_partition",
+            entity_key=month_key,
+            source_checksum=blob_metadata.md5_hash,
+            checksum_kind="gcs_md5",
+            source_uris=(uri,),
+            target_table_id=table_id,
+        )
+    return month_state
 
 
 def load_portwatch_monthly(
@@ -256,6 +301,7 @@ def load_portwatch_monthly(
     resolved_gcs_prefix = gcs_prefix or config.blob_path(*DEFAULT_GCS_PREFIX_PARTS)
     table_id = f"{config.gcp_project_id}.{config.bq_raw_dataset}.{table_name}"
     audit_table_id = f"{config.gcp_project_id}.{config.bq_raw_dataset}.{AUDIT_TABLE_NAME}"
+    state_table_id = f"{config.gcp_project_id}.{config.bq_raw_dataset}.{STATE_TABLE_NAME}"
     run_id = build_run_id("portwatch_load_bigquery")
     logger = configure_logger(
         logger_name=LOGGER_NAME,
@@ -271,6 +317,7 @@ def load_portwatch_monthly(
         "status": "running",
         "started_at": started_at.isoformat(),
         "finished_at": None,
+        "duration_seconds": None,
         "table_id": table_id,
         "source_mode": source_mode,
         "gcs_prefix": resolved_gcs_prefix,
@@ -286,8 +333,10 @@ def load_portwatch_monthly(
         "selected_file_count": 0,
         "output_rows": None,
         "audit_table_id": audit_table_id,
+        "state_table_id": state_table_id,
         "error_summary": None,
         "dry_run": dry_run,
+        "skipped_unchanged_year_months": [],
     }
     client: bigquery.Client | None = None
     audit_table_ready = False
@@ -295,6 +344,7 @@ def load_portwatch_monthly(
     try:
         logger.info("Starting PortWatch BigQuery load run_id=%s", run_id)
         logger.info("Loading into %s from source=%s", table_id, source_mode)
+        logger.info("Step 1/4 Discover candidate PortWatch parquet partitions")
 
         if source_mode == "local":
             partition_files = _partition_files(local_silver_root)
@@ -346,23 +396,39 @@ def load_portwatch_monthly(
             "log_path": str(LOG_PATH),
             "manifest_path": str(MANIFEST_PATH),
             "audit_table_id": manifest_entry["audit_table_id"],
+            "state_table_id": manifest_entry["state_table_id"],
         }
         manifest_entry["candidate_file_count"] = len(filtered_candidate_uris)
         manifest_entry["candidate_year_months"] = [_year_month_from_date(month) for month in candidate_months]
+        month_state = _source_state_by_month(
+            config=config,
+            resolved_gcs_prefix=resolved_gcs_prefix,
+            candidate_uris=filtered_candidate_uris,
+            table_id=table_id,
+        )
+        logger.info(
+            "Discovered candidate_files=%s candidate_year_months=%s",
+            len(filtered_candidate_uris),
+            manifest_entry["candidate_year_months"],
+        )
 
         if dry_run:
             summary["status"] = "planned"
             summary["gcs_source_uris"] = filtered_candidate_uris[:20]
+            finished_at = datetime.now(timezone.utc)
+            summary["duration_seconds"] = duration_seconds(started_at, finished_at)
             manifest_entry.update(
                 {
                     "status": "planned",
-                    "finished_at": datetime.now(timezone.utc).isoformat(),
+                    "finished_at": finished_at.isoformat(),
                 }
             )
+            manifest_entry["duration_seconds"] = duration_seconds(started_at, finished_at)
             append_manifest(MANIFEST_PATH, manifest_entry)
             logger.info("Dry-run complete for run_id=%s", run_id)
             return json_ready(summary)
 
+        logger.info("Step 2/4 Resolve BigQuery dataset and selected months")
         client = bigquery.Client(project=config.gcp_project_id)
         _ensure_dataset(
             client,
@@ -376,6 +442,13 @@ def load_portwatch_monthly(
             dataset_name=config.bq_raw_dataset,
         )
         audit_table_ready = True
+        ensure_load_state_table(
+            client,
+            bigquery=bigquery,
+            project_id=config.gcp_project_id,
+            dataset_name=config.bq_raw_dataset,
+            table_name=STATE_TABLE_NAME,
+        )
 
         table_exists = True
         try:
@@ -383,27 +456,36 @@ def load_portwatch_monthly(
         except NotFound:
             table_exists = False
 
-        selected_uris, selected_months, skipped_months = _selected_uris_by_month(
-            candidate_uris=filtered_candidate_uris,
-            include_loaded_months=include_loaded_months,
-            table_exists=table_exists,
-            client=client,
-            table_id=table_id,
+        state_checksums = fetch_load_state_checksums(
+            client,
+            bigquery=bigquery,
+            state_table_id=state_table_id,
+            entity_type="fact_partition",
+            entity_keys=sorted(month_state.keys()),
             location=config.gcp_location,
         )
-        selected_year_month_values = [_year_month_from_date(month) for month in selected_months]
-        skipped_year_month_values = [_year_month_from_date(month) for month in skipped_months]
+        selected_year_month_values, skipped_year_month_values = _selected_uris_by_month(
+            month_state=month_state,
+            include_loaded_months=include_loaded_months,
+            state_checksums=state_checksums,
+            client=client,
+            table_exists=table_exists,
+        )
+        selected_uris = [month_state[month].source_uris[0] for month in selected_year_month_values]
+        selected_months = [date.fromisoformat(f"{month}-01") for month in selected_year_month_values]
 
         summary["selected_file_count"] = len(selected_uris)
         summary["selected_year_months"] = selected_year_month_values
         summary["skipped_loaded_year_months"] = skipped_year_month_values
+        summary["skipped_unchanged_year_months"] = skipped_year_month_values
         summary["gcs_source_uris"] = selected_uris[:20]
         manifest_entry["selected_file_count"] = len(selected_uris)
         manifest_entry["selected_year_months"] = selected_year_month_values
         manifest_entry["skipped_loaded_year_months"] = skipped_year_month_values
+        manifest_entry["skipped_unchanged_year_months"] = skipped_year_month_values
 
         logger.info(
-            "Candidate months=%s selected=%s skipped_loaded=%s",
+            "Candidate months=%s selected_changed=%s skipped_unchanged=%s",
             summary["candidate_year_months"],
             selected_year_month_values,
             skipped_year_month_values,
@@ -411,12 +493,15 @@ def load_portwatch_monthly(
 
         if not selected_uris:
             summary["status"] = "no_op_all_candidate_months_already_loaded"
+            finished_at = datetime.now(timezone.utc)
+            summary["duration_seconds"] = duration_seconds(started_at, finished_at)
             manifest_entry.update(
                 {
                     "status": summary["status"],
-                    "finished_at": datetime.now(timezone.utc).isoformat(),
+                    "finished_at": finished_at.isoformat(),
                 }
             )
+            manifest_entry["duration_seconds"] = duration_seconds(started_at, finished_at)
             audit_errors = _write_audit_row(client, audit_table_id=audit_table_id, entry=manifest_entry)
             if audit_errors:
                 logger.warning("Audit row insert returned errors: %s", audit_errors)
@@ -425,6 +510,7 @@ def load_portwatch_monthly(
             return json_ready(summary)
 
         if table_exists and replace_touched_partitions:
+            logger.info("Step 3/4 Delete touched month partitions from %s", table_id)
             delete_sql = f"""
             delete from `{table_id}`
             where month_start_date in unnest(@touched_month_start_dates)
@@ -445,6 +531,11 @@ def load_portwatch_monthly(
             delete_job.result()
             logger.info("Deleted existing rows for months=%s", selected_year_month_values)
 
+        logger.info(
+            "Step 4/4 Submit PortWatch load job uris=%s months=%s",
+            len(selected_uris),
+            selected_year_month_values,
+        )
         load_job_config = bigquery.LoadJobConfig(
             source_format=bigquery.SourceFormat.PARQUET,
             create_disposition=bigquery.CreateDisposition.CREATE_IF_NEEDED,
@@ -463,14 +554,26 @@ def load_portwatch_monthly(
         )
         load_job.result()
 
+        replace_load_state_rows(
+            client,
+            bigquery=bigquery,
+            state_table_id=state_table_id,
+            rows=[month_state[month] for month in selected_year_month_values],
+            run_id=run_id,
+            source_mode=source_mode,
+            location=config.gcp_location,
+        )
+
         table = client.get_table(table_id)
         finished_at = datetime.now(timezone.utc)
         summary["status"] = "loaded"
         summary["output_rows"] = table.num_rows
+        summary["duration_seconds"] = duration_seconds(started_at, finished_at)
         manifest_entry.update(
             {
                 "status": "loaded",
                 "finished_at": finished_at.isoformat(),
+                "duration_seconds": duration_seconds(started_at, finished_at),
                 "output_rows": table.num_rows,
             }
         )
@@ -478,7 +581,12 @@ def load_portwatch_monthly(
         if audit_errors:
             logger.warning("Audit row insert returned errors: %s", audit_errors)
         append_manifest(MANIFEST_PATH, manifest_entry)
-        logger.info("Finished PortWatch BigQuery load run_id=%s output_rows=%s", run_id, table.num_rows)
+        logger.info(
+            "Finished PortWatch BigQuery load run_id=%s output_rows=%s duration_s=%.3f",
+            run_id,
+            table.num_rows,
+            manifest_entry["duration_seconds"],
+        )
         return json_ready(summary)
     except Exception as exc:
         finished_at = datetime.now(timezone.utc)
@@ -486,6 +594,7 @@ def load_portwatch_monthly(
             {
                 "status": "failed",
                 "finished_at": finished_at.isoformat(),
+                "duration_seconds": duration_seconds(started_at, finished_at),
                 "error_summary": str(exc),
             }
         )

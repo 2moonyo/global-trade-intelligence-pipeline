@@ -14,7 +14,7 @@
 
 
 select year_month
-from "analytics"."analytics_analytics_staging"."stg_event_month_chokepoint"
+from `capfractal`.`analytics_analytics_staging`.`stg_event_month_chokepoint`
 where year_month is null
 
 

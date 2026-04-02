@@ -1,7 +1,8 @@
 
-  
-  create view "analytics"."analytics_analytics_staging"."stg_event_location__dbt_tmp" as (
-    
+
+  create or replace view `capfractal`.`analytics_analytics_staging`.`stg_event_location`
+  OPTIONS()
+  as 
 
 select
     event_id,
@@ -21,7 +22,7 @@ select
     event_type,
     raw_event_scope,
     link_role
-from "analytics"."analytics_analytics_staging"."stg_event_month_chokepoint"
+from `capfractal`.`analytics_analytics_staging`.`stg_event_month_chokepoint`
 
 union all
 
@@ -43,5 +44,5 @@ select
     event_type,
     raw_event_scope,
     link_role
-from "analytics"."analytics_analytics_staging"."stg_event_month_region"
-  );
+from `capfractal`.`analytics_analytics_staging`.`stg_event_month_region`;
+

@@ -12,8 +12,21 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from ingest.common.cloud_config import GcpCloudConfig
-from ingest.common.gcs_io import list_blob_uris
-from ingest.common.run_artifacts import append_manifest, build_run_id, configure_logger, json_ready
+from ingest.common.gcs_io import list_blob_metadata, list_blob_uris
+from ingest.common.run_artifacts import (
+    append_manifest,
+    build_run_id,
+    configure_logger,
+    duration_seconds,
+    json_ready,
+)
+from warehouse.bigquery_load_state import (
+    LoadStateRecord,
+    blob_name_from_gcs_uri,
+    ensure_load_state_table,
+    fetch_load_state_checksums,
+    replace_load_state_rows,
+)
 
 
 DEFAULT_LOCAL_SILVER_ROOT = PROJECT_ROOT / "data" / "silver" / "worldbank_energy" / "energy_vulnerability"
@@ -24,6 +37,7 @@ LOG_DIR = PROJECT_ROOT / "logs" / "worldbank_energy"
 LOG_PATH = LOG_DIR / "load_worldbank_energy_to_bigquery.log"
 MANIFEST_PATH = LOG_DIR / "load_worldbank_energy_to_bigquery_manifest.jsonl"
 AUDIT_TABLE_NAME = "worldbank_energy_load_audit"
+STATE_TABLE_NAME = "worldbank_energy_load_state"
 
 
 def _bigquery_imports():
@@ -218,30 +232,59 @@ def _existing_loaded_years(
 
 def _selected_uris_by_year(
     *,
-    candidate_uris: list[str],
+    year_state: dict[str, LoadStateRecord],
     include_loaded_years: bool,
-    table_exists: bool,
+    state_checksums: dict[str, str],
     client,
-    bigquery,
-    table_id: str,
-    location: str,
-) -> tuple[list[str], list[int], list[int]]:
-    year_to_uri = {_year_from_gcs_uri(uri): uri for uri in candidate_uris}
-    candidate_years = sorted(year_to_uri.keys())
+    table_exists: bool,
+) -> tuple[list[str], list[str]]:
+    candidate_years = sorted(year_state.keys())
 
     if include_loaded_years or not table_exists or client is None:
-        return [year_to_uri[year] for year in candidate_years], candidate_years, []
+        return candidate_years, []
 
-    loaded_years = _existing_loaded_years(
-        client,
-        bigquery=bigquery,
-        table_id=table_id,
-        location=location,
-        candidate_years=candidate_years,
+    selected_years = []
+    skipped_years = []
+    for year in candidate_years:
+        prior_checksum = state_checksums.get(year)
+        if prior_checksum is not None and prior_checksum == year_state[year].source_checksum:
+            skipped_years.append(year)
+        else:
+            selected_years.append(year)
+    return selected_years, skipped_years
+
+
+def _source_state_by_year(
+    *,
+    config: GcpCloudConfig,
+    resolved_gcs_prefix: str,
+    candidate_uris: list[str],
+    table_id: str,
+) -> dict[str, LoadStateRecord]:
+    metadata_by_name = list_blob_metadata(
+        bucket_name=config.gcs_bucket,
+        prefix=resolved_gcs_prefix,
+        project_id=config.gcp_project_id,
+        suffix=PARTITION_FILENAME,
     )
-    selected_years = [year for year in candidate_years if year not in loaded_years]
-    skipped_years = [year for year in candidate_years if year in loaded_years]
-    return [year_to_uri[year] for year in selected_years], selected_years, skipped_years
+    year_state: dict[str, LoadStateRecord] = {}
+    for uri in candidate_uris:
+        blob_name = blob_name_from_gcs_uri(uri)
+        blob_metadata = metadata_by_name.get(blob_name)
+        if blob_metadata is None:
+            raise FileNotFoundError(f"Expected GCS object for World Bank energy load source {uri}")
+        if not blob_metadata.md5_hash:
+            raise ValueError(f"GCS object {uri} is missing an md5 checksum; cannot perform checksum-aware load.")
+        year_key = f"{_year_from_gcs_uri(uri):04d}"
+        year_state[year_key] = LoadStateRecord(
+            entity_type="fact_partition",
+            entity_key=year_key,
+            source_checksum=blob_metadata.md5_hash,
+            checksum_kind="gcs_md5",
+            source_uris=(uri,),
+            target_table_id=table_id,
+        )
+    return year_state
 
 
 def load_worldbank_energy(
@@ -262,6 +305,7 @@ def load_worldbank_energy(
     resolved_gcs_prefix = gcs_prefix or config.blob_path(*DEFAULT_GCS_PREFIX_PARTS)
     table_id = f"{config.gcp_project_id}.{config.bq_raw_dataset}.{table_name}"
     audit_table_id = f"{config.gcp_project_id}.{config.bq_raw_dataset}.{AUDIT_TABLE_NAME}"
+    state_table_id = f"{config.gcp_project_id}.{config.bq_raw_dataset}.{STATE_TABLE_NAME}"
     run_id = build_run_id("worldbank_energy_load_bigquery")
     logger = configure_logger(
         logger_name=LOGGER_NAME,
@@ -277,6 +321,7 @@ def load_worldbank_energy(
         "status": "running",
         "started_at": started_at.isoformat(),
         "finished_at": None,
+        "duration_seconds": None,
         "table_id": table_id,
         "source_mode": source_mode,
         "gcs_prefix": resolved_gcs_prefix,
@@ -292,8 +337,10 @@ def load_worldbank_energy(
         "selected_file_count": 0,
         "output_rows": None,
         "audit_table_id": audit_table_id,
+        "state_table_id": state_table_id,
         "error_summary": None,
         "dry_run": dry_run,
+        "skipped_unchanged_years": [],
     }
     client = None
     audit_table_ready = False
@@ -301,6 +348,7 @@ def load_worldbank_energy(
     try:
         logger.info("Starting World Bank energy BigQuery load run_id=%s", run_id)
         logger.info("Loading into %s from source=%s", table_id, source_mode)
+        logger.info("Step 1/4 Discover candidate World Bank energy parquet partitions")
 
         if source_mode == "local":
             partition_files = _partition_files(local_silver_root)
@@ -353,23 +401,39 @@ def load_worldbank_energy(
             "log_path": str(LOG_PATH),
             "manifest_path": str(MANIFEST_PATH),
             "audit_table_id": manifest_entry["audit_table_id"],
+            "state_table_id": manifest_entry["state_table_id"],
         }
         manifest_entry["candidate_file_count"] = len(filtered_candidate_uris)
         manifest_entry["candidate_years"] = candidate_year_text
+        year_state = _source_state_by_year(
+            config=config,
+            resolved_gcs_prefix=resolved_gcs_prefix,
+            candidate_uris=filtered_candidate_uris,
+            table_id=table_id,
+        )
+        logger.info(
+            "Discovered candidate_files=%s candidate_years=%s",
+            len(filtered_candidate_uris),
+            candidate_year_text,
+        )
 
         if dry_run:
             summary["status"] = "planned"
             summary["gcs_source_uris"] = filtered_candidate_uris[:20]
+            finished_at = datetime.now(timezone.utc)
+            summary["duration_seconds"] = duration_seconds(started_at, finished_at)
             manifest_entry.update(
                 {
                     "status": "planned",
-                    "finished_at": datetime.now(timezone.utc).isoformat(),
+                    "finished_at": finished_at.isoformat(),
                 }
             )
+            manifest_entry["duration_seconds"] = duration_seconds(started_at, finished_at)
             append_manifest(MANIFEST_PATH, manifest_entry)
             logger.info("Dry-run complete for run_id=%s", run_id)
             return json_ready(summary)
 
+        logger.info("Step 2/4 Resolve BigQuery dataset and selected years")
         bigquery, NotFound = _bigquery_imports()
         client = bigquery.Client(project=config.gcp_project_id)
         _ensure_dataset(
@@ -386,6 +450,13 @@ def load_worldbank_energy(
             dataset_name=config.bq_raw_dataset,
         )
         audit_table_ready = True
+        ensure_load_state_table(
+            client,
+            bigquery=bigquery,
+            project_id=config.gcp_project_id,
+            dataset_name=config.bq_raw_dataset,
+            table_name=STATE_TABLE_NAME,
+        )
 
         table_exists = True
         try:
@@ -393,28 +464,36 @@ def load_worldbank_energy(
         except NotFound:
             table_exists = False
 
-        selected_uris, selected_year_values, skipped_year_values = _selected_uris_by_year(
-            candidate_uris=filtered_candidate_uris,
-            include_loaded_years=include_loaded_years,
-            table_exists=table_exists,
-            client=client,
+        state_checksums = fetch_load_state_checksums(
+            client,
             bigquery=bigquery,
-            table_id=table_id,
+            state_table_id=state_table_id,
+            entity_type="fact_partition",
+            entity_keys=sorted(year_state.keys()),
             location=config.gcp_location,
         )
-        selected_year_text = [f"{year:04d}" for year in selected_year_values]
-        skipped_year_text = [f"{year:04d}" for year in skipped_year_values]
+        selected_year_text, skipped_year_text = _selected_uris_by_year(
+            year_state=year_state,
+            include_loaded_years=include_loaded_years,
+            state_checksums=state_checksums,
+            client=client,
+            table_exists=table_exists,
+        )
+        selected_uris = [year_state[year].source_uris[0] for year in selected_year_text]
+        selected_year_values = [int(year) for year in selected_year_text]
 
         summary["selected_file_count"] = len(selected_uris)
         summary["selected_years"] = selected_year_text
         summary["skipped_loaded_years"] = skipped_year_text
+        summary["skipped_unchanged_years"] = skipped_year_text
         summary["gcs_source_uris"] = selected_uris[:20]
         manifest_entry["selected_file_count"] = len(selected_uris)
         manifest_entry["selected_years"] = selected_year_text
         manifest_entry["skipped_loaded_years"] = skipped_year_text
+        manifest_entry["skipped_unchanged_years"] = skipped_year_text
 
         logger.info(
-            "Candidate years=%s selected=%s skipped_loaded=%s",
+            "Candidate years=%s selected_changed=%s skipped_unchanged=%s",
             candidate_year_text,
             selected_year_text,
             skipped_year_text,
@@ -422,12 +501,15 @@ def load_worldbank_energy(
 
         if not selected_uris:
             summary["status"] = "no_op_all_candidate_years_already_loaded"
+            finished_at = datetime.now(timezone.utc)
+            summary["duration_seconds"] = duration_seconds(started_at, finished_at)
             manifest_entry.update(
                 {
                     "status": summary["status"],
-                    "finished_at": datetime.now(timezone.utc).isoformat(),
+                    "finished_at": finished_at.isoformat(),
                 }
             )
+            manifest_entry["duration_seconds"] = duration_seconds(started_at, finished_at)
             audit_errors = _write_audit_row(client, audit_table_id=audit_table_id, entry=manifest_entry)
             if audit_errors:
                 logger.warning("Audit row insert returned errors: %s", audit_errors)
@@ -436,6 +518,7 @@ def load_worldbank_energy(
             return json_ready(summary)
 
         if table_exists and replace_touched_partitions:
+            logger.info("Step 3/4 Delete touched year partitions from %s", table_id)
             delete_sql = f"""
             delete from `{table_id}`
             where year in unnest(@touched_years)
@@ -456,6 +539,11 @@ def load_worldbank_energy(
             delete_job.result()
             logger.info("Deleted existing rows for years=%s", selected_year_text)
 
+        logger.info(
+            "Step 4/4 Submit World Bank energy load job uris=%s years=%s",
+            len(selected_uris),
+            selected_year_text,
+        )
         load_job_config = bigquery.LoadJobConfig(
             source_format=bigquery.SourceFormat.PARQUET,
             create_disposition=bigquery.CreateDisposition.CREATE_IF_NEEDED,
@@ -475,14 +563,26 @@ def load_worldbank_energy(
         )
         load_job.result()
 
+        replace_load_state_rows(
+            client,
+            bigquery=bigquery,
+            state_table_id=state_table_id,
+            rows=[year_state[year] for year in selected_year_text],
+            run_id=run_id,
+            source_mode=source_mode,
+            location=config.gcp_location,
+        )
+
         table = client.get_table(table_id)
         finished_at = datetime.now(timezone.utc)
         summary["status"] = "loaded"
         summary["output_rows"] = table.num_rows
+        summary["duration_seconds"] = duration_seconds(started_at, finished_at)
         manifest_entry.update(
             {
                 "status": "loaded",
                 "finished_at": finished_at.isoformat(),
+                "duration_seconds": duration_seconds(started_at, finished_at),
                 "output_rows": table.num_rows,
             }
         )
@@ -490,7 +590,12 @@ def load_worldbank_energy(
         if audit_errors:
             logger.warning("Audit row insert returned errors: %s", audit_errors)
         append_manifest(MANIFEST_PATH, manifest_entry)
-        logger.info("Finished World Bank energy BigQuery load run_id=%s output_rows=%s", run_id, table.num_rows)
+        logger.info(
+            "Finished World Bank energy BigQuery load run_id=%s output_rows=%s duration_s=%.3f",
+            run_id,
+            table.num_rows,
+            manifest_entry["duration_seconds"],
+        )
         return json_ready(summary)
     except Exception as exc:
         finished_at = datetime.now(timezone.utc)
@@ -498,6 +603,7 @@ def load_worldbank_energy(
             {
                 "status": "failed",
                 "finished_at": finished_at.isoformat(),
+                "duration_seconds": duration_seconds(started_at, finished_at),
                 "error_summary": str(exc),
             }
         )

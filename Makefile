@@ -7,7 +7,7 @@ TFVARS_EXAMPLE := $(TF_DIR)/terraform.tfvars.json.example
 
 .DEFAULT_GOAL := help
 
-.PHONY: help tfvars-init check-tfvars deps-sync gcp-auth infra-init infra-plan infra-apply infra-destroy env-file env-print cloud-bootstrap portwatch-extract portwatch-silver portwatch-cloud-dry-run portwatch-cloud portwatch-cloud-dry-run-with-bronze portwatch-cloud-with-bronze portwatch-refresh-cloud dbt-bigquery-debug dbt-bigquery-build
+.PHONY: help tfvars-init check-tfvars deps-sync gcp-auth infra-init infra-plan infra-apply infra-destroy env-file env-print cloud-bootstrap portwatch-extract portwatch-silver portwatch-cloud-dry-run portwatch-cloud portwatch-cloud-dry-run-with-bronze portwatch-cloud-with-bronze portwatch-refresh-cloud comtrade-silver comtrade-routing comtrade-cloud-dry-run comtrade-cloud comtrade-cloud-dry-run-with-bronze comtrade-cloud-with-bronze comtrade-refresh-cloud brent-extract brent-silver brent-cloud-dry-run brent-cloud brent-cloud-dry-run-with-bronze brent-cloud-with-bronze brent-refresh-cloud events-silver events-cloud-dry-run events-cloud events-refresh-cloud dbt-bigquery-debug dbt-bigquery-build
 
 help:
 	@printf "%s\n" \
@@ -20,6 +20,24 @@ help:
 		"make portwatch-cloud-dry-run-with-bronze Preview the GCS publish/load steps including bronze." \
 		"make portwatch-cloud-with-bronze Publish PortWatch bronze and silver assets, then load raw.portwatch_monthly." \
 		"make portwatch-refresh-cloud Rebuild PortWatch silver, then publish and load it." \
+		"make comtrade-silver        Build canonical Comtrade silver fact slices and dimensions." \
+		"make comtrade-routing       Build Comtrade routing outputs from the v4 notebook logic." \
+		"make comtrade-cloud-dry-run Preview the Comtrade silver/routing GCS publish and BigQuery load steps." \
+		"make comtrade-cloud         Publish Comtrade silver/routing assets to GCS and load raw.comtrade_*." \
+		"make comtrade-cloud-dry-run-with-bronze Preview the Comtrade publish/load steps including bronze and audit assets." \
+		"make comtrade-cloud-with-bronze Publish Comtrade bronze, silver, routing, and audit assets, then load raw.comtrade_*." \
+		"make comtrade-refresh-cloud Rebuild Comtrade silver and routing, then publish and load it." \
+		"make brent-extract         Run the Brent bronze extract with per-run logs and manifest output." \
+		"make brent-silver          Build partitioned Brent silver daily and monthly parquet outputs." \
+		"make brent-cloud-dry-run   Preview the Brent silver-only GCS publish and BigQuery load steps." \
+		"make brent-cloud           Publish Brent silver assets to GCS and load raw.brent_daily/raw.brent_monthly." \
+		"make brent-cloud-dry-run-with-bronze Preview the Brent publish/load steps including bronze." \
+		"make brent-cloud-with-bronze Publish Brent bronze and silver assets, then load raw.brent_daily/raw.brent_monthly." \
+		"make brent-refresh-cloud   Rebuild Brent silver, then publish and load it." \
+		"make events-silver         Build curated event silver outputs from data/bronze/events.csv with run logs." \
+		"make events-cloud-dry-run Preview the events silver GCS publish and BigQuery load steps." \
+		"make events-cloud         Publish events silver assets to GCS and load raw.dim_event/raw.bridge_event_*." \
+		"make events-refresh-cloud Rebuild event silver, then publish and load it." \
 		"make dbt-bigquery-debug      Run dbt debug with env vars derived from Terraform." \
 		"make dbt-bigquery-build      Run dbt build with env vars derived from Terraform."
 
@@ -93,6 +111,67 @@ portwatch-cloud-with-bronze: check-tfvars
 	PYTHONPATH="$(PROJECT_ROOT)" uv run python warehouse/load_portwatch_to_bigquery.py
 
 portwatch-refresh-cloud: portwatch-silver portwatch-cloud
+
+comtrade-silver:
+	PYTHONPATH="$(PROJECT_ROOT)" UV_CACHE_DIR="$(PROJECT_ROOT)/.uv-cache" uv run python ingest/comtrade/comtrade_silver.py
+
+comtrade-routing:
+	PYTHONPATH="$(PROJECT_ROOT)" UV_CACHE_DIR="$(PROJECT_ROOT)/.uv-cache" uv run python ingest/comtrade/comtrade_routing.py
+
+comtrade-cloud-dry-run: check-tfvars
+	PYTHONPATH="$(PROJECT_ROOT)" UV_CACHE_DIR="$(PROJECT_ROOT)/.uv-cache" uv run python warehouse/publish_comtrade_to_gcs.py --skip-bronze --dry-run
+	PYTHONPATH="$(PROJECT_ROOT)" UV_CACHE_DIR="$(PROJECT_ROOT)/.uv-cache" uv run python warehouse/load_comtrade_to_bigquery.py --dry-run
+
+comtrade-cloud: check-tfvars
+	PYTHONPATH="$(PROJECT_ROOT)" UV_CACHE_DIR="$(PROJECT_ROOT)/.uv-cache" uv run python warehouse/publish_comtrade_to_gcs.py --skip-bronze
+	PYTHONPATH="$(PROJECT_ROOT)" UV_CACHE_DIR="$(PROJECT_ROOT)/.uv-cache" uv run python warehouse/load_comtrade_to_bigquery.py
+
+comtrade-cloud-dry-run-with-bronze: check-tfvars
+	PYTHONPATH="$(PROJECT_ROOT)" UV_CACHE_DIR="$(PROJECT_ROOT)/.uv-cache" uv run python warehouse/publish_comtrade_to_gcs.py --dry-run
+	PYTHONPATH="$(PROJECT_ROOT)" UV_CACHE_DIR="$(PROJECT_ROOT)/.uv-cache" uv run python warehouse/load_comtrade_to_bigquery.py --dry-run
+
+comtrade-cloud-with-bronze: check-tfvars
+	PYTHONPATH="$(PROJECT_ROOT)" UV_CACHE_DIR="$(PROJECT_ROOT)/.uv-cache" uv run python warehouse/publish_comtrade_to_gcs.py
+	PYTHONPATH="$(PROJECT_ROOT)" UV_CACHE_DIR="$(PROJECT_ROOT)/.uv-cache" uv run python warehouse/load_comtrade_to_bigquery.py
+
+comtrade-refresh-cloud: comtrade-silver comtrade-routing comtrade-cloud
+
+brent-extract:
+	PYTHONPATH="$(PROJECT_ROOT)" UV_CACHE_DIR="$(PROJECT_ROOT)/.uv-cache" uv run python ingest/fred/brent_crude.py
+
+brent-silver:
+	PYTHONPATH="$(PROJECT_ROOT)" UV_CACHE_DIR="$(PROJECT_ROOT)/.uv-cache" uv run python ingest/fred/brent_silver.py
+
+brent-cloud-dry-run: check-tfvars
+	PYTHONPATH="$(PROJECT_ROOT)" UV_CACHE_DIR="$(PROJECT_ROOT)/.uv-cache" uv run python warehouse/publish_brent_to_gcs.py --skip-bronze --dry-run
+	PYTHONPATH="$(PROJECT_ROOT)" UV_CACHE_DIR="$(PROJECT_ROOT)/.uv-cache" uv run python warehouse/load_brent_to_bigquery.py --dry-run
+
+brent-cloud: check-tfvars
+	PYTHONPATH="$(PROJECT_ROOT)" UV_CACHE_DIR="$(PROJECT_ROOT)/.uv-cache" uv run python warehouse/publish_brent_to_gcs.py --skip-bronze
+	PYTHONPATH="$(PROJECT_ROOT)" UV_CACHE_DIR="$(PROJECT_ROOT)/.uv-cache" uv run python warehouse/load_brent_to_bigquery.py
+
+brent-cloud-dry-run-with-bronze: check-tfvars
+	PYTHONPATH="$(PROJECT_ROOT)" UV_CACHE_DIR="$(PROJECT_ROOT)/.uv-cache" uv run python warehouse/publish_brent_to_gcs.py --dry-run
+	PYTHONPATH="$(PROJECT_ROOT)" UV_CACHE_DIR="$(PROJECT_ROOT)/.uv-cache" uv run python warehouse/load_brent_to_bigquery.py --dry-run
+
+brent-cloud-with-bronze: check-tfvars
+	PYTHONPATH="$(PROJECT_ROOT)" UV_CACHE_DIR="$(PROJECT_ROOT)/.uv-cache" uv run python warehouse/publish_brent_to_gcs.py
+	PYTHONPATH="$(PROJECT_ROOT)" UV_CACHE_DIR="$(PROJECT_ROOT)/.uv-cache" uv run python warehouse/load_brent_to_bigquery.py
+
+brent-refresh-cloud: brent-silver brent-cloud
+
+events-silver:
+	PYTHONPATH="$(PROJECT_ROOT)" UV_CACHE_DIR="$(PROJECT_ROOT)/.uv-cache" uv run python ingest/events/events_silver.py
+
+events-cloud-dry-run: check-tfvars
+	PYTHONPATH="$(PROJECT_ROOT)" UV_CACHE_DIR="$(PROJECT_ROOT)/.uv-cache" uv run python warehouse/publish_events_to_gcs.py --dry-run
+	PYTHONPATH="$(PROJECT_ROOT)" UV_CACHE_DIR="$(PROJECT_ROOT)/.uv-cache" uv run python warehouse/load_events_to_bigquery.py --dry-run
+
+events-cloud: check-tfvars
+	PYTHONPATH="$(PROJECT_ROOT)" UV_CACHE_DIR="$(PROJECT_ROOT)/.uv-cache" uv run python warehouse/publish_events_to_gcs.py
+	PYTHONPATH="$(PROJECT_ROOT)" UV_CACHE_DIR="$(PROJECT_ROOT)/.uv-cache" uv run python warehouse/load_events_to_bigquery.py
+
+events-refresh-cloud: events-silver events-cloud
 
 dbt-bigquery-debug: check-tfvars
 	@eval "$$(python $(TF_DIR)/render_dotenv.py --format export)"; \

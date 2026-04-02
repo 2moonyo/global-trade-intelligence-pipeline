@@ -503,6 +503,12 @@ models:
       - name: brent_mom_pct_change
         description: Month-over-month percentage Brent price change.
 
+      - name: wti_avg_price_usd_per_bbl
+        description: Average WTI benchmark price for the month in USD per barrel.
+
+      - name: brent_wti_spread_usd_per_bbl
+        description: Monthly average Brent minus WTI benchmark spread in USD per barrel.
+
   - name: mart_trade_exposure
     description: Reporter-chokepoint monthly exposure mart with route confidence segmentation.
     columns:
@@ -639,6 +645,12 @@ models:
         description: Currency code from monthly FX feature series.
         tests:
           - not_null
+
+      - name: wti_price_usd
+        description: Average monthly WTI benchmark price in USD per barrel.
+
+      - name: brent_wti_spread_usd
+        description: Monthly average Brent minus WTI benchmark spread in USD per barrel.
 
       - name: energy_join_method
         description: Explicit join method describing annual-to-month broadcast rule for energy indicators.

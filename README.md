@@ -2,11 +2,18 @@
 
 This repository contains the implemented DuckDB warehouse and dbt project for the capstone analytics stack. The current build is larger than the original bootstrap: it includes core trade facts, route and hub enrichments, macro and energy marts, event impact modelling, canonical-grain provenance, a dbt-generated time dimension, and a generic event location layer.
 
-The repo now also includes a first-pass cloud path for the PortWatch vertical slice:
+The repo now also includes first-pass cloud paths for the PortWatch, Comtrade, Brent, and events vertical slices:
 
 1. publish local PortWatch bronze and silver parquet assets to GCS
 2. load `silver/portwatch/portwatch_monthly` into BigQuery `raw.portwatch_monthly`
-3. point dbt at either DuckDB or BigQuery via `--target`
+3. build canonical Comtrade silver fact slices, dimensions, and routing outputs
+4. publish Comtrade silver and routing assets to GCS
+5. load `raw.comtrade_fact` plus the supporting Comtrade dimensions and route tables into BigQuery
+6. publish Brent silver assets to GCS
+7. load `raw.brent_daily` and `raw.brent_monthly` into BigQuery
+8. publish events silver parquet assets to GCS
+9. load `raw.dim_event`, `raw.bridge_event_month_chokepoint_core`, and `raw.bridge_event_month_maritime_region` into BigQuery
+10. point dbt at either DuckDB or BigQuery via `--target`
 
 ## Terraform-First Quick Start
 
@@ -15,6 +22,9 @@ Once you have filled in `infra/terraform/terraform.tfvars.json`, the intended fl
 ```bash
 make cloud-bootstrap
 make portwatch-refresh-cloud
+make comtrade-refresh-cloud
+make brent-refresh-cloud
+make events-refresh-cloud
 ```
 
 Or, if you want to preview the cloud publish/load before writing anything:
@@ -22,6 +32,9 @@ Or, if you want to preview the cloud publish/load before writing anything:
 ```bash
 make cloud-bootstrap
 make portwatch-cloud-dry-run
+make comtrade-cloud-dry-run
+make brent-cloud-dry-run
+make events-cloud-dry-run
 ```
 
 If you later want to tear the Terraform-managed cloud resources back down, set `"allow_force_destroy": true` in `infra/terraform/terraform.tfvars.json` and then run:
@@ -95,6 +108,20 @@ The canonical trade grain is reporter + partner + commodity + month + flow. The 
 
 The event area still materializes into `analytics_analytics_staging` and `analytics_analytics_marts`, while the main marts live in `analytics_marts`.
 
+The current event silver contract is now built from `data/bronze/events.csv` by `ingest/events/events_silver.py`, which writes:
+
+- `logs/events/events_silver.log`
+- `logs/events/events_silver_manifest.jsonl`
+- `logs/events/publish_events_to_gcs.log`
+- `logs/events/publish_events_to_gcs_manifest.jsonl`
+- `logs/events/load_events_to_bigquery.log`
+- `logs/events/load_events_to_bigquery_manifest.jsonl`
+- `data/silver/events/dim_event.csv`
+- `data/silver/events/dim_event.parquet`
+- `data/silver/events/bridge_event_month_chokepoint_core.csv`
+- `data/silver/events/bridge_event_month_maritime_region.csv`
+- partitioned parquet bridge outputs under `data/silver/events/bridge_event_month_*`
+
 ## Build and refresh
 
 ### 1. Load raw tables into DuckDB
@@ -102,6 +129,7 @@ The event area still materializes into `analytics_analytics_staging` and `analyt
 Run from project root:
 
 ```bash
+make events-silver
 uv run python warehouse/load_silver_to_duckdb.py
 ```
 
@@ -130,6 +158,27 @@ uv run dbt test --profiles-dir . --target duckdb_dev
 ```
 
 ### 3. Publish the PortWatch slice to GCS
+
+### 2a. Publish and load the events slice
+
+Preview the upload and BigQuery load plan:
+
+```bash
+make events-cloud-dry-run
+```
+
+Run the full events cloud slice:
+
+```bash
+make events-refresh-cloud
+```
+
+Or call the commands directly:
+
+```bash
+uv run python warehouse/publish_events_to_gcs.py
+uv run python warehouse/load_events_to_bigquery.py
+```
 
 Populate the cloud settings in one of two ways:
 
@@ -208,6 +257,8 @@ make tfvars-init
 make cloud-bootstrap
 make portwatch-cloud-dry-run
 make portwatch-refresh-cloud
+make comtrade-cloud-dry-run
+make comtrade-refresh-cloud
 ```
 
 Useful targets:
@@ -218,8 +269,55 @@ Useful targets:
 - `make portwatch-cloud-dry-run`
 - `make portwatch-cloud`
 - `make portwatch-refresh-cloud`
+- `make comtrade-silver`
+- `make comtrade-routing`
+- `make comtrade-cloud-dry-run`
+- `make comtrade-cloud`
+- `make comtrade-refresh-cloud`
 - `make dbt-bigquery-debug`
 - `make dbt-bigquery-build`
+
+### 4b. Comtrade silver and routing
+
+The scripted Comtrade path now mirrors the repo's other vertical slices:
+
+- `ingest/comtrade/comtrade_silver.py` builds canonical month-level silver fact slices plus `dim_country`, `dim_time`, `dim_commodity`, and `dim_trade_flow`
+- `ingest/comtrade/comtrade_routing.py` executes the authoritative `05_comtrade_silver_enrichment_scenario_graph_routing_v4.ipynb` logic as a script and writes the routing outputs separately from the base silver fact
+- `warehouse/publish_comtrade_to_gcs.py` publishes Comtrade bronze, silver, routing, metadata, and per-run audit artifacts
+- `warehouse/load_comtrade_to_bigquery.py` loads `raw.comtrade_fact`, `raw.dim_country`, `raw.dim_time`, `raw.dim_commodity`, `raw.dim_trade_flow`, `raw.route_applicability`, and `raw.dim_trade_routes`
+
+The Comtrade fact is physically stored by month slice:
+
+- `data/silver/comtrade/comtrade_fact/year=YYYY/month=MM/reporter_iso3=ISO3/cmd_code=XXXX/flow_code=M/comtrade_fact.parquet`
+
+Within each slice the base-row dedupe grain keeps the operational fields that were needed to eliminate false duplicates:
+
+- `period`
+- `reporter_iso3`
+- `partner_iso3`
+- `flowCode`
+- `cmdCode`
+- `customsCode`
+- `motCode`
+- `partner2Code`
+
+The silver builder overwrites only touched slices and skips unchanged files by fingerprint, so reruns avoid unnecessary local rewrites, GCS uploads, and BigQuery reloads.
+
+Run the scripted silver builder directly:
+
+```bash
+uv run python ingest/comtrade/comtrade_silver.py --since-period 202401 --until-period 202412
+```
+
+Run the routing build with a local Natural Earth cache, or let it bootstrap that cache from GCS:
+
+```bash
+uv run python ingest/comtrade/comtrade_routing.py \
+  --natural-earth-path data/reference/geography/ne_110m_admin_0_countries.zip \
+  --natural-earth-gcs-uri gs://YOUR_BUCKET/reference/geography/ne_110m_admin_0_countries.zip
+```
+
+Each run writes rolling logs plus run-linked audit artifacts under `data/metadata/comtrade/ingest_reports/run_id=<run_id>/`.
 
 ### 5. BigQuery dbt target
 

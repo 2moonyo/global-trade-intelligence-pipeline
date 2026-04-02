@@ -15,7 +15,7 @@ with duplicate_grain as (
     year_month,
     route_confidence_score,
     count(*) as row_count
-  from "analytics"."analytics_marts"."mart_hub_dependency_month"
+  from `capfractal`.`analytics_marts`.`mart_hub_dependency_month`
   group by 1, 2, 3, 4
   having count(*) > 1
 )

@@ -9,7 +9,9 @@ select
     trim(event_id) as event_id,
     trim(event_name) as event_name,
     trim(year_month) as year_month,
-    cast(trim(year_month) || '-01' as date) as month_start_date,
+    
+    safe_cast(concat(cast(trim(year_month) as string), '-01') as date)
+   as month_start_date,
 
     trim(chokepoint_name) as chokepoint_name,
     trim(chokepoint_name) as location_name,
@@ -22,7 +24,7 @@ select
     cast(lead_flag as boolean) as is_lead_period,
     cast(lag_flag as boolean) as is_lag_period,
 
-    cast(severity_weight as double) as severity_weight,
+    cast(severity_weight as FLOAT64) as severity_weight,
     cast(global_event_flag as boolean) as is_global_event,
 
     trim(event_type) as event_type,

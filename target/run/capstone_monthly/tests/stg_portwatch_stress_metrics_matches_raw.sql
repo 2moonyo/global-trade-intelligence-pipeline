@@ -9,9 +9,9 @@
     
   with raw_portwatch as (
   select
-    cast(chokepoint_id as varchar) as portwatch_source_chokepoint_id,
-    cast(year_month as varchar) as year_month
-  from "analytics"."raw"."portwatch_monthly"
+    cast(chokepoint_id as string) as portwatch_source_chokepoint_id,
+    cast(year_month as string) as year_month
+  from `capfractal`.`raw`.`portwatch_monthly`
   where year_month is not null
     and chokepoint_name is not null
 ),
@@ -19,7 +19,7 @@ stress_metrics as (
   select
     portwatch_source_chokepoint_id,
     year_month
-  from "analytics"."analytics_staging"."stg_portwatch_stress_metrics"
+  from `capfractal`.`analytics_staging`.`stg_portwatch_stress_metrics`
 ),
 missing_from_metrics as (
   select

@@ -13,4 +13,4 @@ select
   event_type,
   event_scope,
   link_role
-from {{ source('raw', 'chokepoint_bridge') }}
+from {{ source('raw', 'bridge_event_month_chokepoint_core') }}

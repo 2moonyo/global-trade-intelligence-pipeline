@@ -44,7 +44,7 @@ time_map as (
         period as month_key,
         year_month,
         month_start_date
-    from {{ ref('stg_dim_time') }}
+    from {{ ref('dim_time') }}
 
 )
 

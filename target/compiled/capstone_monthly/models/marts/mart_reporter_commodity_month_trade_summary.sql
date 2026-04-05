@@ -37,9 +37,9 @@ select
   rcm.total_gross_weight_kg,
   rcm.source_row_count
 from reporter_commodity_month as rcm
-left join `capfractal`.`analytics_staging`.`stg_dim_country` as c
+left join `capfractal`.`analytics_marts`.`dim_country` as c
   on rcm.reporter_iso3 = c.iso3
-left join `capfractal`.`analytics_staging`.`stg_dim_commodity` as co
+left join `capfractal`.`analytics_marts`.`dim_commodity` as co
   on rcm.cmd_code = co.cmd_code
-left join `capfractal`.`analytics_staging`.`stg_dim_time` as t
+left join `capfractal`.`analytics_marts`.`dim_time` as t
   on rcm.period = t.period

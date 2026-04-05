@@ -1,0 +1,47 @@
+version: 2
+
+models:
+  - name: dim_country
+    description: "Conformed country dimension promoted from staging for BI-facing marts and dashboard joins."
+    columns:
+      - name: iso3
+        description: "ISO3 code for the country."
+        tests: [not_null, unique]
+      - name: country_name
+        description: "Business-readable country name."
+
+  - name: dim_time
+    description: "Conformed month dimension for all trade, macro, energy, and event marts."
+    columns:
+      - name: month_key
+        description: "Surrogate month key in YYYYMM format."
+        tests: [not_null, unique]
+      - name: year_month
+        description: "Canonical month label in YYYY-MM format."
+        tests: [not_null, unique]
+
+  - name: dim_commodity
+    description: "Conformed commodity dimension promoted from staging for trade reporting and Looker exploration."
+    columns:
+      - name: cmd_code
+        description: "Commodity code at the warehouse commodity grain."
+        tests: [not_null, unique]
+      - name: commodity_name
+        description: "Business-readable commodity name."
+
+  - name: dim_trade_flow
+    description: "Conformed trade flow dimension exposing standardized flow descriptions and groups."
+    columns:
+      - name: flow_code
+        description: "Standardized trade flow code."
+        tests: [not_null, unique]
+
+  - name: dim_chokepoint
+    description: "Conformed chokepoint dimension aligned across routing, events, and PortWatch monitoring."
+    columns:
+      - name: chokepoint_id
+        description: "Stable hashed chokepoint key."
+        tests: [not_null, unique]
+      - name: chokepoint_name
+        description: "Business-readable chokepoint name."
+        tests: [not_null]

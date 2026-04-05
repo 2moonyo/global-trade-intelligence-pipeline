@@ -48,6 +48,23 @@ create or replace table raw.brent_monthly as
 select *
 from read_parquet('data/silver/brent/brent_monthly/year=*/month=*/brent_monthly.parquet');
 
+create or replace table raw.ecb_fx_eu_monthly as
+select
+	cast(fx.year_month as varchar) as year_month,
+	cast(fx.month_start_date as date) as month_start_date,
+	cast(fx.year as integer) as year,
+	cast(fx.month as integer) as month,
+	upper(trim(cast(fx.base_currency_code as varchar))) as base_currency_code,
+	upper(trim(cast(fx.quote_currency_code as varchar))) as quote_currency_code,
+	cast(fx.fx_rate as double) as fx_rate,
+	cast(fx.fx_mom_change as double) as fx_mom_change,
+	cast(fx.trading_day_count as integer) as trading_day_count,
+	cast(fx.source_row_count as integer) as source_row_count,
+	cast(fx.latest_load_ts as timestamp) as latest_load_ts,
+	cast(fx.dataset_name as varchar) as dataset_name,
+	cast(fx.source_name as varchar) as source_name
+from read_parquet('data/silver/fx/ecb_fx_eu_monthly/year=*/month=*/ecb_fx_eu_monthly.parquet') as fx;
+
 -- ECB FX daily feed from bronze batch exports.
 create or replace table raw.ecb_fx_eu_daily as
 select

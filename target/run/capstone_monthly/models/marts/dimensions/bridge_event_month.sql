@@ -1,11 +1,14 @@
 
   
     
+
+    create or replace table `capfractal`.`analytics_analytics_marts`.`bridge_event_month`
+      
+    
     
 
-    create  table
-      "analytics"."analytics_analytics_marts"."bridge_event_month__dbt_tmp"
-  
+    
+    OPTIONS()
     as (
       
 
@@ -21,7 +24,7 @@ with event_months_union as (
         is_lag_period,
         severity_weight,
         is_global_event
-    from "analytics"."analytics_analytics_staging"."stg_event_location"
+    from `capfractal`.`analytics_analytics_staging`.`stg_event_location`
 
 ),
 
@@ -50,7 +53,7 @@ time_map as (
         period as month_key,
         year_month,
         month_start_date
-    from "analytics"."analytics_staging"."stg_dim_time"
+    from `capfractal`.`analytics_marts`.`dim_time`
 
 )
 
@@ -60,12 +63,16 @@ select
     coalesce(
         t.month_key,
         case
-            when regexp_full_match(d.year_month, '^\\d{4}-\\d{2}$')
-                then try_cast(replace(d.year_month, '-', '') as integer)
+            when 
+    regexp_contains(cast(d.year_month as string), r'^\d{4}-\d{2}$')
+  
+                then 
+    safe_cast(replace(d.year_month, '-', '') as INT64)
+  
             when d.month_start_date is not null
                 then
-                    cast(extract(year from d.month_start_date) as integer) * 100
-                    + cast(extract(month from d.month_start_date) as integer)
+                    cast(extract(year from cast(d.month_start_date as date)) as INT64) * 100
+                    + cast(extract(month from cast(d.month_start_date as date)) as INT64)
             else null
         end
     ) as month_key,
@@ -82,5 +89,4 @@ from deduped d
 left join time_map t
     on d.year_month = t.year_month
     );
-  
   

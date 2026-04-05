@@ -37,9 +37,9 @@ select
   rcm.total_gross_weight_kg,
   rcm.source_row_count
 from reporter_commodity_month as rcm
-left join {{ ref('stg_dim_country') }} as c
+left join {{ ref('dim_country') }} as c
   on rcm.reporter_iso3 = c.iso3
-left join {{ ref('stg_dim_commodity') }} as co
+left join {{ ref('dim_commodity') }} as co
   on rcm.cmd_code = co.cmd_code
-left join {{ ref('stg_dim_time') }} as t
+left join {{ ref('dim_time') }} as t
   on rcm.period = t.period

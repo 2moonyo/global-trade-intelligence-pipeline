@@ -38,9 +38,9 @@ active_events as (
   select
     year_month,
     chokepoint_name,
-    count(distinct event_id) filter (where is_event_active) as active_event_count,
-    max(severity_weight) filter (where is_event_active) as max_active_event_severity,
-    avg(severity_weight) filter (where is_event_active) as avg_active_event_severity
+    count(distinct case when is_event_active then event_id end) as active_event_count,
+    max(case when is_event_active then severity_weight end) as max_active_event_severity,
+    avg(case when is_event_active then severity_weight end) as avg_active_event_severity
   from {{ ref('stg_chokepoint_bridge') }}
   group by 1, 2
 ),
@@ -63,6 +63,7 @@ select
   rmc.period,
   rmc.year_month,
   t.month_start_date,
+  dc.chokepoint_id,
   rmc.chokepoint_name,
   rmc.route_pair_count,
   rmc.chokepoint_trade_value_usd,
@@ -85,10 +86,12 @@ inner join reporter_month_total as rmt
   on rmc.reporter_iso3 = rmt.reporter_iso3
  and rmc.period = rmt.period
  and rmc.year_month = rmt.year_month
-left join {{ ref('stg_dim_country') }} as c
+left join {{ ref('dim_country') }} as c
   on rmc.reporter_iso3 = c.iso3
-left join {{ ref('stg_dim_time') }} as t
+left join {{ ref('dim_time') }} as t
   on rmc.period = t.period
+left join {{ ref('dim_chokepoint') }} as dc
+  on rmc.chokepoint_name = dc.chokepoint_name
 left join portwatch as p
   on rmc.year_month = p.year_month
  and rmc.chokepoint_name = p.chokepoint_name

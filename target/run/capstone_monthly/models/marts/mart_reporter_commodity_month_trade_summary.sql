@@ -1,11 +1,14 @@
 
   
     
+
+    create or replace table `capfractal`.`analytics_marts`.`mart_reporter_commodity_month_trade_summary`
+      
+    
     
 
-    create  table
-      "analytics"."analytics_marts"."mart_reporter_commodity_month_trade_summary__dbt_tmp"
-  
+    
+    OPTIONS()
     as (
       with reporter_commodity_month as (
   select
@@ -20,7 +23,7 @@
     sum(f.net_weight_kg) as total_net_weight_kg,
     sum(f.gross_weight_kg) as total_gross_weight_kg,
     sum(f.record_count) as source_row_count
-  from "analytics"."analytics_marts"."fct_reporter_partner_commodity_month" as f
+  from `capfractal`.`analytics_marts`.`fct_reporter_partner_commodity_month` as f
   group by 1, 2, 3, 4, 5
 )
 
@@ -46,12 +49,11 @@ select
   rcm.total_gross_weight_kg,
   rcm.source_row_count
 from reporter_commodity_month as rcm
-left join "analytics"."analytics_staging"."stg_dim_country" as c
+left join `capfractal`.`analytics_marts`.`dim_country` as c
   on rcm.reporter_iso3 = c.iso3
-left join "analytics"."analytics_staging"."stg_dim_commodity" as co
+left join `capfractal`.`analytics_marts`.`dim_commodity` as co
   on rcm.cmd_code = co.cmd_code
-left join "analytics"."analytics_staging"."stg_dim_time" as t
+left join `capfractal`.`analytics_marts`.`dim_time` as t
   on rcm.period = t.period
     );
-  
   

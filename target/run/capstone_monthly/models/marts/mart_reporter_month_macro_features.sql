@@ -1,13 +1,16 @@
 
   
     
+
+    create or replace table `capfractal`.`analytics_marts`.`mart_reporter_month_macro_features`
+      
+    
     
 
-    create  table
-      "analytics"."analytics_marts"."mart_reporter_month_macro_features__dbt_tmp"
-  
+    
+    OPTIONS()
     as (
-      -- Grain: one row per reporter_iso3 + period + fx_currency_code.
+      -- Grain: one row per reporter_iso3 + period + currency_view + fx_currency_code.
 -- Purpose: reporter-month macro context combining Brent, FX, and annual energy indicators.
 
 with reporter_month as (
@@ -25,19 +28,22 @@ with reporter_month as (
     month,
     quarter,
     month_start_date
-  from "analytics"."analytics_marts"."mart_reporter_month_trade_summary"
+  from `capfractal`.`analytics_marts`.`mart_reporter_month_trade_summary`
 ),
 macro_monthly as (
   select
     year_month,
+    currency_view,
+    base_currency_code,
     fx_currency_code,
+    fx_rate,
     brent_price_usd,
     brent_mom_change,
     wti_price_usd,
     brent_wti_spread_usd,
     fx_rate_to_usd,
     fx_mom_change
-  from "analytics"."analytics_marts"."mart_macro_monthly_features"
+  from `capfractal`.`analytics_marts`.`mart_macro_monthly_features`
 ),
 energy_annual_pivot as (
   select
@@ -49,7 +55,7 @@ energy_annual_pivot as (
     max(case when indicator_code = 'oil_electricity_share' then indicator_value end) as oil_electricity_share,
     max(case when indicator_code = 'gas_electricity_share' then indicator_value end) as gas_electricity_share,
     max(case when indicator_code = 'coal_electricity_share' then indicator_value end) as coal_electricity_share
-  from "analytics"."analytics_marts"."mart_reporter_energy_vulnerability"
+  from `capfractal`.`analytics_marts`.`mart_reporter_energy_vulnerability`
   group by 1, 2
 )
 
@@ -67,7 +73,10 @@ select
   rm.month,
   rm.quarter,
   rm.month_start_date,
+  mm.currency_view,
+  mm.base_currency_code,
   mm.fx_currency_code,
+  mm.fx_rate,
   mm.brent_price_usd,
   mm.brent_mom_change,
   mm.wti_price_usd,
@@ -90,5 +99,4 @@ left join energy_annual_pivot as eap
   on rm.reporter_iso3 = eap.reporter_iso3
  and rm.year = eap.year
     );
-  
   

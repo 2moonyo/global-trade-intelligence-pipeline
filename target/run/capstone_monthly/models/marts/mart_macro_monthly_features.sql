@@ -1,13 +1,16 @@
 
   
     
+
+    create or replace table `capfractal`.`analytics_marts`.`mart_macro_monthly_features`
+      
+    
     
 
-    create  table
-      "analytics"."analytics_marts"."mart_macro_monthly_features__dbt_tmp"
-  
+    
+    OPTIONS()
     as (
-      -- Grain: one row per year_month + fx_currency_code.
+      -- Grain: one row per year_month + currency_view + fx_currency_code.
 -- Purpose: macro explanatory features for marts; no causal interpretation is implied.
 
 with brent_monthly_long as (
@@ -16,7 +19,7 @@ with brent_monthly_long as (
     benchmark_code,
     avg_price_usd_per_bbl,
     mom_pct_change
-  from "analytics"."analytics_staging"."stg_brent_monthly"
+  from `capfractal`.`analytics_staging`.`stg_brent_monthly`
   where benchmark_code in ('BRENT_EU', 'WTI_US')
 ),
 brent_monthly as (
@@ -31,14 +34,19 @@ brent_monthly as (
 fx_monthly as (
   select
     year_month,
+    currency_view,
+    base_currency_code,
     fx_currency_code,
+    fx_rate,
     fx_rate_to_usd,
     fx_mom_change
-  from "analytics"."analytics_staging"."stg_fx_monthly"
+  from `capfractal`.`analytics_staging`.`stg_fx_monthly`
 )
 
 select
   fx.year_month,
+  fx.currency_view,
+  fx.base_currency_code,
   brent.brent_price_usd,
   brent.brent_mom_change,
   brent.wti_price_usd,
@@ -47,6 +55,7 @@ select
       then brent.brent_price_usd - brent.wti_price_usd
     else null
   end as brent_wti_spread_usd,
+  fx.fx_rate,
   fx.fx_rate_to_usd,
   fx.fx_mom_change,
   fx.fx_currency_code
@@ -55,5 +64,4 @@ from fx_monthly as fx
 left join brent_monthly as brent
   on fx.year_month = brent.year_month
     );
-  
   

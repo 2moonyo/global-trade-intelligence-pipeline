@@ -1,95 +1,130 @@
--- Grain: one row per year_month + fx_currency_code.
--- Converts ECB quote-per-EUR rates into USD-per-currency and computes monthly momentum.
+-- Grain: one row per year_month + currency_view + fx_currency_code.
+-- Builds EUR-base canonical rates from the ECB-native monthly pair table plus USD-base derived crosses via EUR/USD.
 
 with raw_fx as (
   select
-    cast(date as date) as fx_date,
-    upper(trim(quote_ccy)) as quote_ccy,
-    upper(trim(base_ccy)) as base_ccy,
-    cast(rate as FLOAT64) as quote_per_base_rate,
-    load_ts
-  from `capfractal`.`raw`.`ecb_fx_eu_daily`
-  where date is not null
-    and quote_ccy is not null
-    and base_ccy is not null
-    and rate is not null
+    year_month,
+    cast(month_start_date as date) as month_start_date,
+    cast(year as INT64) as year,
+    cast(month as INT64) as month,
+    upper(trim(base_currency_code)) as base_currency_code,
+    upper(trim(quote_currency_code)) as quote_currency_code,
+    cast(fx_rate as FLOAT64) as fx_rate
+  from `capfractal`.`raw`.`ecb_fx_eu_monthly`
+  where year_month is not null
+    and 
+    regexp_contains(cast(year_month as string), r'^\d{4}-\d{2}$')
+  
+    and base_currency_code is not null
+    and quote_currency_code is not null
+    and fx_rate is not null
 ),
-latest_daily as (
+eur_usd_bridge as (
   select
-    fx_date,
-    quote_ccy,
-    base_ccy,
-    quote_per_base_rate,
-    load_ts,
-    row_number() over (
-      partition by fx_date, quote_ccy, base_ccy
-      order by load_ts desc
-    ) as _rn
+    year_month,
+    month_start_date,
+    year,
+    month,
+    fx_rate as eur_usd_rate
   from raw_fx
+  where base_currency_code = 'EUR'
+    and quote_currency_code = 'USD'
 ),
-daily_clean as (
+eur_base_direct as (
   select
-    fx_date,
-    quote_ccy,
-    base_ccy,
-    quote_per_base_rate
-  from latest_daily
-  where _rn = 1
-),
-daily_with_usd_per_base as (
-  select
-    fx_date,
-    quote_ccy,
-    base_ccy,
-    quote_per_base_rate,
-    max(
-      case
-        when quote_ccy = 'USD' then quote_per_base_rate
-        else null
-      end
-    ) over (partition by fx_date, base_ccy) as usd_per_base_rate
-  from daily_clean
-),
-daily_usd_converted as (
-  select
-    
-    format_date('%Y-%m', cast(fx_date as date))
-   as year_month,
-    quote_ccy as fx_currency_code,
+    raw.year_month,
+    raw.month_start_date,
+    raw.year,
+    raw.month,
+    'EUR_base' as currency_view,
+    'EUR' as base_currency_code,
+    raw.quote_currency_code as fx_currency_code,
+    raw.fx_rate,
     case
-      when quote_ccy = 'USD' then 1.0
-      when usd_per_base_rate is null or quote_per_base_rate = 0 then null
-      else usd_per_base_rate / quote_per_base_rate
+      when raw.quote_currency_code = 'USD' then 1.0
+      else case
+    when raw.fx_rate is null or raw.fx_rate = 0 then null
+    else bridge.eur_usd_rate / raw.fx_rate
+  end
     end as fx_rate_to_usd
-  from daily_with_usd_per_base
+  from raw_fx as raw
+  inner join eur_usd_bridge as bridge
+    on raw.year_month = bridge.year_month
+  where raw.base_currency_code = 'EUR'
+    and raw.quote_currency_code <> 'EUR'
 ),
-monthly_rates as (
+usd_eur_bridge as (
+  select
+    bridge.year_month,
+    bridge.month_start_date,
+    bridge.year,
+    bridge.month,
+    'USD_base' as currency_view,
+    'USD' as base_currency_code,
+    'EUR' as fx_currency_code,
+    case
+    when bridge.eur_usd_rate is null or bridge.eur_usd_rate = 0 then null
+    else 1.0 / bridge.eur_usd_rate
+  end as fx_rate,
+    bridge.eur_usd_rate as fx_rate_to_usd
+  from eur_usd_bridge as bridge
+),
+usd_base_derived as (
+  select
+    eur.year_month,
+    eur.month_start_date,
+    eur.year,
+    eur.month,
+    'USD_base' as currency_view,
+    'USD' as base_currency_code,
+    eur.fx_currency_code,
+    case
+    when bridge.eur_usd_rate is null or bridge.eur_usd_rate = 0 then null
+    else eur.fx_rate / bridge.eur_usd_rate
+  end as fx_rate,
+    eur.fx_rate_to_usd
+  from eur_base_direct as eur
+  inner join eur_usd_bridge as bridge
+    on eur.year_month = bridge.year_month
+  where eur.fx_currency_code <> 'USD'
+),
+combined as (
+  select * from eur_base_direct
+  union all
+  select * from usd_eur_bridge
+  union all
+  select * from usd_base_derived
+),
+with_momentum as (
   select
     year_month,
+    month_start_date,
+    year,
+    month,
+    currency_view,
+    base_currency_code,
     fx_currency_code,
-    avg(fx_rate_to_usd) as fx_rate_to_usd
-  from daily_usd_converted
-  where fx_rate_to_usd is not null
-  group by 1, 2
-),
-monthly_with_prev as (
-  select
-    year_month,
-    fx_currency_code,
+    fx_rate,
     fx_rate_to_usd,
-    lag(fx_rate_to_usd) over (
-      partition by fx_currency_code
+    lag(fx_rate) over (
+      partition by currency_view, base_currency_code, fx_currency_code
       order by year_month
-    ) as prev_month_rate_to_usd
-  from monthly_rates
+    ) as prev_fx_rate
+  from combined
 )
 
 select
   year_month,
+  month_start_date,
+  year,
+  month,
+  currency_view,
+  base_currency_code,
   fx_currency_code,
+  fx_rate,
   fx_rate_to_usd,
   case
-    when prev_month_rate_to_usd is null or prev_month_rate_to_usd = 0 then null
-    else (fx_rate_to_usd - prev_month_rate_to_usd) / prev_month_rate_to_usd
+    when prev_fx_rate is null or prev_fx_rate = 0 then null
+    else (fx_rate - prev_fx_rate) / prev_fx_rate
   end as fx_mom_change
-from monthly_with_prev
+from with_momentum

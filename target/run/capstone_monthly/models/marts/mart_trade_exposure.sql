@@ -71,7 +71,7 @@ left join reporter_month_totals as rmt
   on rcc.reporter_iso3 = rmt.reporter_iso3
  and rcc.period = rmt.period
  and rcc.year_month = rmt.year_month
-left join `capfractal`.`analytics_staging`.`stg_dim_country` as c
+left join `capfractal`.`analytics_marts`.`dim_country` as c
   on rcc.reporter_iso3 = c.iso3
     );
   

@@ -623,8 +623,52 @@ models:
       - name: country_match_status
         description: Country dimension linkage signal (ISO3_MATCH, COUNTRY_NAME_FALLBACK, UNMATCHED).
 
+  - name: mart_macro_monthly_features
+    description: Monthly macro context mart joining canonical Brent monthly features to FX monthly features for both USD-base and EUR-base analytical views.
+    columns:
+      - name: year_month
+        description: Canonical month key in YYYY-MM format.
+        tests:
+          - not_null
+
+      - name: currency_view
+        description: Analytical FX view label such as USD_base or EUR_base.
+        tests:
+          - not_null
+
+      - name: base_currency_code
+        description: Base currency code for the presented FX rate view.
+        tests:
+          - not_null
+
+      - name: fx_currency_code
+        description: Currency code from the monthly FX feature series.
+        tests:
+          - not_null
+
+      - name: fx_rate
+        description: Average monthly FX rate expressed as quote currency units per one base currency unit for the selected currency_view.
+
+      - name: brent_price_usd
+        description: Average monthly Brent benchmark price in USD per barrel.
+
+      - name: brent_mom_change
+        description: Month-over-month percentage change in the Brent monthly average price.
+
+      - name: wti_price_usd
+        description: Average monthly WTI benchmark price in USD per barrel.
+
+      - name: brent_wti_spread_usd
+        description: Monthly average Brent minus WTI benchmark spread in USD per barrel.
+
+      - name: fx_rate_to_usd
+        description: Average monthly FX rate expressed in USD per currency unit.
+
+      - name: fx_mom_change
+        description: Month-over-month percentage change in the monthly FX rate to USD.
+
   - name: mart_reporter_month_macro_features
-    description: Reporter-month macro context combining monthly Brent and FX features with annual energy indicators broadcast by year.
+    description: Reporter-month macro context combining monthly Brent and FX features with annual energy indicators broadcast by year, while exposing both USD-base and EUR-base FX analytical views.
     columns:
       - name: reporter_iso3
         description: ISO3 code of the reporting country or economy.
@@ -641,10 +685,23 @@ models:
         tests:
           - not_null
 
+      - name: currency_view
+        description: Analytical FX view label such as USD_base or EUR_base.
+        tests:
+          - not_null
+
+      - name: base_currency_code
+        description: Base currency code for the presented FX rate view.
+        tests:
+          - not_null
+
       - name: fx_currency_code
         description: Currency code from monthly FX feature series.
         tests:
           - not_null
+
+      - name: fx_rate
+        description: Average monthly FX rate expressed as quote currency units per one base currency unit for the selected currency_view.
 
       - name: wti_price_usd
         description: Average monthly WTI benchmark price in USD per barrel.

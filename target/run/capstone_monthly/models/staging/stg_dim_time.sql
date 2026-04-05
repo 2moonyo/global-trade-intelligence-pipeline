@@ -40,10 +40,13 @@ with observed_months as (
 
   select distinct
     
-    cast(date_trunc(cast(date as date), month) as date)
+    safe_cast(concat(cast(year_month as string), '-01') as date)
    as month_start_date
-  from `capfractal`.`raw`.`ecb_fx_eu_daily`
-  where date is not null
+  from `capfractal`.`raw`.`ecb_fx_eu_monthly`
+  where year_month is not null
+    and 
+    regexp_contains(cast(year_month as string), r'^\d{4}-\d{2}$')
+  
 
   union distinct
 
@@ -96,7 +99,7 @@ calendar as (
   from bounds,
   
     unnest(generate_date_array(cast(
-    date_sub(cast(min_month_start as date), interval 12 month)
+    date_add(cast(min_month_start as date), interval -12 month)
    as date), cast(
     date_add(cast(max_month_start as date), interval 12 month)
    as date), interval 1 month)) as month_start_date

@@ -1,11 +1,14 @@
 
   
     
+
+    create or replace table `capfractal`.`analytics_marts`.`mart_event_impact`
+      
+    
     
 
-    create  table
-      "analytics"."analytics_marts"."mart_event_impact__dbt_tmp"
-  
+    
+    OPTIONS()
     as (
       -- Final grain: one row per event_id.
 -- Join order is staged to prevent grain explosion:
@@ -22,8 +25,8 @@ with event_chokepoint_month as (
     bem.event_id,
     bec.chokepoint_id,
     bem.year_month
-  from "analytics"."analytics_analytics_marts"."bridge_event_month" as bem
-  inner join "analytics"."analytics_analytics_marts"."bridge_event_chokepoint" as bec
+  from `capfractal`.`analytics_analytics_marts`.`bridge_event_month` as bem
+  inner join `capfractal`.`analytics_analytics_marts`.`bridge_event_chokepoint` as bec
     on bem.event_id = bec.event_id
 ),
 event_chokepoint_month_z as (
@@ -38,7 +41,7 @@ event_chokepoint_month_z as (
     z.z_score_count,
     z.z_score_vessel_size
   from event_chokepoint_month as ecm
-  left join "analytics"."analytics_staging"."stg_chokepoint_stress_zscore" as z
+  left join `capfractal`.`analytics_staging`.`stg_chokepoint_stress_zscore` as z
     on ecm.chokepoint_id = z.chokepoint_id
    and ecm.year_month = z.year_month
 ),
@@ -88,7 +91,7 @@ event_exposure_countries as (
     ecm.event_id,
     count(distinct te.reporter_iso3) as affected_country_count
   from event_chokepoint_month as ecm
-  inner join "analytics"."analytics_marts"."mart_trade_exposure" as te
+  inner join `capfractal`.`analytics_marts`.`mart_trade_exposure` as te
     on ecm.chokepoint_id = te.chokepoint_id
    and ecm.year_month = te.year_month
   where te.route_confidence_score in ('HIGH', 'MEDIUM')
@@ -109,7 +112,7 @@ select
   esm.mean_event_window_zscore_vessel_size,
   est.mean_baseline_throughput_of_affected_chokepoints,
   edm.mean_throughput_pct_change_vs_baseline
-from "analytics"."analytics_analytics_marts"."dim_event" as d
+from `capfractal`.`analytics_analytics_marts`.`dim_event` as d
 left join event_stress_metrics as esm
   on d.event_id = esm.event_id
 left join event_structural_metrics as est
@@ -119,5 +122,4 @@ left join event_disruption_metrics as edm
 left join event_exposure_countries as ec
   on d.event_id = ec.event_id
     );
-  
   

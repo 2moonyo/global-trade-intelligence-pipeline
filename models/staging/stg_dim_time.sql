@@ -27,9 +27,10 @@ with observed_months as (
   union distinct
 
   select distinct
-    {{ truncate_to_month('date') }} as month_start_date
-  from {{ source('raw', 'ecb_fx_eu_daily') }}
-  where date is not null
+    {{ month_start_from_year_month('year_month') }} as month_start_date
+  from {{ source('raw', 'ecb_fx_eu_monthly') }}
+  where year_month is not null
+    and {{ regex_full_match('year_month', '^\\d{4}-\\d{2}$') }}
 
   union distinct
 

@@ -70,27 +70,19 @@
   {% endif %}
 {%- endmacro %}
 
-{% macro truncate_to_month(expression) -%}
-  {% if target.type == 'bigquery' %}
-    cast(date_trunc(cast({{ expression }} as date), month) as date)
-  {% else %}
-    cast(date_trunc('month', cast({{ expression }} as date)) as date)
-  {% endif %}
-{%- endmacro %}
-
-{% macro date_add_months(expression, month_count) -%}
-  {% if month_count >= 0 %}
-    date_add(cast({{ expression }} as date), interval {{ month_count }} month)
-  {% else %}
-    date_sub(cast({{ expression }} as date), interval {{ -month_count }} month)
-  {% endif %}
-{%- endmacro %}
-
 {% macro month_series(start_expression, end_expression, column_name='month_start_date') -%}
   {% if target.type == 'bigquery' %}
     unnest(generate_date_array(cast({{ start_expression }} as date), cast({{ end_expression }} as date), interval 1 month)) as {{ column_name }}
   {% else %}
     generate_series(cast({{ start_expression }} as date), cast({{ end_expression }} as date), interval 1 month) as series({{ column_name }})
+  {% endif %}
+{%- endmacro %}
+
+{% macro date_add_months(expression, months) -%}
+  {% if target.type == 'bigquery' %}
+    date_add(cast({{ expression }} as date), interval {{ months }} month)
+  {% else %}
+    cast({{ expression }} as date) + interval {{ months }} month
   {% endif %}
 {%- endmacro %}
 

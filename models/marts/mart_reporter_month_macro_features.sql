@@ -1,4 +1,4 @@
--- Grain: one row per reporter_iso3 + period + fx_currency_code.
+-- Grain: one row per reporter_iso3 + period + currency_view + fx_currency_code.
 -- Purpose: reporter-month macro context combining Brent, FX, and annual energy indicators.
 
 with reporter_month as (
@@ -21,7 +21,10 @@ with reporter_month as (
 macro_monthly as (
   select
     year_month,
+    currency_view,
+    base_currency_code,
     fx_currency_code,
+    fx_rate,
     brent_price_usd,
     brent_mom_change,
     wti_price_usd,
@@ -58,7 +61,10 @@ select
   rm.month,
   rm.quarter,
   rm.month_start_date,
+  mm.currency_view,
+  mm.base_currency_code,
   mm.fx_currency_code,
+  mm.fx_rate,
   mm.brent_price_usd,
   mm.brent_mom_change,
   mm.wti_price_usd,

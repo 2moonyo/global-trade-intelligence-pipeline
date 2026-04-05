@@ -35,7 +35,7 @@ select
   rm.total_gross_weight_kg,
   rm.source_row_count
 from reporter_month as rm
-left join `capfractal`.`analytics_staging`.`stg_dim_country` as c
+left join `capfractal`.`analytics_marts`.`dim_country` as c
   on rm.reporter_iso3 = c.iso3
-left join `capfractal`.`analytics_staging`.`stg_dim_time` as t
+left join `capfractal`.`analytics_marts`.`dim_time` as t
   on rm.period = t.period

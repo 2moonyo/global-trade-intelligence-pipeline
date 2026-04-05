@@ -41,7 +41,7 @@ time_map as (
         period as month_key,
         year_month,
         month_start_date
-    from `capfractal`.`analytics_staging`.`stg_dim_time`
+    from `capfractal`.`analytics_marts`.`dim_time`
 
 )
 
@@ -52,7 +52,7 @@ select
         t.month_key,
         case
             when 
-    regexp_contains(cast(d.year_month as string), '^\d{4}-\d{2}$')
+    regexp_contains(cast(d.year_month as string), r'^\d{4}-\d{2}$')
   
                 then 
     safe_cast(replace(d.year_month, '-', '') as INT64)

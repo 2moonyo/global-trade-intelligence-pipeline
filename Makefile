@@ -7,7 +7,7 @@ TFVARS_EXAMPLE := $(TF_DIR)/terraform.tfvars.json.example
 
 .DEFAULT_GOAL := help
 
-.PHONY: help tfvars-init check-tfvars deps-sync gcp-auth infra-init infra-plan infra-apply infra-destroy env-file env-print cloud-bootstrap portwatch-extract portwatch-silver portwatch-cloud-dry-run portwatch-cloud portwatch-cloud-dry-run-with-bronze portwatch-cloud-with-bronze portwatch-refresh-cloud comtrade-silver comtrade-routing comtrade-cloud-dry-run comtrade-cloud comtrade-cloud-dry-run-with-bronze comtrade-cloud-with-bronze comtrade-refresh-cloud brent-extract brent-silver brent-cloud-dry-run brent-cloud brent-cloud-dry-run-with-bronze brent-cloud-with-bronze brent-refresh-cloud events-silver events-cloud-dry-run events-cloud events-refresh-cloud dbt-bigquery-debug dbt-bigquery-build
+.PHONY: help tfvars-init check-tfvars deps-sync gcp-auth infra-init infra-plan infra-apply infra-destroy env-file env-print cloud-bootstrap portwatch-extract portwatch-silver portwatch-cloud-dry-run portwatch-cloud portwatch-cloud-dry-run-with-bronze portwatch-cloud-with-bronze portwatch-refresh-cloud comtrade-silver comtrade-routing comtrade-cloud-dry-run comtrade-cloud comtrade-cloud-dry-run-with-bronze comtrade-cloud-with-bronze comtrade-refresh-cloud brent-extract brent-silver brent-cloud-dry-run brent-cloud brent-cloud-dry-run-with-bronze brent-cloud-with-bronze brent-refresh-cloud fx-extract fx-silver fx-cloud-dry-run fx-cloud fx-cloud-dry-run-with-bronze fx-cloud-with-bronze fx-refresh-cloud events-silver events-cloud-dry-run events-cloud events-refresh-cloud dbt-bigquery-debug dbt-bigquery-build dbt-bigquery-docs-generate dbt-bigquery-docs-serve dbt-bigquery-docs-static
 
 help:
 	@printf "%s\n" \
@@ -34,12 +34,22 @@ help:
 		"make brent-cloud-dry-run-with-bronze Preview the Brent publish/load steps including bronze." \
 		"make brent-cloud-with-bronze Publish Brent bronze and silver assets, then load raw.brent_daily/raw.brent_monthly." \
 		"make brent-refresh-cloud   Rebuild Brent silver, then publish and load it." \
+		"make fx-extract           Run the FX bronze extract using the ECB API." \
+		"make fx-silver            Build partitioned FX monthly silver parquet outputs." \
+		"make fx-cloud-dry-run     Preview the FX silver-only GCS publish and BigQuery load steps." \
+		"make fx-cloud             Publish FX silver assets to GCS and load raw.ecb_fx_eu_monthly." \
+		"make fx-cloud-dry-run-with-bronze Preview the FX publish/load steps including bronze." \
+		"make fx-cloud-with-bronze Publish FX bronze and silver assets, then load raw.ecb_fx_eu_monthly." \
+		"make fx-refresh-cloud     Rebuild FX silver, then publish and load it." \
 		"make events-silver         Build curated event silver outputs from data/bronze/events.csv with run logs." \
 		"make events-cloud-dry-run Preview the events silver GCS publish and BigQuery load steps." \
 		"make events-cloud         Publish events silver assets to GCS and load raw.dim_event/raw.bridge_event_*." \
 		"make events-refresh-cloud Rebuild event silver, then publish and load it." \
 		"make dbt-bigquery-debug      Run dbt debug with env vars derived from Terraform." \
-		"make dbt-bigquery-build      Run dbt build with env vars derived from Terraform."
+		"make dbt-bigquery-build      Run dbt build with env vars derived from Terraform." \
+		"make dbt-bigquery-docs-generate Generate dbt docs artifacts into target/." \
+		"make dbt-bigquery-docs-serve    Serve dbt docs locally." \
+		"make dbt-bigquery-docs-static   Generate a portable static dbt docs HTML file."
 
 tfvars-init:
 	@if [[ -f "$(TFVARS)" ]]; then \
@@ -160,6 +170,30 @@ brent-cloud-with-bronze: check-tfvars
 
 brent-refresh-cloud: brent-silver brent-cloud
 
+fx-extract:
+	PYTHONPATH="$(PROJECT_ROOT)" UV_CACHE_DIR="$(PROJECT_ROOT)/.uv-cache" uv run python ingest/fred/fx_rates.py
+
+fx-silver:
+	PYTHONPATH="$(PROJECT_ROOT)" UV_CACHE_DIR="$(PROJECT_ROOT)/.uv-cache" uv run python ingest/fred/fx_silver.py
+
+fx-cloud-dry-run: check-tfvars
+	PYTHONPATH="$(PROJECT_ROOT)" UV_CACHE_DIR="$(PROJECT_ROOT)/.uv-cache" uv run python warehouse/publish_fx_to_gcs.py --skip-bronze --dry-run
+	PYTHONPATH="$(PROJECT_ROOT)" UV_CACHE_DIR="$(PROJECT_ROOT)/.uv-cache" uv run python warehouse/load_fx_to_bigquery.py --source local --dry-run
+
+fx-cloud: check-tfvars
+	PYTHONPATH="$(PROJECT_ROOT)" UV_CACHE_DIR="$(PROJECT_ROOT)/.uv-cache" uv run python warehouse/publish_fx_to_gcs.py --skip-bronze
+	PYTHONPATH="$(PROJECT_ROOT)" UV_CACHE_DIR="$(PROJECT_ROOT)/.uv-cache" uv run python warehouse/load_fx_to_bigquery.py
+
+fx-cloud-dry-run-with-bronze: check-tfvars
+	PYTHONPATH="$(PROJECT_ROOT)" UV_CACHE_DIR="$(PROJECT_ROOT)/.uv-cache" uv run python warehouse/publish_fx_to_gcs.py --dry-run
+	PYTHONPATH="$(PROJECT_ROOT)" UV_CACHE_DIR="$(PROJECT_ROOT)/.uv-cache" uv run python warehouse/load_fx_to_bigquery.py --source local --dry-run
+
+fx-cloud-with-bronze: check-tfvars
+	PYTHONPATH="$(PROJECT_ROOT)" UV_CACHE_DIR="$(PROJECT_ROOT)/.uv-cache" uv run python warehouse/publish_fx_to_gcs.py
+	PYTHONPATH="$(PROJECT_ROOT)" UV_CACHE_DIR="$(PROJECT_ROOT)/.uv-cache" uv run python warehouse/load_fx_to_bigquery.py
+
+fx-refresh-cloud: fx-silver fx-cloud
+
 events-silver:
 	PYTHONPATH="$(PROJECT_ROOT)" UV_CACHE_DIR="$(PROJECT_ROOT)/.uv-cache" uv run python ingest/events/events_silver.py
 
@@ -179,4 +213,17 @@ dbt-bigquery-debug: check-tfvars
 
 dbt-bigquery-build: check-tfvars
 	@eval "$$(python $(TF_DIR)/render_dotenv.py --format export)"; \
-	uv run dbt build --profiles-dir . --target bigquery_dev
+	UV_CACHE_DIR="$(PROJECT_ROOT)/.uv-cache" uv run dbt build --profiles-dir . --target bigquery_dev
+
+dbt-bigquery-docs-generate: check-tfvars
+	@eval "$$(python $(TF_DIR)/render_dotenv.py --format export)"; \
+	UV_CACHE_DIR="$(PROJECT_ROOT)/.uv-cache" uv run dbt docs generate --profiles-dir . --target bigquery_dev
+
+dbt-bigquery-docs-serve: check-tfvars
+	@eval "$$(python $(TF_DIR)/render_dotenv.py --format export)"; \
+	UV_CACHE_DIR="$(PROJECT_ROOT)/.uv-cache" uv run dbt docs serve --profiles-dir . --target bigquery_dev
+
+dbt-bigquery-docs-static: check-tfvars
+	@eval "$$(python $(TF_DIR)/render_dotenv.py --format export)"; \
+	UV_CACHE_DIR="$(PROJECT_ROOT)/.uv-cache" uv run dbt docs generate --profiles-dir . --target bigquery_dev --static; \
+	echo "Static docs written to target/static_index.html"

@@ -1,6 +1,38 @@
 version: 2
 
 models:
+  - name: stg_fx_monthly
+    description: Standardized monthly FX context sourced from the canonical silver-backed raw FX monthly landing table, exposing both USD-base direct rates and EUR-base derived crosses.
+    columns:
+      - name: year_month
+        description: Canonical month key in YYYY-MM format.
+        tests:
+          - not_null
+
+      - name: currency_view
+        description: Analytical FX view label such as USD_base or EUR_base.
+        tests:
+          - not_null
+
+      - name: base_currency_code
+        description: Base currency for the presented FX rate view.
+        tests:
+          - not_null
+
+      - name: fx_currency_code
+        description: Currency code for the quoted monthly FX series standardized to uppercase.
+        tests:
+          - not_null
+
+      - name: fx_rate
+        description: Average monthly FX rate expressed as quote currency units per one base currency unit for the selected currency_view.
+
+      - name: fx_rate_to_usd
+        description: USD per quoted currency unit, retained as a normalized comparison metric across currency views.
+
+      - name: fx_mom_change
+        description: Month-over-month percentage change in the presented view-specific monthly FX rate.
+
   - name: stg_brent_monthly
     description: Monthly Brent benchmark price series normalized for mart joins.
     columns:

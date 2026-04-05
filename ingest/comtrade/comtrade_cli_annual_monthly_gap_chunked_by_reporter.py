@@ -12,17 +12,75 @@ import pandas as pd
 import requests
 from dotenv import load_dotenv
 
+from ingest.common.run_artifacts import append_manifest, build_run_id, configure_logger, duration_seconds, json_ready
 
 
 load_dotenv()
-logger = logging.getLogger("comtrade")
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - comtrade - %(levelname)s - %(message)s")
+LOGGER_NAME = "comtrade"
+LOG_DIR = Path("logs/comtrade")
+LOG_PATH = LOG_DIR / "comtrade_extract.log"
+MANIFEST_PATH = LOG_DIR / "comtrade_extract_manifest.jsonl"
+logger = logging.getLogger(LOGGER_NAME)
 
 def _append_jsonl(path: Path, entry: Dict) -> None:
     """Append a single JSON object to a JSONL file (one line per object)."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with open(path, "a", encoding="utf-8") as f:
-        f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+    append_manifest(path, entry)
+
+
+def configure_comtrade_logger(log_level: str = "INFO", log_to_stdout: bool = True) -> logging.Logger:
+    global logger
+    logger = configure_logger(
+        logger_name=LOGGER_NAME,
+        log_path=LOG_PATH,
+        log_level=log_level,
+        log_to_stdout=log_to_stdout,
+    )
+    return logger
+
+
+def start_extract_run(
+    *,
+    command_name: str,
+    bronze_dir: str,
+    registry_path: str,
+    checkpoint_path: str | None = None,
+    extra: Optional[Dict] = None,
+) -> tuple[str, datetime, Dict]:
+    configure_comtrade_logger()
+    run_id = build_run_id("comtrade_extract")
+    started_at = datetime.now(timezone.utc)
+    manifest_entry: Dict = {
+        "run_id": run_id,
+        "asset_name": "comtrade_extract",
+        "dataset_name": "comtrade",
+        "command_name": command_name,
+        "status": "running",
+        "started_at": started_at.isoformat(),
+        "finished_at": None,
+        "bronze_dir": bronze_dir,
+        "registry_path": registry_path,
+        "checkpoint_path": checkpoint_path,
+        "log_path": str(LOG_PATH),
+        "manifest_path": str(MANIFEST_PATH),
+        "duration_seconds": None,
+        "error_summary": None,
+    }
+    if extra:
+        manifest_entry.update(json_ready(extra))
+    logger.info("Starting Comtrade extract run_id=%s command=%s", run_id, command_name)
+    return run_id, started_at, manifest_entry
+
+
+def finish_extract_run(manifest_entry: Dict, started_at: datetime, *, status: str, error_summary: Optional[str] = None, extra: Optional[Dict] = None) -> None:
+    finished_at = datetime.now(timezone.utc)
+    manifest_entry = dict(manifest_entry)
+    manifest_entry["status"] = status
+    manifest_entry["finished_at"] = finished_at.isoformat()
+    manifest_entry["duration_seconds"] = duration_seconds(started_at, finished_at)
+    manifest_entry["error_summary"] = error_summary
+    if extra:
+        manifest_entry.update(json_ready(extra))
+    append_manifest(MANIFEST_PATH, manifest_entry)
 
 
 
@@ -67,8 +125,7 @@ class ExtractionRegistry:
         logger.info("Loaded %s registry entries", len(self.registry))
 
     def append_entry(self, entry: Dict) -> None:
-        with open(self.registry_path, "a") as f:
-            f.write(json.dumps(entry) + "\n")
+        append_manifest(self.registry_path, entry)
         jk = entry.get("job_key")
         if jk:
             self.registry[jk] = entry
@@ -446,8 +503,8 @@ def cli():
 @click.option("--api-key-env", type=click.Choice(["COMTRADE_API_KEY_DATA", "COMTRADE_API_KEY_DATA_A", "COMTRADE_API_KEY_DATA_B"]), default="COMTRADE_API_KEY_DATA", show_default=True)
 @click.option("--metadata-dir", default="data/metadata/comtrade", show_default=True)
 @click.option("--bronze-dir", default="data/bronze/comtrade/test2", show_default=True)
-@click.option("--registry-path", default="logs/test2/extraction_registry.jsonl", show_default=True)
-@click.option("--checkpoint-path", default="logs/test2/comtrade_checkpoint.json", show_default=True)
+@click.option("--registry-path", default="logs/comtrade/extraction_registry.jsonl", show_default=True)
+@click.option("--checkpoint-path", default="logs/comtrade/comtrade_checkpoint.json", show_default=True)
 @click.option("--include-eu-bloc/--no-include-eu-bloc", default=True, show_default=True)
 @click.option("--reporters", default=None, help="Comma-separated reporter ISO3 codes (e.g. 'USA,CHN,DEU'). If not provided, uses default set: ESP,FRA,NLD,BGR,ROU,USA,EUN,CHN")
 @click.option("--years", required=True, help="Comma-separated years, e.g. 2020,2021,2022,2023,2024,2025,2026")
@@ -463,131 +520,128 @@ def run_annual(api_key_env, metadata_dir, bronze_dir, registry_path, checkpoint_
     """
     Annual extraction. If a job returns 0 rows, record a coverage gap and tally it in checkpoint.
     """
-    api_key = os.getenv(api_key_env)
-    if not api_key:
-        raise click.ClickException(f"Missing env var {api_key_env}")
-
-    reporters_df = load_reporters(metadata_dir)
-    
-    # Use custom reporters if provided, otherwise use defaults
-    if reporters:
-        reporters_list = [r.strip().upper() for r in reporters.split(",") if r.strip()]
-        logger.info("Using custom reporters from CLI: %s", reporters_list)
-    else:
-        reporters_list = reporters_default_top3_eu_plus(world=True)
-        if include_eu_bloc:
-            eu_bloc = find_eu_bloc_iso3(reporters_df)
-            if eu_bloc and eu_bloc not in reporters_list:
-                reporters_list.insert(3, eu_bloc)
-        logger.info("Using default reporters: %s", reporters_list)
-
-    periods = parse_years(years)
-    commodities_list = [c.strip() for c in commodities.split(",") if c.strip()]
-    flows_list = [f.strip() for f in flows.split(",") if f.strip()]
-
-    shape = QueryShape(partner_code=partner_code, freq_code="A")
-    reg = ExtractionRegistry(registry_path)
-    chk = Checkpoint(checkpoint_path)
-    ex = ComtradeDataExtractor(api_key or "AUDIT_ONLY_NO_KEY", bronze_dir)
-
-    audit_log = Path(audit_log_path)
-    zero_count_report = Path(zero_count_report_path)
-
-    audit_zero_count_hits = 0
-    audit_missing_hits = 0
-
-    plan: List[Tuple[str, str, int, str, str, str]] = []
-    for iso3 in reporters_list:
-        code = reporter_code_for_iso3(reporters_df, iso3)
-        if code is None:
-            logger.warning("Reporter not found in metadata: %s", iso3)
-            continue
-        for year in periods:
-            for cmd in commodities_list:
-                for flow in flows_list:
-                    job_key = reg.job_key(code, year, cmd, flow, shape.partner_code, shape.type_code, shape.freq_code, shape.cl_code)
-                    plan.append((job_key, iso3, code, year, cmd, flow))
-
-    total = len(plan)
-    logger.info("Planned annual jobs: %s (api=%s)", total, api_key_env)
-
-    if audit_only:
-        logger.info("AUDIT MODE ENABLED: reconciling bronze JSON counts for %s planned jobs", total)
-        logger.info("AUDIT → writing scan log to %s", str(audit_log))
-        logger.info("AUDIT → writing zero-count coverage report to %s", str(zero_count_report))
-
-    if audit_only:
-        logger.info("AUDIT MODE ENABLED: reconciling bronze JSON counts for %s planned jobs", total)
-
-    for idx, (job_key, iso3, code, year, cmd, flow) in enumerate(plan, start=1):
-        meta = {
-            "reporter_iso3": iso3,
-            "reporter_code": int(code),
-            "period": str(year),
-            "commodity": str(cmd),
-            "flow": str(flow),
-            "shape": shape.__dict__,
+    _, started_at, manifest_entry = start_extract_run(
+        command_name="run-annual",
+        bronze_dir=bronze_dir,
+        registry_path=registry_path,
+        checkpoint_path=checkpoint_path,
+        extra={
             "api_key_env": api_key_env,
-        }
-        chk.write({"position": {"index": idx, "total": total}, "last_attempted": meta})
+            "audit_only": audit_only,
+            "audit_log_path": audit_log_path,
+            "zero_count_report_path": zero_count_report_path,
+        },
+    )
+    completed_jobs = 0
+    skipped_jobs = 0
+    failed_jobs = 0
+    try:
+        api_key = os.getenv(api_key_env)
+        if not api_key:
+            raise click.ClickException(f"Missing env var {api_key_env}")
 
-        if (not audit_only) and reg.is_completed(job_key):
-            continue
+        reporters_df = load_reporters(metadata_dir)
+        
+        # Use custom reporters if provided, otherwise use defaults
+        if reporters:
+            reporters_list = [r.strip().upper() for r in reporters.split(",") if r.strip()]
+            logger.info("Using custom reporters from CLI: %s", reporters_list)
+        else:
+            reporters_list = reporters_default_top3_eu_plus(world=True)
+            if include_eu_bloc:
+                eu_bloc = find_eu_bloc_iso3(reporters_df)
+                if eu_bloc and eu_bloc not in reporters_list:
+                    reporters_list.insert(3, eu_bloc)
+            logger.info("Using default reporters: %s", reporters_list)
 
-        # Bronze existence check (idempotent)
-        existing = ex.find_existing(year, code, cmd, flow, shape)
-        if existing:
-            # Count-based bronze truth: prefer payload['_metadata']['record_count'], then top-level 'count', else len(data)
-            try:
-                payload = json.loads(existing.read_text())
-                payload.setdefault("_metadata", {})
+        periods = parse_years(years)
+        commodities_list = [c.strip() for c in commodities.split(",") if c.strip()]
+        flows_list = [f.strip() for f in flows.split(",") if f.strip()]
 
-                if isinstance(payload.get("_metadata"), dict) and "record_count" in payload["_metadata"]:
-                    record_count = int(payload["_metadata"].get("record_count") or 0)
-                elif "count" in payload:
-                    record_count = int(payload.get("count") or 0)
-                    payload["_metadata"]["record_count"] = record_count
-                else:
-                    record_count = len(payload.get("data", []) or [])
-                    payload["_metadata"]["record_count"] = record_count
-            except Exception:
-                payload = {"_metadata": {"record_count": 0}}
-                record_count = 0
+        shape = QueryShape(partner_code=partner_code, freq_code="A")
+        reg = ExtractionRegistry(registry_path)
+        chk = Checkpoint(checkpoint_path)
+        ex = ComtradeDataExtractor(api_key or "AUDIT_ONLY_NO_KEY", bronze_dir)
 
-            if audit_only:
-                logger.info(
-                    "AUDIT → found bronze %s (count=%s) for %s %s cmd=%s flow=%s",
-                    existing.name, record_count, iso3, year, cmd, flow
-                )
+        audit_log = Path(audit_log_path)
+        zero_count_report = Path(zero_count_report_path)
 
-            
-            if audit_only:
-                _append_jsonl(audit_log, {
-                    "scanned_at_utc": datetime.now(timezone.utc).isoformat(),
-                    "job_key": job_key,
-                    "status": "bronze_found",
-                    "record_count": int(record_count),
-                    "filepath": str(existing),
-                    "reporter_iso3": iso3,
-                    "reporter_code": int(code),
-                    "year": str(year),
-                    "commodity": str(cmd),
-                    "flow": str(flow),
-                    "partner_code": int(shape.partner_code),
-                    "freq_code": str(shape.freq_code),
-                    "type_code": str(shape.type_code),
-                    "cl_code": str(shape.cl_code),
-                })
+        audit_zero_count_hits = 0
+        audit_missing_hits = 0
 
-                if int(record_count) == 0:
-                    audit_zero_count_hits += 1
-                    _append_jsonl(zero_count_report, {
-                        "reported_at_utc": datetime.now(timezone.utc).isoformat(),
-                        "reason": "bronze_zero_count",
+        plan: List[Tuple[str, str, int, str, str, str]] = []
+        for iso3 in reporters_list:
+            code = reporter_code_for_iso3(reporters_df, iso3)
+            if code is None:
+                logger.warning("Reporter not found in metadata: %s", iso3)
+                continue
+            for year in periods:
+                for cmd in commodities_list:
+                    for flow in flows_list:
+                        job_key = reg.job_key(code, year, cmd, flow, shape.partner_code, shape.type_code, shape.freq_code, shape.cl_code)
+                        plan.append((job_key, iso3, code, year, cmd, flow))
+
+        total = len(plan)
+        logger.info("Planned annual jobs: %s (api=%s)", total, api_key_env)
+
+        if audit_only:
+            logger.info("AUDIT MODE ENABLED: reconciling bronze JSON counts for %s planned jobs", total)
+            logger.info("AUDIT → writing scan log to %s", str(audit_log))
+            logger.info("AUDIT → writing zero-count coverage report to %s", str(zero_count_report))
+
+        if audit_only:
+            logger.info("AUDIT MODE ENABLED: reconciling bronze JSON counts for %s planned jobs", total)
+
+        for idx, (job_key, iso3, code, year, cmd, flow) in enumerate(plan, start=1):
+            meta = {
+                "reporter_iso3": iso3,
+                "reporter_code": int(code),
+                "period": str(year),
+                "commodity": str(cmd),
+                "flow": str(flow),
+                "shape": shape.__dict__,
+                "api_key_env": api_key_env,
+            }
+            chk.write({"position": {"index": idx, "total": total}, "last_attempted": meta})
+
+            if (not audit_only) and reg.is_completed(job_key):
+                skipped_jobs += 1
+                continue
+
+            # Bronze existence check (idempotent)
+            existing = ex.find_existing(year, code, cmd, flow, shape)
+            if existing:
+                # Count-based bronze truth: prefer payload['_metadata']['record_count'], then top-level 'count', else len(data)
+                try:
+                    payload = json.loads(existing.read_text())
+                    payload.setdefault("_metadata", {})
+
+                    if isinstance(payload.get("_metadata"), dict) and "record_count" in payload["_metadata"]:
+                        record_count = int(payload["_metadata"].get("record_count") or 0)
+                    elif "count" in payload:
+                        record_count = int(payload.get("count") or 0)
+                        payload["_metadata"]["record_count"] = record_count
+                    else:
+                        record_count = len(payload.get("data", []) or [])
+                        payload["_metadata"]["record_count"] = record_count
+                except Exception:
+                    payload = {"_metadata": {"record_count": 0}}
+                    record_count = 0
+
+                if audit_only:
+                    logger.info(
+                        "AUDIT → found bronze %s (count=%s) for %s %s cmd=%s flow=%s",
+                        existing.name, record_count, iso3, year, cmd, flow
+                    )
+
+                
+                if audit_only:
+                    _append_jsonl(audit_log, {
+                        "scanned_at_utc": datetime.now(timezone.utc).isoformat(),
                         "job_key": job_key,
-                        "record_count": 0,
+                        "status": "bronze_found",
+                        "record_count": int(record_count),
                         "filepath": str(existing),
-                        "filename": existing.name,
                         "reporter_iso3": iso3,
                         "reporter_code": int(code),
                         "year": str(year),
@@ -598,71 +652,69 @@ def run_annual(api_key_env, metadata_dir, bronze_dir, registry_path, checkpoint_
                         "type_code": str(shape.type_code),
                         "cl_code": str(shape.cl_code),
                     })
-            reg.record_completed(job_key=job_key, payload=payload, filepath=existing, meta=meta | {"note": "recorded_from_existing_bronze"})
+                    if int(record_count) == 0:
+                        audit_zero_count_hits += 1
+                        _append_jsonl(zero_count_report, {
+                            "reported_at_utc": datetime.now(timezone.utc).isoformat(),
+                            "reason": "bronze_zero_count",
+                            "job_key": job_key,
+                            "record_count": 0,
+                            "filepath": str(existing),
+                            "filename": existing.name,
+                            "reporter_iso3": iso3,
+                            "reporter_code": int(code),
+                            "year": str(year),
+                            "commodity": str(cmd),
+                            "flow": str(flow),
+                            "partner_code": int(shape.partner_code),
+                            "freq_code": str(shape.freq_code),
+                            "type_code": str(shape.type_code),
+                            "cl_code": str(shape.cl_code),
+                        })
+                reg.record_completed(job_key=job_key, payload=payload, filepath=existing, meta=meta | {"note": "recorded_from_existing_bronze"})
+                completed_jobs += 1
 
-            # If existing annual bronze is empty, mark a gap so monthly can recover
-            if int(payload.get("_metadata", {}).get("record_count", record_count)) == 0:
-                reg.record_gap(
-                    reporter_code=code,
-                    year=str(year),
-                    commodity=str(cmd),
-                    flow=str(flow),
-                    partner=shape.partner_code,
-                    type_code=shape.type_code,
-                    cl=shape.cl_code,
-                    reason="annual_zero_rows_existing_bronze",
-                    meta=meta,
-                )
-                update_coverage_tally(chk, code, str(year), str(cmd), str(flow))
-            continue
-        
-        if audit_only:
-            logger.info(
-                "AUDIT ONLY → missing bronze for %s %s cmd=%s flow=%s",
-                iso3, year, cmd, flow
-            )
-
+                # If existing annual bronze is empty, mark a gap so monthly can recover
+                if int(payload.get("_metadata", {}).get("record_count", record_count)) == 0:
+                    reg.record_gap(
+                        reporter_code=code,
+                        year=str(year),
+                        commodity=str(cmd),
+                        flow=str(flow),
+                        partner=shape.partner_code,
+                        type_code=shape.type_code,
+                        cl=shape.cl_code,
+                        reason="annual_zero_rows_existing_bronze",
+                        meta=meta,
+                    )
+                    update_coverage_tally(chk, code, str(year), str(cmd), str(flow))
+                continue
             
-            _append_jsonl(audit_log, {
-                "scanned_at_utc": datetime.now(timezone.utc).isoformat(),
-                "job_key": job_key,
-                "status": "bronze_missing",
-                "record_count": None,
-                "filepath": None,
-                "reporter_iso3": iso3,
-                "reporter_code": int(code),
-                "year": str(year),
-                "commodity": str(cmd),
-                "flow": str(flow),
-                "partner_code": int(shape.partner_code),
-                "freq_code": str(shape.freq_code),
-                "type_code": str(shape.type_code),
-                "cl_code": str(shape.cl_code),
-            })
-            audit_missing_hits += 1
+            if audit_only:
+                logger.info(
+                    "AUDIT ONLY → missing bronze for %s %s cmd=%s flow=%s",
+                    iso3, year, cmd, flow
+                )
 
-            reg.record_gap(
-                reporter_code=code,
-                year=str(year),
-                commodity=str(cmd),
-                flow=str(flow),
-                partner=shape.partner_code,
-                type_code=shape.type_code,
-                cl=shape.cl_code,
-                reason="audit_missing_bronze",
-                meta=meta,
-            )
+                
+                _append_jsonl(audit_log, {
+                    "scanned_at_utc": datetime.now(timezone.utc).isoformat(),
+                    "job_key": job_key,
+                    "status": "bronze_missing",
+                    "record_count": None,
+                    "filepath": None,
+                    "reporter_iso3": iso3,
+                    "reporter_code": int(code),
+                    "year": str(year),
+                    "commodity": str(cmd),
+                    "flow": str(flow),
+                    "partner_code": int(shape.partner_code),
+                    "freq_code": str(shape.freq_code),
+                    "type_code": str(shape.type_code),
+                    "cl_code": str(shape.cl_code),
+                })
+                audit_missing_hits += 1
 
-            update_coverage_tally(chk, code, str(year), str(cmd), str(flow))
-            continue
-        logger.info("[%s/%s] %s | %s | cmd=%s | flow=%s", idx, total, iso3, year, cmd, flow)
-
-        try:
-            data = ex.extract_one(code, year, cmd, flow, shape)
-            path = ex.save_one(data, year, code, cmd, flow, shape)
-            reg.record_completed(job_key=job_key, payload=data, filepath=path, meta=meta)
-
-            if int(data.get("_metadata", {}).get("record_count", 0)) == 0:
                 reg.record_gap(
                     reporter_code=code,
                     year=str(year),
@@ -671,56 +723,106 @@ def run_annual(api_key_env, metadata_dir, bronze_dir, registry_path, checkpoint_
                     partner=shape.partner_code,
                     type_code=shape.type_code,
                     cl=shape.cl_code,
-                    reason="annual_returned_zero_rows",
+                    reason="audit_missing_bronze",
                     meta=meta,
                 )
                 update_coverage_tally(chk, code, str(year), str(cmd), str(flow))
+                continue
+            logger.info("[%s/%s] %s | %s | cmd=%s | flow=%s", idx, total, iso3, year, cmd, flow)
 
-            time.sleep(rate_delay)
+            try:
+                data = ex.extract_one(code, year, cmd, flow, shape)
+                path = ex.save_one(data, year, code, cmd, flow, shape)
+                reg.record_completed(job_key=job_key, payload=data, filepath=path, meta=meta)
+                completed_jobs += 1
 
-        except QuotaHit as q:
-            reg.record_failed(job_key=job_key, error_type="quota_or_throttle", http_status=q.http_status, message=q.message, meta=meta | {"wait_seconds": q.wait_seconds})
-            if q.http_status == 429 or "HTTP 429" in (q.message or ""):
-                logger.warning("429 throttle. Sleeping %ss then retrying same key.", q.wait_seconds)
+                if int(data.get("_metadata", {}).get("record_count", 0)) == 0:
+                    reg.record_gap(
+                        reporter_code=code,
+                        year=str(year),
+                        commodity=str(cmd),
+                        flow=str(flow),
+                        partner=shape.partner_code,
+                        type_code=shape.type_code,
+                        cl=shape.cl_code,
+                        reason="annual_returned_zero_rows",
+                        meta=meta,
+                    )
+                    update_coverage_tally(chk, code, str(year), str(cmd), str(flow))
+
+                time.sleep(rate_delay)
+
+            except QuotaHit as q:
+                failed_jobs += 1
+                reg.record_failed(job_key=job_key, error_type="quota_or_throttle", http_status=q.http_status, message=q.message, meta=meta | {"wait_seconds": q.wait_seconds})
+                if q.http_status == 429 or "HTTP 429" in (q.message or ""):
+                    logger.warning("429 throttle. Sleeping %ss then retrying same key.", q.wait_seconds)
+                    time.sleep(q.wait_seconds)
+                    continue
+
+                logger.warning("Quota hit. Suggested wait %ss. %s", q.wait_seconds, q.message)
+                if exit_on_quota:
+                    raise SystemExit(2)
                 time.sleep(q.wait_seconds)
+
+            except requests.HTTPError as e:
+                failed_jobs += 1
+                status = getattr(e.response, "status_code", None)
+                body = ""
+                try:
+                    body = e.response.text if e.response is not None else ""
+                except Exception:
+                    body = ""
+                reg.record_failed(job_key=job_key, error_type="http_error", http_status=status, message=str(e) + " " + body, meta=meta)
                 continue
 
-            logger.warning("Quota hit. Suggested wait %ss. %s", q.wait_seconds, q.message)
-            if exit_on_quota:
-                raise SystemExit(2)
-            time.sleep(q.wait_seconds)
+            except Exception as e:
+                failed_jobs += 1
+                reg.record_failed(job_key=job_key, error_type="exception", http_status=None, message=str(e), meta=meta)
+                continue
 
-        except requests.HTTPError as e:
-            status = getattr(e.response, "status_code", None)
-            body = ""
-            try:
-                body = e.response.text if e.response is not None else ""
-            except Exception:
-                body = ""
-            reg.record_failed(job_key=job_key, error_type="http_error", http_status=status, message=str(e) + " " + body, meta=meta)
-            continue
+        if audit_only:
+            logger.info(
+                "AUDIT SUMMARY: scanned=%s bronze_missing=%s bronze_zero_count=%s",
+                total, audit_missing_hits, audit_zero_count_hits
+            )
+            logger.info("AUDIT SUMMARY: scan log written to %s", str(audit_log))
+            logger.info("AUDIT SUMMARY: zero-count report written to %s", str(zero_count_report))
 
-        except Exception as e:
-            reg.record_failed(job_key=job_key, error_type="exception", http_status=None, message=str(e), meta=meta)
-            continue
-
-
-
-    if audit_only:
-        logger.info(
-            "AUDIT SUMMARY: scanned=%s bronze_missing=%s bronze_zero_count=%s",
-            total, audit_missing_hits, audit_zero_count_hits
+        finish_extract_run(
+            manifest_entry,
+            started_at,
+            status="completed",
+            extra={
+                "planned_jobs": total,
+                "completed_jobs": completed_jobs,
+                "skipped_jobs": skipped_jobs,
+                "failed_jobs": failed_jobs,
+                "audit_missing_hits": audit_missing_hits,
+                "audit_zero_count_hits": audit_zero_count_hits,
+            },
         )
-        logger.info("AUDIT SUMMARY: scan log written to %s", str(audit_log))
-        logger.info("AUDIT SUMMARY: zero-count report written to %s", str(zero_count_report))
+    except Exception as exc:
+        finish_extract_run(
+            manifest_entry,
+            started_at,
+            status="failed",
+            error_summary=str(exc),
+            extra={
+                "completed_jobs": completed_jobs,
+                "skipped_jobs": skipped_jobs,
+                "failed_jobs": failed_jobs,
+            },
+        )
+        raise
 
 
 @cli.command("run-monthly-direct")
 @click.option("--api-key-env", type=click.Choice(["COMTRADE_API_KEY_DATA", "COMTRADE_API_KEY_DATA_A", "COMTRADE_API_KEY_DATA_B"]), default="COMTRADE_API_KEY_DATA", show_default=True)
 @click.option("--metadata-dir", default="data/metadata/comtrade", show_default=True)
 @click.option("--bronze-dir", default="data/bronze/comtrade", show_default=True)
-@click.option("--registry-path", default="logs/extraction_registry.jsonl", show_default=True)
-@click.option("--checkpoint-path", default="logs/comtrade_checkpoint.json", show_default=True)
+@click.option("--registry-path", default="logs/comtrade/extraction_registry.jsonl", show_default=True)
+@click.option("--checkpoint-path", default="logs/comtrade/comtrade_checkpoint.json", show_default=True)
 @click.option("--reporters", required=True, help="Comma-separated reporter ISO3 codes (e.g. 'USA,CHN,DEU')")
 @click.option("--periods", required=True, help="Comma-separated YYYYMM periods, e.g. 202501,202506,202509,202512")
 @click.option("--commodities", required=True, help="HS codes, comma-separated, e.g. 10,12,2709,2710")
@@ -732,97 +834,129 @@ def run_monthly_direct(api_key_env, metadata_dir, bronze_dir, registry_path, che
     """
     Direct monthly extraction for specific YYYYMM periods.
     """
-    api_key = os.getenv(api_key_env)
-    if not api_key:
-        raise click.ClickException(f"Missing env var {api_key_env}")
+    _, started_at, manifest_entry = start_extract_run(
+        command_name="run-monthly-direct",
+        bronze_dir=bronze_dir,
+        registry_path=registry_path,
+        checkpoint_path=checkpoint_path,
+        extra={"api_key_env": api_key_env},
+    )
+    completed_jobs = 0
+    skipped_jobs = 0
+    failed_jobs = 0
+    try:
+        api_key = os.getenv(api_key_env)
+        if not api_key:
+            raise click.ClickException(f"Missing env var {api_key_env}")
 
-    reporters_df = load_reporters(metadata_dir)
-    reporters_list = [r.strip().upper() for r in reporters.split(",") if r.strip()]
-    periods_list = [p.strip() for p in periods.split(",") if p.strip()]
-    commodities_list = [c.strip() for c in commodities.split(",") if c.strip()]
-    flows_list = [f.strip() for f in flows.split(",") if f.strip()]
+        reporters_df = load_reporters(metadata_dir)
+        reporters_list = [r.strip().upper() for r in reporters.split(",") if r.strip()]
+        periods_list = [p.strip() for p in periods.split(",") if p.strip()]
+        commodities_list = [c.strip() for c in commodities.split(",") if c.strip()]
+        flows_list = [f.strip() for f in flows.split(",") if f.strip()]
 
-    # Validate periods are YYYYMM
-    for p in periods_list:
-        if not re.fullmatch(r"\d{6}", p):
-            raise click.ClickException(f"Invalid period '{p}'. Expected YYYYMM format.")
+        for p in periods_list:
+            if not re.fullmatch(r"\d{6}", p):
+                raise click.ClickException(f"Invalid period '{p}'. Expected YYYYMM format.")
 
-    shape = QueryShape(partner_code=partner_code, freq_code="M")
-    reg = ExtractionRegistry(registry_path)
-    chk = Checkpoint(checkpoint_path)
-    ex = ComtradeDataExtractor(api_key, bronze_dir)
+        shape = QueryShape(partner_code=partner_code, freq_code="M")
+        reg = ExtractionRegistry(registry_path)
+        chk = Checkpoint(checkpoint_path)
+        ex = ComtradeDataExtractor(api_key, bronze_dir)
 
-    plan = []
-    for iso3 in reporters_list:
-        code = reporter_code_for_iso3(reporters_df, iso3)
-        if code is None:
-            logger.warning("Reporter not found in metadata: %s", iso3)
-            continue
-        for period in periods_list:
-            for cmd in commodities_list:
-                for flow in flows_list:
-                    job_key = reg.job_key(code, period, cmd, flow, shape.partner_code, shape.type_code, shape.freq_code, shape.cl_code)
-                    plan.append((job_key, iso3, code, period, cmd, flow))
-
-    total = len(plan)
-    logger.info("Planned monthly jobs: %s (api=%s)", total, api_key_env)
-
-    for idx, (job_key, iso3, code, period, cmd, flow) in enumerate(plan, start=1):
-        meta = {
-            "reporter_iso3": iso3,
-            "reporter_code": int(code),
-            "period": str(period),
-            "commodity": str(cmd),
-            "flow": str(flow),
-            "shape": shape.__dict__,
-            "api_key_env": api_key_env,
-        }
-        chk.write({"position": {"index": idx, "total": total}, "last_attempted": meta})
-
-        if reg.is_completed(job_key):
-            continue
-
-        existing = ex.find_existing(period, code, cmd, flow, shape)
-        if existing:
-            payload, rc = load_json_record_count(existing)
-            reg.record_completed(job_key=job_key, payload=payload, filepath=existing, meta=meta | {"note": "recorded_from_existing_bronze"})
-            continue
-
-        logger.info("[%s/%s] %s | %s | cmd=%s | flow=%s", idx, total, iso3, period, cmd, flow)
-
-        try:
-            data = ex.extract_one(code, period, cmd, flow, shape)
-            path = ex.save_one(data, period, code, cmd, flow, shape)
-            reg.record_completed(job_key=job_key, payload=data, filepath=path, meta=meta)
-            time.sleep(rate_delay)
-
-        except QuotaHit as q:
-            reg.record_failed(job_key=job_key, error_type="quota_or_throttle", http_status=q.http_status, message=q.message, meta=meta | {"wait_seconds": q.wait_seconds})
-            if q.http_status == 429:
-                logger.warning("429 throttle. Sleeping %ss then retrying.", q.wait_seconds)
-                time.sleep(q.wait_seconds)
+        plan = []
+        for iso3 in reporters_list:
+            code = reporter_code_for_iso3(reporters_df, iso3)
+            if code is None:
+                logger.warning("Reporter not found in metadata: %s", iso3)
                 continue
-            logger.warning("Quota hit. Suggested wait %ss.", q.wait_seconds)
-            if exit_on_quota:
-                raise SystemExit(2)
-            time.sleep(q.wait_seconds)
+            for period in periods_list:
+                for cmd in commodities_list:
+                    for flow in flows_list:
+                        job_key = reg.job_key(code, period, cmd, flow, shape.partner_code, shape.type_code, shape.freq_code, shape.cl_code)
+                        plan.append((job_key, iso3, code, period, cmd, flow))
 
-        except requests.HTTPError as e:
-            status = getattr(e.response, "status_code", None)
-            body = e.response.text if e.response else ""
-            reg.record_failed(job_key=job_key, error_type="http_error", http_status=status, message=str(e) + " " + body, meta=meta)
-            continue
+        total = len(plan)
+        logger.info("Planned monthly jobs: %s (api=%s)", total, api_key_env)
 
-        except Exception as e:
-            reg.record_failed(job_key=job_key, error_type="exception", http_status=None, message=str(e), meta=meta)
-            continue
+        for idx, (job_key, iso3, code, period, cmd, flow) in enumerate(plan, start=1):
+            meta = {
+                "reporter_iso3": iso3,
+                "reporter_code": int(code),
+                "period": str(period),
+                "commodity": str(cmd),
+                "flow": str(flow),
+                "shape": shape.__dict__,
+                "api_key_env": api_key_env,
+            }
+            chk.write({"position": {"index": idx, "total": total}, "last_attempted": meta})
+
+            if reg.is_completed(job_key):
+                skipped_jobs += 1
+                continue
+
+            existing = ex.find_existing(period, code, cmd, flow, shape)
+            if existing:
+                payload, rc = load_json_record_count(existing)
+                reg.record_completed(job_key=job_key, payload=payload, filepath=existing, meta=meta | {"note": "recorded_from_existing_bronze"})
+                completed_jobs += 1
+                continue
+
+            logger.info("[%s/%s] %s | %s | cmd=%s | flow=%s", idx, total, iso3, period, cmd, flow)
+
+            try:
+                data = ex.extract_one(code, period, cmd, flow, shape)
+                path = ex.save_one(data, period, code, cmd, flow, shape)
+                reg.record_completed(job_key=job_key, payload=data, filepath=path, meta=meta)
+                completed_jobs += 1
+                time.sleep(rate_delay)
+
+            except QuotaHit as q:
+                failed_jobs += 1
+                reg.record_failed(job_key=job_key, error_type="quota_or_throttle", http_status=q.http_status, message=q.message, meta=meta | {"wait_seconds": q.wait_seconds})
+                if q.http_status == 429:
+                    logger.warning("429 throttle. Sleeping %ss then retrying.", q.wait_seconds)
+                    time.sleep(q.wait_seconds)
+                    continue
+                logger.warning("Quota hit. Suggested wait %ss.", q.wait_seconds)
+                if exit_on_quota:
+                    raise SystemExit(2)
+                time.sleep(q.wait_seconds)
+
+            except requests.HTTPError as e:
+                failed_jobs += 1
+                status = getattr(e.response, "status_code", None)
+                body = e.response.text if e.response else ""
+                reg.record_failed(job_key=job_key, error_type="http_error", http_status=status, message=str(e) + " " + body, meta=meta)
+                continue
+
+            except Exception as e:
+                failed_jobs += 1
+                reg.record_failed(job_key=job_key, error_type="exception", http_status=None, message=str(e), meta=meta)
+                continue
+
+        finish_extract_run(
+            manifest_entry,
+            started_at,
+            status="completed",
+            extra={"planned_jobs": total, "completed_jobs": completed_jobs, "skipped_jobs": skipped_jobs, "failed_jobs": failed_jobs},
+        )
+    except Exception as exc:
+        finish_extract_run(
+            manifest_entry,
+            started_at,
+            status="failed",
+            error_summary=str(exc),
+            extra={"completed_jobs": completed_jobs, "skipped_jobs": skipped_jobs, "failed_jobs": failed_jobs},
+        )
+        raise
 
 @cli.command("run-monthly-gaps")
 @click.option("--api-key-env", type=click.Choice(["COMTRADE_API_KEY_DATA", "COMTRADE_API_KEY_DATA_A", "COMTRADE_API_KEY_DATA_B"]), default="COMTRADE_API_KEY_DATA", show_default=True)
 @click.option("--metadata-dir", default="data/metadata/comtrade", show_default=True)
 @click.option("--bronze-dir", default="data/bronze/comtrade/test2", show_default=True)
-@click.option("--registry-path", default="logs/test2/extraction_registry.jsonl", show_default=True)
-@click.option("--checkpoint-path", default="logs/test2/comtrade_checkpoint.json", show_default=True)
+@click.option("--registry-path", default="logs/comtrade/extraction_registry.jsonl", show_default=True)
+@click.option("--checkpoint-path", default="logs/comtrade/comtrade_checkpoint.json", show_default=True)
 @click.option("--months", default="10-12", show_default=True, help="Months to attempt per gap year, e.g. '10-12' or '1,2,3'")
 @click.option("--exit-on-quota/--sleep-on-quota", default=True, show_default=True)
 @click.option("--rate-delay", default=3.0, show_default=True, type=float)
@@ -862,173 +996,179 @@ def run_monthly_gaps(
 
     Writes monthly bronze to: year=YYYY/monthly/reporter=CODE/
     """
-    api_key = os.getenv(api_key_env)
-    if not api_key:
-        raise click.ClickException(f"Missing env var {api_key_env}")
-
-    load_reporters(metadata_dir)  # validates metadata dir
-    reg = ExtractionRegistry(registry_path)
-    chk = Checkpoint(checkpoint_path)
-    ex = ComtradeDataExtractor(api_key, bronze_dir)
-
-    # -------- Build gaps list (reporter_code, year, cmd, flow) --------
-    gaps: List[Tuple[int, str, str, str]] = []
-
-    if coverage_source.lower() == "checkpoint":
-        chk_data = chk.load()
-        chk_gaps = chk_data.get("coverage_gaps", {})
-        for r, years in chk_gaps.items():
-            for y, items in (years or {}).items():
-                for it in items or []:
-                    try:
-                        cmd, flow = it.split("_", 1)
-                    except ValueError:
-                        continue
-                    gaps.append((int(r), str(y), str(cmd), str(flow)))
-
-    else:
-        report_path = Path(zero_count_report_path)
-        if not report_path.exists():
-            raise click.ClickException(
-                f"Zero-count report not found at {report_path}. "
-                f"Run: run-annual --audit-only --zero-count-report-path {report_path}"
-            )
-
-        for line in report_path.read_text().splitlines():
-            if not line.strip():
-                continue
-            try:
-                rec = json.loads(line)
-            except Exception:
-                continue
-
-            # Only entries that indicate 0 count should be used for monthly recovery
-            rc = rec.get("record_count", rec.get("count", None))
-            try:
-                rc = int(rc)
-            except Exception:
-                rc = None
-
-            if rc != 0:
-                continue
-
-            reporter_code = rec.get("reporter_code")
-            year = rec.get("year") or rec.get("period")
-            cmd = rec.get("commodity")
-            flow = rec.get("flow")
-
-            if reporter_code is None or year is None or cmd is None or flow is None:
-                continue
-
-            gaps.append((int(reporter_code), str(year), str(cmd), str(flow)))
-
-    if not gaps:
-        logger.info("No coverage gaps found for source=%s. Nothing to do.", coverage_source)
-        return
-
-    # De-dup + deterministic ordering
-    gaps = sorted(set(gaps), key=lambda x: (x[1], x[0], x[2], x[3]))
-
-    # Safety valve on distinct years
-    years_in_gaps = sorted(set(y for _, y, _, _ in gaps))
-    if len(years_in_gaps) > max_gap_years:
-        years_in_gaps = years_in_gaps[:max_gap_years]
-        gaps = [g for g in gaps if g[1] in years_in_gaps]
-        logger.warning("Safety valve: limiting to years=%s (use --max-gap-years to change)", years_in_gaps)
-
-    months_list = parse_months(months)
-    shape = QueryShape(partner_code=0, freq_code="M")  # monthly, world partner
-
-    plan = []
-    for reporter_code, year, cmd, flow in gaps:
-        for period in month_periods_for_year(year, months_list):
-            job_key = reg.job_key(
-                reporter_code,
-                period,
-                cmd,
-                flow,
-                shape.partner_code,
-                shape.type_code,
-                shape.freq_code,
-                shape.cl_code,
-            )
-            plan.append((job_key, reporter_code, period, cmd, flow))
-
-    total = len(plan)
-    logger.info(
-        "Planned monthly gap jobs: %s (source=%s) (api=%s)",
-        total,
-        coverage_source,
-        api_key_env,
+    _, started_at, manifest_entry = start_extract_run(
+        command_name="run-monthly-gaps",
+        bronze_dir=bronze_dir,
+        registry_path=registry_path,
+        checkpoint_path=checkpoint_path,
+        extra={"api_key_env": api_key_env, "coverage_source": coverage_source, "zero_count_report_path": zero_count_report_path},
     )
+    completed_jobs = 0
+    skipped_jobs = 0
+    failed_jobs = 0
+    try:
+        api_key = os.getenv(api_key_env)
+        if not api_key:
+            raise click.ClickException(f"Missing env var {api_key_env}")
 
-    for idx, (job_key, reporter_code, period, cmd, flow) in enumerate(plan, start=1):
-        meta = {
-            "reporter_code": int(reporter_code),
-            "period": str(period),
-            "commodity": str(cmd),
-            "flow": str(flow),
-            "shape": shape.__dict__,
-            "api_key_env": api_key_env,
-            "source": f"monthly_gap_recovery:{coverage_source}",
-        }
-        chk.write({"position": {"index": idx, "total": total}, "last_attempted": meta})
+        load_reporters(metadata_dir)
+        reg = ExtractionRegistry(registry_path)
+        chk = Checkpoint(checkpoint_path)
+        ex = ComtradeDataExtractor(api_key, bronze_dir)
 
-        # Idempotency: if already completed, skip
-        if reg.is_completed(job_key):
-            continue
+        gaps: List[Tuple[int, str, str, str]] = []
 
-        # Idempotency: if bronze exists, record and skip
-        existing = ex.find_existing(period, reporter_code, cmd, flow, shape)
-        if existing:
-            payload, rc = load_json_record_count(existing)
-            reg.record_completed(job_key=job_key, payload=payload, filepath=existing, meta=meta | {"note": "recorded_from_existing_bronze"})
-            continue
+        if coverage_source.lower() == "checkpoint":
+            chk_data = chk.load()
+            chk_gaps = chk_data.get("coverage_gaps", {})
+            for r, years in chk_gaps.items():
+                for y, items in (years or {}).items():
+                    for it in items or []:
+                        try:
+                            cmd, flow = it.split("_", 1)
+                        except ValueError:
+                            continue
+                        gaps.append((int(r), str(y), str(cmd), str(flow)))
+        else:
+            report_path = Path(zero_count_report_path)
+            if not report_path.exists():
+                raise click.ClickException(
+                    f"Zero-count report not found at {report_path}. "
+                    f"Run: run-annual --audit-only --zero-count-report-path {report_path}"
+                )
 
-        logger.info("[%s/%s] reporter=%s | period=%s | cmd=%s | flow=%s", idx, total, reporter_code, period, cmd, flow)
+            for line in report_path.read_text().splitlines():
+                if not line.strip():
+                    continue
+                try:
+                    rec = json.loads(line)
+                except Exception:
+                    continue
 
-        try:
-            data = ex.extract_one(reporter_code, period, cmd, flow, shape)
-            path = ex.save_one(data, period, reporter_code, cmd, flow, shape)
-            reg.record_completed(job_key=job_key, payload=data, filepath=path, meta=meta)
-            time.sleep(rate_delay)
+                rc = rec.get("record_count", rec.get("count", None))
+                try:
+                    rc = int(rc)
+                except Exception:
+                    rc = None
 
-        except QuotaHit as q:
-            reg.record_failed(
-                job_key=job_key,
-                error_type="quota_or_throttle",
-                http_status=q.http_status,
-                message=q.message,
-                meta=meta | {"wait_seconds": q.wait_seconds},
+                if rc != 0:
+                    continue
+
+                reporter_code = rec.get("reporter_code")
+                year = rec.get("year") or rec.get("period")
+                cmd = rec.get("commodity")
+                flow = rec.get("flow")
+                if reporter_code is None or year is None or cmd is None or flow is None:
+                    continue
+                gaps.append((int(reporter_code), str(year), str(cmd), str(flow)))
+
+        if not gaps:
+            logger.info("No coverage gaps found for source=%s. Nothing to do.", coverage_source)
+            finish_extract_run(
+                manifest_entry,
+                started_at,
+                status="completed",
+                extra={"planned_jobs": 0, "completed_jobs": 0, "skipped_jobs": 0, "failed_jobs": 0},
             )
+            return
 
-            if q.http_status == 429 or "HTTP 429" in (q.message or ""):
-                logger.warning("429 throttle. Sleeping %ss then continuing.", q.wait_seconds)
-                time.sleep(q.wait_seconds)
+        gaps = sorted(set(gaps), key=lambda x: (x[1], x[0], x[2], x[3]))
+        years_in_gaps = sorted(set(y for _, y, _, _ in gaps))
+        if len(years_in_gaps) > max_gap_years:
+            years_in_gaps = years_in_gaps[:max_gap_years]
+            gaps = [g for g in gaps if g[1] in years_in_gaps]
+            logger.warning("Safety valve: limiting to years=%s (use --max-gap-years to change)", years_in_gaps)
+
+        months_list = parse_months(months)
+        shape = QueryShape(partner_code=0, freq_code="M")
+        plan = []
+        for reporter_code, year, cmd, flow in gaps:
+            for period in month_periods_for_year(year, months_list):
+                job_key = reg.job_key(reporter_code, period, cmd, flow, shape.partner_code, shape.type_code, shape.freq_code, shape.cl_code)
+                plan.append((job_key, reporter_code, period, cmd, flow))
+
+        total = len(plan)
+        logger.info("Planned monthly gap jobs: %s (source=%s) (api=%s)", total, coverage_source, api_key_env)
+
+        for idx, (job_key, reporter_code, period, cmd, flow) in enumerate(plan, start=1):
+            meta = {
+                "reporter_code": int(reporter_code),
+                "period": str(period),
+                "commodity": str(cmd),
+                "flow": str(flow),
+                "shape": shape.__dict__,
+                "api_key_env": api_key_env,
+                "source": f"monthly_gap_recovery:{coverage_source}",
+            }
+            chk.write({"position": {"index": idx, "total": total}, "last_attempted": meta})
+
+            if reg.is_completed(job_key):
+                skipped_jobs += 1
                 continue
 
-            logger.warning("Quota hit. Suggested wait %ss. %s", q.wait_seconds, q.message)
-            if exit_on_quota:
-                raise SystemExit(2)
-            time.sleep(q.wait_seconds)
+            existing = ex.find_existing(period, reporter_code, cmd, flow, shape)
+            if existing:
+                payload, rc = load_json_record_count(existing)
+                reg.record_completed(job_key=job_key, payload=payload, filepath=existing, meta=meta | {"note": "recorded_from_existing_bronze"})
+                completed_jobs += 1
+                continue
 
-        except requests.HTTPError as e:
-            status = getattr(e.response, "status_code", None)
-            body = ""
+            logger.info("[%s/%s] reporter=%s | period=%s | cmd=%s | flow=%s", idx, total, reporter_code, period, cmd, flow)
+
             try:
-                body = e.response.text if e.response is not None else ""
-            except Exception:
-                body = ""
-            reg.record_failed(job_key=job_key, error_type="http_error", http_status=status, message=str(e) + " " + body, meta=meta)
-            continue
+                data = ex.extract_one(reporter_code, period, cmd, flow, shape)
+                path = ex.save_one(data, period, reporter_code, cmd, flow, shape)
+                reg.record_completed(job_key=job_key, payload=data, filepath=path, meta=meta)
+                completed_jobs += 1
+                time.sleep(rate_delay)
 
-        except Exception as e:
-            reg.record_failed(job_key=job_key, error_type="exception", http_status=None, message=str(e), meta=meta)
-            continue
+            except QuotaHit as q:
+                failed_jobs += 1
+                reg.record_failed(job_key=job_key, error_type="quota_or_throttle", http_status=q.http_status, message=q.message, meta=meta | {"wait_seconds": q.wait_seconds})
+                if q.http_status == 429 or "HTTP 429" in (q.message or ""):
+                    logger.warning("429 throttle. Sleeping %ss then continuing.", q.wait_seconds)
+                    time.sleep(q.wait_seconds)
+                    continue
+                logger.warning("Quota hit. Suggested wait %ss. %s", q.wait_seconds, q.message)
+                if exit_on_quota:
+                    raise SystemExit(2)
+                time.sleep(q.wait_seconds)
+
+            except requests.HTTPError as e:
+                failed_jobs += 1
+                status = getattr(e.response, "status_code", None)
+                body = ""
+                try:
+                    body = e.response.text if e.response is not None else ""
+                except Exception:
+                    body = ""
+                reg.record_failed(job_key=job_key, error_type="http_error", http_status=status, message=str(e) + " " + body, meta=meta)
+                continue
+
+            except Exception as e:
+                failed_jobs += 1
+                reg.record_failed(job_key=job_key, error_type="exception", http_status=None, message=str(e), meta=meta)
+                continue
+
+        finish_extract_run(
+            manifest_entry,
+            started_at,
+            status="completed",
+            extra={"planned_jobs": total, "completed_jobs": completed_jobs, "skipped_jobs": skipped_jobs, "failed_jobs": failed_jobs},
+        )
+    except Exception as exc:
+        finish_extract_run(
+            manifest_entry,
+            started_at,
+            status="failed",
+            error_summary=str(exc),
+            extra={"completed_jobs": completed_jobs, "skipped_jobs": skipped_jobs, "failed_jobs": failed_jobs},
+        )
+        raise
 
 
 @cli.command("coverage-report")
-@click.option("--registry-path", default="logs/test2/extraction_registry.jsonl", show_default=True)
+@click.option("--registry-path", default="logs/comtrade/extraction_registry.jsonl", show_default=True)
 def coverage_report(registry_path: str):
     reg = ExtractionRegistry(registry_path)
     gaps = reg.iter_gaps()
@@ -1108,8 +1248,8 @@ def run_event_batch(api_key_env, event_date, commodities, reporters):
 @cli.command("run-monthly-history")
 @click.option("--api-key-env", default="COMTRADE_API_KEY_DATA", show_default=True)
 @click.option("--bronze-dir", default="data/bronze/comtrade/monthly_history", show_default=True)
-@click.option("--registry-path", default="logs/monthly_history/extraction_registry.jsonl", show_default=True)
-@click.option("--checkpoint-path", default="logs/monthly_history/comtrade_checkpoint.json", show_default=True)
+@click.option("--registry-path", default="logs/comtrade/extraction_registry.jsonl", show_default=True)
+@click.option("--checkpoint-path", default="logs/comtrade/comtrade_checkpoint.json", show_default=True)
 @click.option("--reporters", default="97,100,156,251,528,642,724,842", help="Comma-separated reporter numeric codes")
 @click.option("--years", required=True, default="2020,2021,2022,2023,2024,2025", help="Comma-separated years")
 @click.option("--commodities", default="10,12,2709,2710", help="HS codes, comma-separated")
@@ -1122,104 +1262,122 @@ def run_monthly_history(api_key_env, bronze_dir, registry_path, checkpoint_path,
     Batches reporters (max 5) and periods (max 5) to minimize API calls.
     Uses dedicated history logs to prevent registry pollution.
     """
-    api_key = os.getenv(api_key_env)
-    if not api_key:
-        raise click.ClickException(f"Missing env var {api_key_env}")
+    _, started_at, manifest_entry = start_extract_run(
+        command_name="run-monthly-history",
+        bronze_dir=bronze_dir,
+        registry_path=registry_path,
+        checkpoint_path=checkpoint_path,
+        extra={"api_key_env": api_key_env},
+    )
+    completed_jobs = 0
+    skipped_jobs = 0
+    failed_jobs = 0
+    try:
+        api_key = os.getenv(api_key_env)
+        if not api_key:
+            raise click.ClickException(f"Missing env var {api_key_env}")
 
-    # 1. Setup Infrastructure
-    reg = ExtractionRegistry(registry_path)
-    chk = Checkpoint(checkpoint_path)
-    ex = ComtradeDataExtractor(api_key, bronze_dir)
-    shape = QueryShape(freq_code="M")
+        reg = ExtractionRegistry(registry_path)
+        chk = Checkpoint(checkpoint_path)
+        ex = ComtradeDataExtractor(api_key, bronze_dir)
+        shape = QueryShape(freq_code="M")
 
-    # 2. Generate all Periods (e.g. 202001, 202002 ... 202512)
-    years_list = parse_years(years)
-    all_periods = []
-    for y in years_list:
-        all_periods.extend([f"{y}{str(m).zfill(2)}" for m in range(1, 13)])
+        years_list = parse_years(years)
+        all_periods = []
+        for y in years_list:
+            all_periods.extend([f"{y}{str(m).zfill(2)}" for m in range(1, 13)])
 
-    # 3. Create API-Compliant Batches (Max 5 items per parameter)
-    rep_list = [r.strip() for r in reporters.split(",") if r.strip()]
-    # one reporter chunk per call
-    reporter_batches = [",".join(rep_list[i:i+1]) for i in range(0, len(rep_list), 1)]
-    #
-    period_batches = [",".join(all_periods[i:i+4]) for i in range(0, len(all_periods), 4)]
-    flow_list = [f.strip() for f in flows.split(",") if f.strip()]
+        rep_list = [r.strip() for r in reporters.split(",") if r.strip()]
+        reporter_batches = [",".join(rep_list[i:i+1]) for i in range(0, len(rep_list), 1)]
+        period_batches = [",".join(all_periods[i:i+4]) for i in range(0, len(all_periods), 4)]
+        flow_list = [f.strip() for f in flows.split(",") if f.strip()]
 
-    # 4. Build Execution Plan
-    plan = []
-    for rb in reporter_batches:
-        for pb in period_batches:
-            for flow in flow_list:
-                # Create a unique job key for this exact batch
-                safe_rb = rb.replace(",", "-")
-                safe_pb = pb.replace(",", "-")
-                safe_cmd = commodities.replace(",", "-")
-                job_key = f"batch_hist_{safe_rb}_periods_{safe_pb}_cmd_{safe_cmd}_flow_{flow}"
-                plan.append((job_key, rb, pb, flow))
+        plan = []
+        for rb in reporter_batches:
+            for pb in period_batches:
+                for flow in flow_list:
+                    safe_rb = rb.replace(",", "-")
+                    safe_pb = pb.replace(",", "-")
+                    safe_cmd = commodities.replace(",", "-")
+                    job_key = f"batch_hist_{safe_rb}_periods_{safe_pb}_cmd_{safe_cmd}_flow_{flow}"
+                    plan.append((job_key, rb, pb, flow))
 
-    total = len(plan)
-    logger.info(f"Planned monthly history batches: {total} (api={api_key_env})")
+        total = len(plan)
+        logger.info(f"Planned monthly history batches: {total} (api={api_key_env})")
 
-    # 5. Execute Plan with Retry & Idempotency
-    for idx, (job_key, rb, pb, flow) in enumerate(plan, start=1):
-        meta = {
-            "reporters": rb,
-            "periods": pb,
-            "commodities": commodities,
-            "flow": flow,
-            "api_key_env": api_key_env
-        }
-        chk.write({"position": {"index": idx, "total": total}, "last_attempted": meta})
+        for idx, (job_key, rb, pb, flow) in enumerate(plan, start=1):
+            meta = {
+                "reporters": rb,
+                "periods": pb,
+                "commodities": commodities,
+                "flow": flow,
+                "api_key_env": api_key_env
+            }
+            chk.write({"position": {"index": idx, "total": total}, "last_attempted": meta})
 
-        if reg.is_completed(job_key):
-            logger.info(f"[{idx}/{total}] Skipping (Already Completed) | Reps: {rb} | Periods: {pb} | Flow: {flow}")
-            continue
-
-        logger.info(f"[{idx}/{total}] Extracting | Reps: {rb} | Periods: {pb} | Flow: {flow}")
-
-        try:
-            # We use extract_one which we upgraded previously to handle string batches
-            data = ex.extract_one(rb, pb, commodities, flow, shape)
-            
-            # Save file - we name it according to the batch start/end period
-            p_start, p_end = pb.split(",")[0], pb.split(",")[-1]
-            batch_start_year = p_start[:4]  # Extracts 'YYYY' from 'YYYYMM'
-            ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-            safe_cmd = commodities.replace(",", "-")
-            fn = f"hist_batch_reps_{rb.replace(',','-')}_cmd_{safe_cmd}_periods_{p_start}_to_{p_end}_flow_{flow}_{ts}.json"
-            
-            # Add the year=YYYY folder dynamically to the path
-            save_path = Path(bronze_dir) / f"year={batch_start_year}" / fn
-            save_path.parent.mkdir(parents=True, exist_ok=True)
-            save_path.write_text(json.dumps(data, indent=2))
-
-            reg.record_completed(job_key=job_key, payload=data, filepath=save_path, meta=meta)
-            logger.info(f"  -> Saved {data['_metadata']['record_count']} records to {fn}")
-            
-            time.sleep(rate_delay)
-
-        except QuotaHit as q:
-            reg.record_failed(job_key=job_key, error_type="quota_or_throttle", http_status=q.http_status, message=q.message, meta=meta)
-            if q.http_status == 429:
-                logger.warning(f"429 Throttle. Sleeping {q.wait_seconds}s...")
-                time.sleep(q.wait_seconds)
+            if reg.is_completed(job_key):
+                skipped_jobs += 1
+                logger.info(f"[{idx}/{total}] Skipping (Already Completed) | Reps: {rb} | Periods: {pb} | Flow: {flow}")
                 continue
-            
-            logger.warning(f"Quota Hit! Suggested wait: {q.wait_seconds}s. Message: {q.message}")
-            if exit_on_quota:
-                raise SystemExit(2)
-            time.sleep(q.wait_seconds)
 
-        except Exception as e:
-            logger.error(f"  -> Batch failed: {str(e)}")
-            reg.record_failed(job_key=job_key, error_type="exception", http_status=None, message=str(e), meta=meta)
-            time.sleep(rate_delay) # Don't hammer the API on error
+            logger.info(f"[{idx}/{total}] Extracting | Reps: {rb} | Periods: {pb} | Flow: {flow}")
+
+            try:
+                data = ex.extract_one(rb, pb, commodities, flow, shape)
+                p_start, p_end = pb.split(",")[0], pb.split(",")[-1]
+                batch_start_year = p_start[:4]
+                ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+                safe_cmd = commodities.replace(",", "-")
+                fn = f"hist_batch_reps_{rb.replace(',','-')}_cmd_{safe_cmd}_periods_{p_start}_to_{p_end}_flow_{flow}_{ts}.json"
+
+                save_path = Path(bronze_dir) / f"year={batch_start_year}" / fn
+                save_path.parent.mkdir(parents=True, exist_ok=True)
+                save_path.write_text(json.dumps(data, indent=2))
+
+                reg.record_completed(job_key=job_key, payload=data, filepath=save_path, meta=meta)
+                completed_jobs += 1
+                logger.info(f"  -> Saved {data['_metadata']['record_count']} records to {fn}")
+                time.sleep(rate_delay)
+
+            except QuotaHit as q:
+                failed_jobs += 1
+                reg.record_failed(job_key=job_key, error_type="quota_or_throttle", http_status=q.http_status, message=q.message, meta=meta)
+                if q.http_status == 429:
+                    logger.warning(f"429 Throttle. Sleeping {q.wait_seconds}s...")
+                    time.sleep(q.wait_seconds)
+                    continue
+
+                logger.warning(f"Quota Hit! Suggested wait: {q.wait_seconds}s. Message: {q.message}")
+                if exit_on_quota:
+                    raise SystemExit(2)
+                time.sleep(q.wait_seconds)
+
+            except Exception as e:
+                failed_jobs += 1
+                logger.error(f"  -> Batch failed: {str(e)}")
+                reg.record_failed(job_key=job_key, error_type="exception", http_status=None, message=str(e), meta=meta)
+                time.sleep(rate_delay)
+
+        finish_extract_run(
+            manifest_entry,
+            started_at,
+            status="completed",
+            extra={"planned_jobs": total, "completed_jobs": completed_jobs, "skipped_jobs": skipped_jobs, "failed_jobs": failed_jobs},
+        )
+    except Exception as exc:
+        finish_extract_run(
+            manifest_entry,
+            started_at,
+            status="failed",
+            error_summary=str(exc),
+            extra={"completed_jobs": completed_jobs, "skipped_jobs": skipped_jobs, "failed_jobs": failed_jobs},
+        )
+        raise
 
 
 @cli.command("coverage-heatmap")
-@click.option("--registry-path", default="logs/extraction_registry.jsonl", show_default=True, help="Used for listing reporters/years if you want to include registry gaps.")
-@click.option("--checkpoint-path", default="logs/comtrade_checkpoint.json", show_default=True, help="Used when --source=checkpoint.")
+@click.option("--registry-path", default="logs/comtrade/extraction_registry.jsonl", show_default=True, help="Used for listing reporters/years if you want to include registry gaps.")
+@click.option("--checkpoint-path", default="logs/comtrade/comtrade_checkpoint.json", show_default=True, help="Used when --source=checkpoint.")
 @click.option(
     "--source",
     type=click.Choice(["checkpoint", "zero-count-report", "registry-gaps"], case_sensitive=False),

@@ -55,5 +55,5 @@ from hub_month_confidence as hmc
 left join monthly_total_trade as mtt
   on hmc.period = mtt.period
  and hmc.year_month = mtt.year_month
-left join {{ ref('stg_dim_country') }} as c
+left join {{ ref('dim_country') }} as c
   on hmc.hub_iso3 = c.iso3

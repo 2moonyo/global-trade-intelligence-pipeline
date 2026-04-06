@@ -1,0 +1,24 @@
+
+    
+    select
+      count(*) as failures,
+      count(*) != 0 as should_warn,
+      count(*) != 0 as should_error
+    from (
+      
+    
+  -- Test: mart_country_event_impact must be unique at reporter_country_code + event_id + year_month_key + year_month.
+
+select
+  reporter_country_code,
+  event_id,
+  year_month_key,
+  year_month,
+  count(*) as row_count
+from `capfractal`.`analytics_marts`.`mart_country_event_impact`
+group by 1, 2, 3, 4
+having count(*) > 1
+  
+  
+      
+    ) dbt_internal_test

@@ -1,0 +1,336 @@
+version: 2
+
+models:
+  - name: mart_country_trade_profile
+    description: Monthly country-level trade profile designed for simple storytelling charts and scorecards.
+    columns:
+      - name: reporter_country_code
+        description: ISO3 code of the reporter country used for cross-page dashboard filtering.
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_country')
+                field: iso3
+
+      - name: reporter_country_name
+        description: Standardized display name of the reporter country.
+
+      - name: year_month_key
+        description: Integer month key in YYYYMM format for machine-safe joins and sorting.
+        tests:
+          - not_null
+
+      - name: year_month
+        description: Canonical month label in YYYY-MM format for reporting.
+        tests:
+          - not_null
+
+      - name: month_start_date
+        description: First date of the month used for time series visuals.
+        tests:
+          - not_null
+
+      - name: total_trade_value_usd
+        description: Total monthly trade value in USD at reporter-country grain.
+
+      - name: total_trade_value_label
+        description: Human-readable label for total monthly trade value.
+
+      - name: import_trade_share_pct
+        description: Percentage share of imports in total reporter monthly trade.
+
+      - name: export_trade_share_pct
+        description: Percentage share of exports in total reporter monthly trade.
+
+      - name: trade_orientation
+        description: Business-facing orientation category based on import/export share.
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['export_oriented', 'import_oriented', 'mixed']
+
+  - name: mart_country_partner_dependency
+    description: Monthly reporter-partner dependency mart for partner concentration and ranking stories.
+    columns:
+      - name: reporter_partner_key
+        description: Stable hashed key for reporter-partner combinations.
+        tests:
+          - not_null
+
+      - name: reporter_country_code
+        description: ISO3 code of the reporter country.
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_country')
+                field: iso3
+
+      - name: reporter_country_name
+        description: Standardized display name for reporter country.
+
+      - name: partner_country_code
+        description: ISO3 code of the partner country.
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_country')
+                field: iso3
+
+      - name: partner_country_name
+        description: Standardized display name for partner country.
+
+      - name: year_month_key
+        description: Integer month key in YYYYMM format.
+        tests:
+          - not_null
+
+      - name: partner_trade_value_usd
+        description: Monthly reporter-partner trade value in USD.
+
+      - name: partner_trade_value_label
+        description: Human-readable label for monthly reporter-partner trade value.
+
+      - name: partner_trade_share_pct
+        description: Partner share of the reporter's monthly total trade value.
+
+      - name: partner_rank_by_trade_value
+        description: Rank of partner by monthly trade value within each reporter-month.
+
+      - name: dependency_level
+        description: Categorical dependency tier based on partner share.
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['very_high', 'high', 'moderate', 'low', 'very_low']
+
+      - name: risk_level
+        description: Categorical risk tier combining partner share magnitude and rank.
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['high', 'medium', 'low']
+
+  - name: mart_country_commodity_dependency
+    description: Monthly reporter-commodity dependency mart for commodity concentration and ranking narratives.
+    columns:
+      - name: reporter_country_code
+        description: ISO3 code of the reporter country.
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_country')
+                field: iso3
+
+      - name: commodity_code
+        description: Commodity code aligned to dim_commodity.
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_commodity')
+                field: cmd_code
+
+      - name: commodity_name
+        description: Standardized commodity display name.
+
+      - name: commodity_group
+        description: Business-facing commodity grouping.
+
+      - name: year_month_key
+        description: Integer month key in YYYYMM format.
+        tests:
+          - not_null
+
+      - name: commodity_trade_value_usd
+        description: Monthly reporter-commodity trade value in USD.
+
+      - name: commodity_trade_value_label
+        description: Human-readable label for monthly reporter-commodity trade value.
+
+      - name: commodity_trade_share_pct
+        description: Commodity share of reporter monthly total trade.
+
+      - name: commodity_rank_by_trade_value
+        description: Rank of commodity by trade value within each reporter-month.
+
+      - name: dependency_level
+        description: Categorical commodity dependency tier based on share.
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['very_high', 'high', 'moderate', 'low', 'very_low']
+
+      - name: risk_level
+        description: Categorical risk tier combining commodity share and rank.
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['high', 'medium', 'low']
+
+  - name: mart_country_chokepoint_exposure
+    description: Monthly reporter-chokepoint exposure mart with confidence-aware values and stress context.
+    columns:
+      - name: reporter_country_code
+        description: ISO3 code of the reporter country.
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_country')
+                field: iso3
+
+      - name: chokepoint_id
+        description: Canonical chokepoint identifier aligned to dim_chokepoint.
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_chokepoint')
+                field: chokepoint_id
+
+      - name: chokepoint_name
+        description: Standardized chokepoint display name.
+
+      - name: year_month_key
+        description: Integer month key in YYYYMM format.
+        tests:
+          - not_null
+
+      - name: exposed_trade_value_usd
+        description: Monthly trade value exposed to the chokepoint for HIGH and MEDIUM confidence routes.
+
+      - name: exposed_trade_value_label
+        description: Human-readable label for exposed trade value.
+
+      - name: chokepoint_exposure_pct
+        description: Exposed trade value as percentage of reporter monthly total trade.
+
+      - name: chokepoint_rank_by_exposure
+        description: Rank of chokepoint by exposed trade value within each reporter-month.
+
+      - name: dependency_level
+        description: Categorical chokepoint dependency tier based on exposure percentage.
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['very_high', 'high', 'moderate', 'low', 'very_low']
+
+      - name: risk_level
+        description: Categorical risk tier using exposure percentage, stress context, and event activity.
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['high', 'medium', 'low']
+
+  - name: mart_country_event_impact
+    description: Monthly reporter-event impact mart for before-during-after event windows and exposure context.
+    columns:
+      - name: reporter_country_code
+        description: ISO3 code of the reporter country.
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_country')
+                field: iso3
+
+      - name: event_id
+        description: Event identifier aligned to dim_event.
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_event')
+                field: event_id
+
+      - name: event_name
+        description: Standardized event display name.
+
+      - name: severity_level
+        description: Manual event severity category from dim_event.
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['low', 'medium', 'high', 'critical']
+
+      - name: year_month_key
+        description: Integer month key in YYYYMM format.
+        tests:
+          - not_null
+
+      - name: event_phase_label
+        description: Position of month relative to event window.
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['before', 'during', 'after', 'outside_window']
+
+      - name: event_exposed_trade_value_usd
+        description: Monthly reporter trade value exposed to event-linked chokepoints.
+
+      - name: event_exposure_pct
+        description: Event-exposed trade value as percentage of reporter monthly total trade.
+
+      - name: dependency_level
+        description: Categorical dependency tier based on event exposure percentage.
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['very_high', 'high', 'moderate', 'low', 'very_low']
+
+      - name: risk_level
+        description: Categorical risk tier combining event severity and reporter exposure.
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['high', 'medium', 'low']
+
+  - name: mart_country_risk_summary
+    description: Monthly reporter-level composite risk summary combining concentration, chokepoint exposure, and event pressure.
+    columns:
+      - name: reporter_country_code
+        description: ISO3 code of the reporter country.
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_country')
+                field: iso3
+
+      - name: year_month_key
+        description: Integer month key in YYYYMM format.
+        tests:
+          - not_null
+
+      - name: total_chokepoint_exposure_pct
+        description: Aggregated monthly chokepoint exposure percentage for the reporter.
+
+      - name: partner_concentration_index
+        description: Reporter-month partner concentration score derived from HHI.
+
+      - name: commodity_concentration_index
+        description: Reporter-month commodity concentration score derived from HHI.
+
+      - name: active_exposed_event_count
+        description: Count of active events intersecting reporter exposure in the month.
+
+      - name: composite_risk_score
+        description: Composite 0-100 summary score combining exposure and concentration components.
+
+      - name: dependency_level
+        description: Categorical dependency tier based on monthly chokepoint exposure.
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['very_high', 'high', 'moderate', 'low', 'very_low']
+
+      - name: risk_level
+        description: Categorical risk tier based on composite risk score thresholds.
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['high', 'medium', 'low']

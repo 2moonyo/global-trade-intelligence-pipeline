@@ -21,7 +21,7 @@ help:
 		"make portwatch-cloud-with-bronze Publish PortWatch bronze and silver assets, then load raw.portwatch_monthly." \
 		"make portwatch-refresh-cloud Rebuild PortWatch silver, then publish and load it." \
 		"make comtrade-silver        Build canonical Comtrade silver fact slices and dimensions." \
-		"make comtrade-routing       Build Comtrade routing outputs from the v4 notebook logic." \
+		"make comtrade-routing       Build Comtrade routing outputs from the modular routing package." \
 		"make comtrade-cloud-dry-run Preview the Comtrade silver/routing GCS publish and BigQuery load steps." \
 		"make comtrade-cloud         Publish Comtrade silver/routing assets to GCS and load raw.comtrade_*." \
 		"make comtrade-cloud-dry-run-with-bronze Preview the Comtrade publish/load steps including bronze and audit assets." \
@@ -126,7 +126,7 @@ comtrade-silver:
 	PYTHONPATH="$(PROJECT_ROOT)" UV_CACHE_DIR="$(PROJECT_ROOT)/.uv-cache" uv run python ingest/comtrade/comtrade_silver.py
 
 comtrade-routing:
-	PYTHONPATH="$(PROJECT_ROOT)" UV_CACHE_DIR="$(PROJECT_ROOT)/.uv-cache" uv run python ingest/comtrade/comtrade_routing.py
+	PYTHONPATH="$(PROJECT_ROOT)" UV_CACHE_DIR="$(PROJECT_ROOT)/.uv-cache" uv run python -m ingest.comtrade.routing
 
 comtrade-cloud-dry-run: check-tfvars
 	PYTHONPATH="$(PROJECT_ROOT)" UV_CACHE_DIR="$(PROJECT_ROOT)/.uv-cache" uv run python warehouse/publish_comtrade_to_gcs.py --skip-bronze --dry-run

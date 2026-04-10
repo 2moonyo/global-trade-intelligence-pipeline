@@ -12,12 +12,18 @@ from ingest.comtrade.routing.constants import (
     BASIN_GRAPH_EDGE_ROWS,
     BASIN_HUB_BRIDGE_ROWS,
     CHOKEPOINT_ROWS,
+    CHOKEPOINT_ZONE_OF_INFLUENCE_METERS,
     INLAND_WATER_CODES,
     NON_MARINE_CODES,
     SEA_CODES,
     STRATEGIC_PORT_KEEP,
     TRANSHIPMENT_HUB_ROWS,
     UNKNOWN_CODES,
+)
+from ingest.comtrade.routing.geometry import (
+    buffered_point_wkb_from_lon_lat,
+    linestring_wkb_from_coords,
+    point_wkb_from_lon_lat,
 )
 from ingest.comtrade.routing.helpers import display, infer_port_basin_with_override, normalize_port_name
 from ingest.comtrade.routing.metrics import apply_scenario_weights
@@ -158,6 +164,10 @@ def build_port_dimensions(
             "port_rank",
         ]
     ].copy()
+    dim_country_ports["port_point_wkb"] = dim_country_ports.apply(
+        lambda row: point_wkb_from_lon_lat(row["longitude"], row["latitude"]),
+        axis=1,
+    )
 
     dim_port_basin = (
         dim_country_ports[["port_basin", "world_water_body"]]
@@ -280,7 +290,22 @@ def build_chokepoint_graph(
     basin_edge_path: Path,
     write_dataframe_if_changed,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
-    dim_chokepoint = pd.DataFrame(CHOKEPOINT_ROWS)
+    dim_chokepoint = pd.DataFrame(CHOKEPOINT_ROWS).copy()
+    dim_chokepoint["zone_of_influence_radius_m"] = (
+        dim_chokepoint["chokepoint_name"].map(CHOKEPOINT_ZONE_OF_INFLUENCE_METERS).astype("Int64")
+    )
+    dim_chokepoint["chokepoint_point_wkb"] = dim_chokepoint.apply(
+        lambda row: point_wkb_from_lon_lat(row["longitude"], row["latitude"]),
+        axis=1,
+    )
+    dim_chokepoint["zone_of_influence_wkb"] = dim_chokepoint.apply(
+        lambda row: buffered_point_wkb_from_lon_lat(
+            row["longitude"],
+            row["latitude"],
+            row["zone_of_influence_radius_m"],
+        ),
+        axis=1,
+    )
     write_dataframe_if_changed(dim_chokepoint, chokepoint_dim_path)
 
     basin_graph_edges = pd.DataFrame(BASIN_GRAPH_EDGE_ROWS)
@@ -457,6 +482,7 @@ def build_dim_trade_routes(
         )
 
     dim_trade_routes_export = dim_trade_routes.drop(columns=["route_path_coords"], errors="ignore").copy()
+    dim_trade_routes_export["route_path_wkb"] = dim_trade_routes["route_path_coords"].map(linestring_wkb_from_coords)
     write_dataframe_if_changed(dim_trade_routes_export, dim_output_path)
 
     display(dim_trade_routes["route_mode"].value_counts(dropna=False).rename_axis("route_mode").reset_index(name="route_count"))

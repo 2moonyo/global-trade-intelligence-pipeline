@@ -1,11 +1,11 @@
 version: 2
 
 models:
-  - name: mart_country_trade_profile
-    description: Monthly country-level trade profile designed for simple storytelling charts and scorecards.
+  - name: mart_dashboard_global_trade_overview
+    description: Monthly reporter-level semantic mart built on a full reporter-month coverage grid for Page 1 global trade scorecards, trend lines, top reporters, and reporting completeness visuals.
     columns:
       - name: reporter_country_code
-        description: ISO3 code of the reporter country used for cross-page dashboard filtering.
+        description: ISO3 code retained as a stable reporter key for downstream joins and controlled filters.
         tests:
           - not_null
           - relationships:
@@ -14,52 +14,1082 @@ models:
                 field: iso3
 
       - name: reporter_country_name
-        description: Standardized display name of the reporter country.
-
-      - name: year_month_key
-        description: Integer month key in YYYYMM format for machine-safe joins and sorting.
+        description: Standardized English reporter country name for dashboard display.
         tests:
           - not_null
 
+      - name: reporter_region
+        description: Standardized reporter region from the country dimension.
+
+      - name: reporter_is_eu
+        description: True when the reporter country is an EU member.
+
+      - name: reporter_is_oecd
+        description: True when the reporter country is an OECD member.
+
+      - name: year_month_key
+        description: Integer month key in YYYYMM format for sorting and joins.
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_time')
+                field: period
+
       - name: year_month
-        description: Canonical month label in YYYY-MM format for reporting.
+        description: Canonical month label in YYYY-MM format.
         tests:
           - not_null
 
       - name: month_start_date
-        description: First date of the month used for time series visuals.
+        description: First calendar date of the reporting month used by Looker Studio time series visuals.
         tests:
           - not_null
 
-      - name: total_trade_value_usd
-        description: Total monthly trade value in USD at reporter-country grain.
+      - name: month_label
+        description: Business-readable month label for tooltips and tables.
 
-      - name: total_trade_value_label
-        description: Human-readable label for total monthly trade value.
-
-      - name: import_trade_share_pct
-        description: Percentage share of imports in total reporter monthly trade.
-
-      - name: export_trade_share_pct
-        description: Percentage share of exports in total reporter monthly trade.
-
-      - name: trade_orientation
-        description: Business-facing orientation category based on import/export share.
+      - name: has_reported_trade_data_flag
+        description: True when a canonical upstream reporter-month trade row exists.
         tests:
+          - not_null
           - accepted_values:
               arguments:
-                values: ['export_oriented', 'import_oriented', 'mixed']
+                quote: false
+                values: [true, false]
 
-  - name: mart_country_partner_dependency
-    description: Monthly reporter-partner dependency mart for partner concentration and ranking stories.
-    columns:
-      - name: reporter_partner_key
-        description: Stable hashed key for reporter-partner combinations.
+      - name: missing_from_latest_month_flag
+        description: True when the row belongs to the latest observed month and no canonical upstream trade row exists for that reporter-month.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                quote: false
+                values: [true, false]
+
+      - name: reporters_with_data_in_month
+        description: Count of reporters with upstream trade data in the month, repeated on every row of that month for Looker Studio scorecards.
         tests:
           - not_null
 
-      - name: reporter_country_code
-        description: ISO3 code of the reporter country.
+      - name: expected_reporter_count
+        description: Count of expected reporters in scope, repeated on every row of the month for Looker Studio scorecards.
+        tests:
+          - not_null
+
+      - name: reporting_completeness_pct
+        description: Share of expected reporters that have trade data in the month, expressed as a 0 to 1 ratio.
+        tests:
+          - not_null
+
+      - name: complete_month_flag
+        description: True when all expected reporters have data in the month.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                quote: false
+                values: [true, false]
+
+      - name: latest_complete_month_flag
+        description: True when the row belongs to the most recent month where all expected reporters reported trade data.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                quote: false
+                values: [true, false]
+
+      - name: latest_month_flag
+        description: True when the row belongs to the latest available month in the dataset.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                quote: false
+                values: [true, false]
+
+      - name: total_trade_value_usd
+        description: Total monthly trade value in USD for the reporter across all partners and commodities; null indicates no upstream reporter-month row.
+
+      - name: import_trade_value_usd
+        description: Total monthly import trade value in USD for the reporter; null indicates no upstream reporter-month row.
+
+      - name: export_trade_value_usd
+        description: Total monthly export trade value in USD for the reporter; null indicates no upstream reporter-month row.
+
+      - name: source_row_count
+        description: Count of contributing canonical fact rows represented in the upstream reporter-month aggregate; null indicates no upstream row was present.
+
+      - name: previous_month_available_flag
+        description: True when the reporter has an immediately preceding calendar month available for a valid month-over-month comparison.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                quote: false
+                values: [true, false]
+
+      - name: previous_month_total_trade_value_usd
+        description: Reporter total trade value from the immediately preceding calendar month when that calendar month exists in scope.
+
+      - name: previous_month_import_trade_value_usd
+        description: Reporter import trade value from the immediately preceding calendar month when that calendar month exists in scope.
+
+      - name: previous_month_export_trade_value_usd
+        description: Reporter export trade value from the immediately preceding calendar month when that calendar month exists in scope.
+
+      - name: total_trade_value_mom_change_usd
+        description: Absolute month-over-month change in reporter total trade value in USD.
+
+      - name: import_trade_value_mom_change_usd
+        description: Absolute month-over-month change in reporter import trade value in USD.
+
+      - name: export_trade_value_mom_change_usd
+        description: Absolute month-over-month change in reporter export trade value in USD.
+
+      - name: total_trade_value_mom_change_pct
+        description: Percentage month-over-month change in reporter total trade value.
+
+      - name: import_trade_value_mom_change_pct
+        description: Percentage month-over-month change in reporter import trade value.
+
+      - name: export_trade_value_mom_change_pct
+        description: Percentage month-over-month change in reporter export trade value.
+
+      - name: total_trade_value_label
+        description: Compact display label for total trade value, for example 8.24B or 645.00M.
+
+      - name: import_trade_value_label
+        description: Compact display label for import trade value.
+
+      - name: export_trade_value_label
+        description: Compact display label for export trade value.
+
+      - name: total_trade_value_mom_change_pct_label
+        description: Compact display label for total trade month-over-month percentage change.
+
+      - name: import_trade_value_mom_change_pct_label
+        description: Compact display label for import trade month-over-month percentage change.
+
+      - name: export_trade_value_mom_change_pct_label
+        description: Compact display label for export trade month-over-month percentage change.
+
+      - name: reporter_rank_by_total_trade_in_month
+        description: Reporter rank by total trade value within each month for rows with upstream trade data, with rank 1 representing the largest trader.
+
+      - name: top_5_reporter_in_month_flag
+        description: True when the reporter ranks in the monthly top 5 by total trade value.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                quote: false
+                values: [true, false]
+
+  - name: mart_chokepoint_daily_signal
+    description: Daily semantic mart for Page 2 chokepoint operational visuals, exposing daily throughput and vessel-count signals at date-day and chokepoint grain while preserving missing-data visibility.
+    columns:
+      - name: date_day
+        description: Calendar day field used directly in Looker Studio date filters and daily trend charts.
+        tests:
+          - not_null
+
+      - name: month_start_date
+        description: First calendar day of the row's month, retained for mixed day-level and month-level filtering without changing grain.
+        tests:
+          - not_null
+
+      - name: year_month
+        description: Canonical month label in YYYY-MM format for display and sorting support.
+        tests:
+          - not_null
+
+      - name: chokepoint_id
+        description: Stable canonical chokepoint identifier for controlled filters and joins.
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_chokepoint')
+                field: chokepoint_id
+
+      - name: chokepoint_name
+        description: Standardized chokepoint display name for chart dimensions and filter controls.
+        tests:
+          - not_null
+
+      - name: portwatch_source_chokepoint_id
+        description: Source PortWatch chokepoint identifier retained for lineage and auditability.
+
+      - name: has_portwatch_daily_data_flag
+        description: True when the day and chokepoint have an observed PortWatch source row.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                quote: false
+                values: [0, 1]
+
+      - name: throughput_metric
+        description: Daily throughput proxy from PortWatch capacity.
+
+      - name: vessel_count_metric
+        description: Daily total vessel count from PortWatch.
+
+      - name: vessel_size_index
+        description: Daily average vessel size proxy computed as throughput divided by vessel count.
+
+      - name: priority_vessel_share
+        description: Chokepoint-specific priority vessel class share aligned to the monthly stress logic.
+
+      - name: observed_days_in_7d_window
+        description: Count of observed prior days contributing to the 7-day trailing baseline.
+
+      - name: observed_days_in_30d_window
+        description: Count of observed prior days contributing to the 30-day trailing baseline.
+
+      - name: rolling_mean_7d
+        description: Prior 7-calendar-day average of throughput_metric, excluding the current day.
+
+      - name: rolling_mean_30d
+        description: Prior 30-calendar-day average of throughput_metric, excluding the current day.
+
+      - name: rolling_stddev_30d
+        description: Prior 30-calendar-day population standard deviation of throughput_metric.
+
+      - name: z_score_rolling_30d
+        description: Current throughput deviation from the prior 30-day baseline, expressed in standard deviations.
+
+      - name: vessel_count_rolling_mean_7d
+        description: Prior 7-calendar-day average of vessel_count_metric.
+
+      - name: vessel_count_rolling_mean_30d
+        description: Prior 30-calendar-day average of vessel_count_metric.
+
+      - name: vessel_count_rolling_stddev_30d
+        description: Prior 30-calendar-day population standard deviation of vessel_count_metric.
+
+      - name: vessel_count_z_score_rolling_30d
+        description: Current vessel-count deviation from the prior 30-day baseline, expressed in standard deviations.
+
+      - name: signal_index_rolling_30d
+        description: Simple daily composite signal index averaging throughput and vessel-count 30-day z-scores.
+
+      - name: pct_change_1d
+        description: Percentage throughput change versus the prior calendar day when both days have observed values.
+
+      - name: pct_change_7d
+        description: Percentage throughput change versus seven calendar days earlier when both days have observed values.
+
+      - name: latest_observed_date_day
+        description: Latest day on which the chokepoint has an observed PortWatch daily value.
+
+      - name: days_since_latest_observation
+        description: Number of calendar days between the mart's latest day and the chokepoint's latest observed day.
+
+      - name: latest_day_flag
+        description: True when the row belongs to the latest day present in the PortWatch daily calendar.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                quote: false
+                values: [true, false]
+
+      - name: latest_observed_day_flag
+        description: True when the row belongs to the chokepoint's most recent observed day with real PortWatch data.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                quote: false
+                values: [true, false]
+
+      - name: direction_of_change
+        description: Simple direction label comparing current throughput to the prior calendar day.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['NO_DATA', 'NO_PRIOR_DAY', 'UP', 'DOWN', 'FLAT']
+
+      - name: alert_band
+        description: Daily throughput z-score severity band used for Page 2 tables and conditional formatting.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['NO_DATA', 'INSUFFICIENT_BASELINE', 'SEVERE', 'ELEVATED', 'NORMAL']
+
+  - name: mart_global_daily_market_signal
+    description: Daily scorecard semantic mart for Page 2, combining aggregated chokepoint daily signals with daily Brent context at one row per date-day.
+    columns:
+      - name: date_day
+        description: Calendar day field used directly in Looker Studio date filters and scorecard trend ranges.
+        tests:
+          - not_null
+
+      - name: month_start_date
+        description: First day of the containing month retained for daily-to-month drill context.
+        tests:
+          - not_null
+
+      - name: year_month_label
+        description: YYYY-MM display label for daily tables and tooltips.
+        tests:
+          - not_null
+
+      - name: observed_chokepoint_count
+        description: Number of chokepoints with observed PortWatch data on the day.
+        tests:
+          - not_null
+
+      - name: expected_chokepoint_count
+        description: Number of chokepoints expected in the daily PortWatch scope, repeated on every row for scorecards.
+        tests:
+          - not_null
+
+      - name: daily_coverage_ratio
+        description: Share of expected chokepoints with observed PortWatch data on the day, expressed as a 0 to 1 ratio.
+
+      - name: daily_source_coverage_status
+        description: Coverage status band highlighting whether the daily PortWatch feed is complete, partial, or absent for the day.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['NO_PORTWATCH_DATA', 'FULL_COVERAGE', 'PARTIAL_COVERAGE']
+
+      - name: avg_chokepoint_signal_index
+        description: Average daily composite signal across observed chokepoints.
+
+      - name: avg_abs_chokepoint_signal_index
+        description: Average absolute daily composite signal across observed chokepoints.
+
+      - name: max_abs_chokepoint_signal_index
+        description: Maximum absolute daily composite signal across observed chokepoints.
+
+      - name: stressed_chokepoint_count
+        description: Count of observed chokepoints with an absolute composite signal of at least one standard deviation.
+
+      - name: system_stress_level
+        description: Daily system severity band derived from the strongest observed chokepoint signal magnitude.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['NO_PORTWATCH_DATA', 'INSUFFICIENT_BASELINE', 'SEVERE', 'ELEVATED', 'NORMAL']
+
+      - name: brent_price_usd
+        description: Brent benchmark price in USD per barrel on the observed trading day.
+
+      - name: brent_price_change_usd_1_observed_day
+        description: Brent absolute price change versus the prior observed trading day.
+
+      - name: brent_return_pct_1_observed_day
+        description: Brent percentage price change versus the prior observed trading day.
+
+      - name: brent_price_change_usd_7_observed_days
+        description: Brent absolute price change versus seven prior observed trading days.
+
+      - name: brent_return_pct_7_observed_days
+        description: Brent percentage price change versus seven prior observed trading days.
+
+      - name: brent_rolling_mean_7_observed_days
+        description: Brent average price across the prior seven observed trading days, excluding the current day.
+
+      - name: brent_rolling_mean_30_observed_days
+        description: Brent average price across the prior thirty observed trading days, excluding the current day.
+
+      - name: brent_rolling_stddev_30_observed_days
+        description: Brent population standard deviation across the prior thirty observed trading days.
+
+      - name: brent_z_score_rolling_30_observed_days
+        description: Brent price deviation from the prior thirty observed trading day baseline, expressed in standard deviations.
+
+      - name: has_brent_price_data_flag
+        description: True when Brent has an observed trading-day value on the date.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                quote: false
+                values: [true, false]
+
+      - name: latest_day_flag
+        description: True when the row belongs to the latest day with observed PortWatch system data.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                quote: false
+                values: [true, false]
+
+  - name: mart_chokepoint_monthly_stress
+    description: Monthly semantic mart for Page 3, exposing chokepoint-level PortWatch stress, historical baselines, month-over-month change, freshness, and event overlay fields at one row per month and chokepoint.
+    columns:
+      - name: month_start_date
+        description: First calendar day of the observed month used directly in Looker Studio month filters and trend charts.
+        tests:
+          - not_null
+
+      - name: year_month
+        description: Canonical month key in YYYY-MM format for display and sorting support.
+        tests:
+          - not_null
+
+      - name: chokepoint_id
+        description: Stable canonical chokepoint identifier for controlled filters and joins.
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_chokepoint')
+                field: chokepoint_id
+
+      - name: chokepoint_name
+        description: Standardized chokepoint display name for Looker Studio charts, tables, and filter controls.
+        tests:
+          - not_null
+
+      - name: portwatch_source_chokepoint_id
+        description: Source PortWatch chokepoint identifier retained for lineage and backfill audits.
+
+      - name: throughput_metric
+        description: Monthly PortWatch throughput proxy sourced from avg_capacity.
+
+      - name: vessel_count_metric
+        description: Monthly PortWatch vessel-count proxy sourced from avg_n_total.
+
+      - name: priority_vessel_share
+        description: Chokepoint-specific priority vessel share aligned to the monthly stress logic.
+
+      - name: vessel_size_index
+        description: Monthly average vessel-size proxy computed as throughput_metric divided by vessel_count_metric.
+
+      - name: historical_baseline_observation_count
+        description: Count of prior observed months contributing to the point-in-time expanding historical baseline.
+
+      - name: baseline_mean_throughput_historical
+        description: Expanding point-in-time baseline mean throughput using only prior observed months.
+
+      - name: baseline_stddev_throughput_historical
+        description: Expanding point-in-time baseline throughput standard deviation using only prior observed months.
+
+      - name: baseline_mean_vessel_count_historical
+        description: Expanding point-in-time baseline mean vessel count using only prior observed months.
+
+      - name: baseline_stddev_vessel_count_historical
+        description: Expanding point-in-time baseline vessel-count standard deviation using only prior observed months.
+
+      - name: baseline_mean_vessel_size_historical
+        description: Expanding point-in-time baseline mean vessel size using only prior observed months.
+
+      - name: baseline_stddev_vessel_size_historical
+        description: Expanding point-in-time baseline vessel-size standard deviation using only prior observed months.
+
+      - name: z_score_historical
+        description: Monthly throughput deviation from the expanding historical baseline, expressed in standard deviations.
+
+      - name: z_score_count_historical
+        description: Monthly vessel-count deviation from the expanding historical baseline, expressed in standard deviations.
+
+      - name: z_score_vessel_size_historical
+        description: Monthly vessel-size deviation from the expanding historical baseline, expressed in standard deviations.
+
+      - name: stress_index
+        description: Monthly blended stress index averaging throughput and vessel-count historical z-scores.
+
+      - name: stress_index_weighted
+        description: Monthly blended stress index weighted by the chokepoint-specific priority vessel share.
+
+      - name: rolling_6m_baseline_observation_count
+        description: Count of prior observed months contributing to the rolling 6-month comparison baseline.
+
+      - name: baseline_mean_throughput_rolling_6m
+        description: Rolling 6-month mean throughput using only prior observed months.
+
+      - name: baseline_stddev_throughput_rolling_6m
+        description: Rolling 6-month throughput standard deviation using only prior observed months.
+
+      - name: baseline_mean_vessel_count_rolling_6m
+        description: Rolling 6-month mean vessel count using only prior observed months.
+
+      - name: baseline_stddev_vessel_count_rolling_6m
+        description: Rolling 6-month vessel-count standard deviation using only prior observed months.
+
+      - name: baseline_mean_vessel_size_rolling_6m
+        description: Rolling 6-month mean vessel size using only prior observed months.
+
+      - name: baseline_stddev_vessel_size_rolling_6m
+        description: Rolling 6-month vessel-size standard deviation using only prior observed months.
+
+      - name: z_score_rolling_6m
+        description: Monthly throughput deviation from the prior 6 observed months, expressed in standard deviations.
+
+      - name: z_score_count_rolling_6m
+        description: Monthly vessel-count deviation from the prior 6 observed months, expressed in standard deviations.
+
+      - name: z_score_vessel_size_rolling_6m
+        description: Monthly vessel-size deviation from the prior 6 observed months, expressed in standard deviations.
+
+      - name: stress_index_rolling_6m
+        description: Monthly blended stress index using the rolling 6-month throughput and vessel-count baselines.
+
+      - name: stress_index_weighted_rolling_6m
+        description: Monthly weighted stress index using the same rolling 6-month baseline and priority-vessel weighting logic.
+
+      - name: previous_month_available_flag
+        description: True when the immediately prior calendar month exists for the chokepoint and is safe for month-over-month comparison.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                quote: false
+                values: [true, false]
+
+      - name: previous_month_throughput_metric
+        description: Throughput metric from the immediately prior calendar month when a valid month-over-month comparison exists.
+
+      - name: previous_month_vessel_count_metric
+        description: Vessel-count metric from the immediately prior calendar month when a valid month-over-month comparison exists.
+
+      - name: previous_month_stress_index
+        description: Stress index from the immediately prior calendar month when a valid month-over-month comparison exists.
+
+      - name: previous_month_stress_index_weighted
+        description: Weighted stress index from the immediately prior calendar month when a valid month-over-month comparison exists.
+
+      - name: throughput_mom_change
+        description: Absolute month-over-month change in the throughput metric.
+
+      - name: throughput_mom_change_pct
+        description: Percentage month-over-month change in the throughput metric.
+
+      - name: vessel_count_mom_change
+        description: Absolute month-over-month change in the vessel-count metric.
+
+      - name: vessel_count_mom_change_pct
+        description: Percentage month-over-month change in the vessel-count metric.
+
+      - name: stress_index_mom_change
+        description: Absolute month-over-month change in stress_index.
+
+      - name: stress_index_weighted_mom_change
+        description: Absolute month-over-month change in stress_index_weighted.
+
+      - name: latest_observed_month_start_date
+        description: Most recent month_start_date where the chokepoint has an observed PortWatch monthly row.
+        tests:
+          - not_null
+
+      - name: months_since_latest_observation
+        description: Number of calendar months between the mart's latest month and the chokepoint's latest observed month.
+        tests:
+          - not_null
+
+      - name: latest_month_flag
+        description: True when the row belongs to the latest available month in the monthly stress mart.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                quote: false
+                values: [true, false]
+
+      - name: latest_observed_month_flag
+        description: True when the row belongs to the chokepoint's most recent observed month.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                quote: false
+                values: [true, false]
+
+      - name: active_event_count
+        description: Count of distinct active events linked to the chokepoint in the month, aggregated before joining to preserve grain.
+        tests:
+          - not_null
+
+      - name: event_active_flag
+        description: True when one or more active events are linked to the chokepoint in the month.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                quote: false
+                values: [true, false]
+
+      - name: max_active_event_severity
+        description: Highest active-event severity weight linked to the chokepoint in the month.
+
+      - name: avg_active_event_severity
+        description: Average active-event severity weight linked to the chokepoint in the month.
+
+  - name: mart_global_monthly_system_stress_summary
+    description: Monthly scorecard semantic mart for Page 3 and executive monthly system snapshots, aggregating monthly chokepoint stress signals to one row per month.
+    columns:
+      - name: month_start_date
+        description: First calendar day of the month used directly in Looker Studio month filters and scorecards.
+        tests:
+          - not_null
+
+      - name: year_month
+        description: Canonical month key in YYYY-MM format for display and sorting support.
+        tests:
+          - not_null
+
+      - name: observed_chokepoint_count
+        description: Number of chokepoints with observed monthly PortWatch stress rows in the month.
+        tests:
+          - not_null
+
+      - name: expected_chokepoint_count
+        description: Number of chokepoints in the full monthly stress scope, repeated on every row for scorecards.
+        tests:
+          - not_null
+
+      - name: monthly_coverage_ratio
+        description: Share of chokepoints with observed monthly stress rows in the month, expressed as a 0 to 1 ratio.
+
+      - name: monthly_source_coverage_status
+        description: Coverage status band showing whether the monthly PortWatch scope is full, partial, or absent for the month.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['NO_PORTWATCH_DATA', 'FULL_COVERAGE', 'PARTIAL_COVERAGE']
+
+      - name: avg_stress_index
+        description: Average monthly blended stress index across observed chokepoints.
+
+      - name: avg_stress_index_weighted
+        description: Average monthly weighted stress index across observed chokepoints.
+
+      - name: avg_abs_z_score_historical
+        description: Average absolute historical throughput z-score across observed chokepoints in the month.
+
+      - name: max_abs_z_score_historical
+        description: Maximum absolute historical throughput z-score across observed chokepoints in the month.
+
+      - name: stressed_chokepoint_count
+        description: Count of chokepoints with an absolute historical throughput z-score of at least one standard deviation in the month.
+
+      - name: event_impacted_chokepoint_count
+        description: Count of chokepoints with at least one active linked event in the month.
+
+      - name: system_stress_level
+        description: Monthly system severity band derived from the strongest observed historical z-score magnitude.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['NO_PORTWATCH_DATA', 'INSUFFICIENT_BASELINE', 'SEVERE', 'ELEVATED', 'NORMAL']
+
+      - name: latest_month_flag
+        description: True when the row belongs to the latest available month in the monthly system summary mart.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                quote: false
+                values: [true, false]
+
+  - name: mart_chokepoint_monthly_stress_detail
+    description: Monthly support mart for Page 1 ranked chokepoint detail tables, exposing the existing monthly chokepoint stress signals with simple ranking, hotspot banding, and movement labels at one row per month and chokepoint.
+    columns:
+      - name: month_start_date
+        description: First calendar day of the month used directly in Looker Studio month filters and table date controls.
+        tests:
+          - not_null
+
+      - name: year_month
+        description: Canonical month key in YYYY-MM format for display and sorting support.
+        tests:
+          - not_null
+
+      - name: month_label
+        description: Business-readable month label for tooltips and compact tables.
+
+      - name: chokepoint_id
+        description: Stable canonical chokepoint identifier for filtering and joins.
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_chokepoint')
+                field: chokepoint_id
+
+      - name: chokepoint_name
+        description: Standardized chokepoint display name for executive tables and filters.
+        tests:
+          - not_null
+
+      - name: z_score_historical
+        description: Monthly throughput deviation from the expanding historical baseline, expressed in standard deviations.
+
+      - name: abs_z_score_historical
+        description: Absolute historical throughput z-score used for hotspot ranking and severity comparisons. This is the raw uncapped analytical field.
+
+      - name: z_score_historical_capped
+        description: Display-oriented signed historical z-score capped to the range [-3, 3] for executive charts while preserving the raw z_score_historical field for audit use.
+
+      - name: stress_deviation_score_capped
+        description: Display-oriented absolute historical z-score capped at 3 for more stable latest-hotspot bar charts.
+
+      - name: stress_deviation_index_100
+        description: Executive-friendly 0 to 100 display index derived from the capped absolute historical z-score, where 100 represents an absolute z-score of 3 or above.
+
+      - name: stress_index
+        description: Monthly blended stress index averaging throughput and vessel-count historical z-scores.
+
+      - name: stress_index_weighted
+        description: Monthly blended stress index weighted by the chokepoint-specific priority vessel share.
+
+      - name: previous_month_available_flag
+        description: True when the immediately prior calendar month exists for the chokepoint and is safe for month-over-month comparison.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                quote: false
+                values: [true, false]
+
+      - name: previous_month_stress_index
+        description: Stress index from the immediately prior calendar month when a valid month-over-month comparison exists.
+
+      - name: previous_month_stress_index_weighted
+        description: Weighted stress index from the immediately prior calendar month when a valid month-over-month comparison exists.
+
+      - name: previous_month_z_score_historical
+        description: Historical throughput z-score from the immediately prior calendar month when a valid month-over-month comparison exists.
+
+      - name: stress_index_mom_change
+        description: Absolute month-over-month change in stress_index.
+
+      - name: stress_index_weighted_mom_change
+        description: Absolute month-over-month change in stress_index_weighted.
+
+      - name: abs_z_score_historical_mom_change
+        description: Absolute month-over-month change in the magnitude of the historical throughput z-score.
+
+      - name: latest_month_flag
+        description: True when the row belongs to the latest available month in the monthly chokepoint stress source.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                quote: false
+                values: [true, false]
+
+      - name: event_active_flag
+        description: True when one or more active events are linked to the chokepoint in the month.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                quote: false
+                values: [true, false]
+
+      - name: active_event_count
+        description: Count of distinct active events linked to the chokepoint in the month.
+        tests:
+          - not_null
+
+      - name: stress_hotspot_band
+        description: Existing severity band for the current month based on the absolute historical throughput z-score, retained for backward compatibility.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['INSUFFICIENT_BASELINE', 'SEVERE', 'ELEVATED', 'NORMAL']
+
+      - name: stress_severity_band
+        description: Display-oriented severity band for executive tables and conditional formatting, adding an EXTREME tier for absolute historical z-scores of 3 or above.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['INSUFFICIENT_BASELINE', 'EXTREME', 'SEVERE', 'ELEVATED', 'NORMAL']
+
+      - name: stress_direction
+        description: Executive movement label showing whether stress severity increased, decreased, or held flat versus the prior calendar month.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['NO_PRIOR_MONTH', 'INSUFFICIENT_BASELINE', 'MORE_STRESSED', 'LESS_STRESSED', 'UNCHANGED']
+
+      - name: stress_rank_in_month
+        description: Month-level rank of the chokepoint by absolute historical z-score, using weighted stress as a secondary tie-breaker.
+
+      - name: top_5_stressed_chokepoint_flag
+        description: True when the chokepoint ranks in the top 5 stressed chokepoints for the month among rows with valid historical z-scores.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                quote: false
+                values: [true, false]
+
+  - name: mart_trade_month_coverage_status
+    description: Monthly support mart for Page 1 executive trade completeness framing, collapsing the repeated month-level coverage fields from the reporter-month trade overview mart into one row per month.
+    columns:
+      - name: month_start_date
+        description: First calendar day of the month used directly in Looker Studio month filters and trend charts.
+        tests:
+          - not_null
+
+      - name: year_month_key
+        description: Integer month key in YYYYMM format for sorting and joins.
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_time')
+                field: period
+
+      - name: year_month
+        description: Canonical month key in YYYY-MM format.
+        tests:
+          - not_null
+
+      - name: month_label
+        description: Business-readable month label for scorecards and tooltips.
+
+      - name: reporters_with_data_in_month
+        description: Count of reporters with a canonical upstream trade row in the month.
+        tests:
+          - not_null
+
+      - name: expected_reporter_count
+        description: Count of expected reporters in scope for the month.
+        tests:
+          - not_null
+
+      - name: missing_reporter_count
+        description: Count of expected reporters that do not have a canonical upstream trade row in the month.
+        tests:
+          - not_null
+
+      - name: missing_reporter_pct
+        description: Share of expected reporters missing trade data in the month, expressed as a 0 to 1 ratio.
+
+      - name: reporting_completeness_pct
+        description: Share of expected reporters that have trade data in the month, expressed as a 0 to 1 ratio.
+        tests:
+          - not_null
+
+      - name: coverage_gap_flag
+        description: True when one or more expected reporters are missing trade data in the month.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                quote: false
+                values: [true, false]
+
+      - name: trade_reporting_status
+        description: Coverage status band describing whether the month is fully reported, partially reported, or has no trade rows at all.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['NO_TRADE_DATA', 'FULL_COVERAGE', 'PARTIAL_COVERAGE']
+
+      - name: complete_month_flag
+        description: True when all expected reporters have trade data in the month.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                quote: false
+                values: [true, false]
+
+      - name: latest_complete_month_flag
+        description: True when the row belongs to the most recent month with complete reporter coverage.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                quote: false
+                values: [true, false]
+
+      - name: latest_month_flag
+        description: True when the row belongs to the latest available trade month in the source mart.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                quote: false
+                values: [true, false]
+
+      - name: latest_complete_month_start_date
+        description: Most recent month_start_date where all expected reporters had trade data, repeated on every row for executive scorecards.
+
+      - name: latest_complete_year_month
+        description: Canonical YYYY-MM label for the most recent complete trade month, repeated on every row for executive scorecards.
+
+      - name: months_between_latest_and_latest_complete
+        description: Number of calendar months between the latest trade month and the latest complete trade month.
+
+  - name: mart_executive_monthly_system_snapshot
+    description: Monthly support mart for Page 1 executive system framing, combining monthly system stress summary fields with hotspot and simple month-over-month context at one row per month.
+    columns:
+      - name: month_start_date
+        description: First calendar day of the month used directly in Looker Studio month filters and trend charts.
+        tests:
+          - not_null
+
+      - name: year_month
+        description: Canonical month key in YYYY-MM format.
+        tests:
+          - not_null
+
+      - name: month_label
+        description: Business-readable month label for scorecards and tooltips.
+
+      - name: observed_chokepoint_count
+        description: Number of chokepoints with observed monthly PortWatch stress rows in the month.
+        tests:
+          - not_null
+
+      - name: expected_chokepoint_count
+        description: Number of chokepoints expected in the monthly stress scope.
+        tests:
+          - not_null
+
+      - name: missing_chokepoint_count
+        description: Count of chokepoints missing monthly stress observations in the month.
+        tests:
+          - not_null
+
+      - name: monthly_coverage_ratio
+        description: Share of expected chokepoints with observed monthly stress rows in the month, expressed as a 0 to 1 ratio.
+
+      - name: monthly_source_coverage_status
+        description: Coverage status band showing whether the monthly PortWatch scope is full, partial, or absent for the month.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['NO_PORTWATCH_DATA', 'FULL_COVERAGE', 'PARTIAL_COVERAGE']
+
+      - name: coverage_gap_flag
+        description: True when one or more chokepoints are missing monthly stress observations in the month.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                quote: false
+                values: [true, false]
+
+      - name: avg_stress_index
+        description: Average monthly blended stress index across observed chokepoints.
+
+      - name: avg_stress_index_weighted
+        description: Average monthly weighted stress index across observed chokepoints.
+
+      - name: avg_abs_z_score_historical
+        description: Average absolute historical throughput z-score across observed chokepoints in the month.
+
+      - name: max_abs_z_score_historical
+        description: Maximum absolute historical throughput z-score across observed chokepoints in the month.
+
+      - name: stressed_chokepoint_count
+        description: Count of chokepoints with an absolute historical throughput z-score of at least one standard deviation in the month.
+
+      - name: event_impacted_chokepoint_count
+        description: Count of chokepoints with at least one active linked event in the month.
+
+      - name: system_stress_level
+        description: Monthly system severity band derived from the strongest observed historical z-score magnitude.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['NO_PORTWATCH_DATA', 'INSUFFICIENT_BASELINE', 'SEVERE', 'ELEVATED', 'NORMAL']
+
+      - name: previous_month_available_flag
+        description: True when the immediately prior calendar month exists and is safe for month-over-month comparison.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                quote: false
+                values: [true, false]
+
+      - name: previous_month_avg_stress_index
+        description: Average stress index from the immediately prior calendar month when a valid month-over-month comparison exists.
+
+      - name: previous_month_avg_stress_index_weighted
+        description: Average weighted stress index from the immediately prior calendar month when a valid month-over-month comparison exists.
+
+      - name: previous_month_stressed_chokepoint_count
+        description: Stressed chokepoint count from the immediately prior calendar month when a valid month-over-month comparison exists.
+
+      - name: previous_month_event_impacted_chokepoint_count
+        description: Event-impacted chokepoint count from the immediately prior calendar month when a valid month-over-month comparison exists.
+
+      - name: avg_stress_index_mom_change
+        description: Absolute month-over-month change in avg_stress_index.
+
+      - name: avg_stress_index_weighted_mom_change
+        description: Absolute month-over-month change in avg_stress_index_weighted.
+
+      - name: stressed_chokepoint_count_mom_change
+        description: Absolute month-over-month change in stressed_chokepoint_count.
+
+      - name: event_impacted_chokepoint_count_mom_change
+        description: Absolute month-over-month change in event_impacted_chokepoint_count.
+
+      - name: top_stressed_chokepoint_id
+        description: Canonical chokepoint identifier for the month’s highest absolute historical stress hotspot when one exists.
+        tests:
+          - relationships:
+              arguments:
+                to: ref('dim_chokepoint')
+                field: chokepoint_id
+
+      - name: top_stressed_chokepoint_name
+        description: Chokepoint name for the month’s highest absolute historical stress hotspot when one exists.
+
+      - name: top_stressed_chokepoint_z_score_historical
+        description: Signed historical throughput z-score for the month’s top stressed chokepoint.
+
+      - name: top_stressed_chokepoint_abs_z_score_historical
+        description: Absolute historical throughput z-score used to rank the month’s top stressed chokepoint.
+
+      - name: top_stressed_chokepoint_stress_index
+        description: Blended stress index for the month’s top stressed chokepoint.
+
+      - name: top_stressed_chokepoint_stress_index_weighted
+        description: Weighted blended stress index for the month’s top stressed chokepoint.
+
+      - name: top_stressed_chokepoint_event_active_flag
+        description: True when the month’s top stressed chokepoint also has one or more active linked events.
+
+      - name: top_stressed_chokepoint_active_event_count
+        description: Number of active linked events on the month’s top stressed chokepoint.
+
+      - name: top_stressed_chokepoint_max_active_event_severity
+        description: Maximum active-event severity weight on the month’s top stressed chokepoint.
+
+      - name: latest_month_flag
+        description: True when the row belongs to the latest available month in the monthly system summary source.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                quote: false
+                values: [true, false]
+
+  - name: mart_reporter_partner_commodity_month_enriched
+    description: Monthly Page 4 semantic mart for reporter-partner-commodity exposure detail, keeping one explicit row per reporter, partner, commodity, month, and chokepoint so Looker Studio tables can show who is exposed and through which flows.
+    columns:
+      - name: reporter_iso3
+        description: ISO3 code of the reporting country.
         tests:
           - not_null
           - relationships:
@@ -68,9 +1098,9 @@ models:
                 field: iso3
 
       - name: reporter_country_name
-        description: Standardized display name for reporter country.
+        description: Standardized reporter country name for table labels and filters.
 
-      - name: partner_country_code
+      - name: partner_iso3
         description: ISO3 code of the partner country.
         tests:
           - not_null
@@ -80,53 +1110,10 @@ models:
                 field: iso3
 
       - name: partner_country_name
-        description: Standardized display name for partner country.
+        description: Standardized partner country name for partner-context visuals and filters.
 
-      - name: year_month_key
-        description: Integer month key in YYYYMM format.
-        tests:
-          - not_null
-
-      - name: partner_trade_value_usd
-        description: Monthly reporter-partner trade value in USD.
-
-      - name: partner_trade_value_label
-        description: Human-readable label for monthly reporter-partner trade value.
-
-      - name: partner_trade_share_pct
-        description: Partner share of the reporter's monthly total trade value.
-
-      - name: partner_rank_by_trade_value
-        description: Rank of partner by monthly trade value within each reporter-month.
-
-      - name: dependency_level
-        description: Categorical dependency tier based on partner share.
-        tests:
-          - accepted_values:
-              arguments:
-                values: ['very_high', 'high', 'moderate', 'low', 'very_low']
-
-      - name: risk_level
-        description: Categorical risk tier combining partner share magnitude and rank.
-        tests:
-          - accepted_values:
-              arguments:
-                values: ['high', 'medium', 'low']
-
-  - name: mart_country_commodity_dependency
-    description: Monthly reporter-commodity dependency mart for commodity concentration and ranking narratives.
-    columns:
-      - name: reporter_country_code
-        description: ISO3 code of the reporter country.
-        tests:
-          - not_null
-          - relationships:
-              arguments:
-                to: ref('dim_country')
-                field: iso3
-
-      - name: commodity_code
-        description: Commodity code aligned to dim_commodity.
+      - name: cmd_code
+        description: Commodity code at the conformed commodity grain.
         tests:
           - not_null
           - relationships:
@@ -135,56 +1122,15 @@ models:
                 field: cmd_code
 
       - name: commodity_name
-        description: Standardized commodity display name.
+        description: Business-readable commodity name.
 
-      - name: commodity_group
-        description: Business-facing commodity grouping.
-
-      - name: year_month_key
-        description: Integer month key in YYYYMM format.
+      - name: month_start_date
+        description: First calendar day of the month used by Looker Studio month filters.
         tests:
           - not_null
-
-      - name: commodity_trade_value_usd
-        description: Monthly reporter-commodity trade value in USD.
-
-      - name: commodity_trade_value_label
-        description: Human-readable label for monthly reporter-commodity trade value.
-
-      - name: commodity_trade_share_pct
-        description: Commodity share of reporter monthly total trade.
-
-      - name: commodity_rank_by_trade_value
-        description: Rank of commodity by trade value within each reporter-month.
-
-      - name: dependency_level
-        description: Categorical commodity dependency tier based on share.
-        tests:
-          - accepted_values:
-              arguments:
-                values: ['very_high', 'high', 'moderate', 'low', 'very_low']
-
-      - name: risk_level
-        description: Categorical risk tier combining commodity share and rank.
-        tests:
-          - accepted_values:
-              arguments:
-                values: ['high', 'medium', 'low']
-
-  - name: mart_country_chokepoint_exposure
-    description: Monthly reporter-chokepoint exposure mart with confidence-aware values and stress context.
-    columns:
-      - name: reporter_country_code
-        description: ISO3 code of the reporter country.
-        tests:
-          - not_null
-          - relationships:
-              arguments:
-                to: ref('dim_country')
-                field: iso3
 
       - name: chokepoint_id
-        description: Canonical chokepoint identifier aligned to dim_chokepoint.
+        description: Canonical chokepoint identifier for the routed exposure path.
         tests:
           - not_null
           - relationships:
@@ -193,44 +1139,96 @@ models:
                 field: chokepoint_id
 
       - name: chokepoint_name
-        description: Standardized chokepoint display name.
-
-      - name: year_month_key
-        description: Integer month key in YYYYMM format.
+        description: Standardized chokepoint name shown in Page 4 tables.
         tests:
           - not_null
 
-      - name: exposed_trade_value_usd
-        description: Monthly trade value exposed to the chokepoint for HIGH and MEDIUM confidence routes.
+      - name: route_group
+        description: Route group retained from the route assignment logic for exposure slicing.
 
-      - name: exposed_trade_value_label
-        description: Human-readable label for exposed trade value.
+      - name: headline_exposure_group
+        description: Higher-level route grouping retained from the modeled route assignment.
 
-      - name: chokepoint_exposure_pct
-        description: Exposed trade value as percentage of reporter monthly total trade.
-
-      - name: chokepoint_rank_by_exposure
-        description: Rank of chokepoint by exposed trade value within each reporter-month.
-
-      - name: dependency_level
-        description: Categorical chokepoint dependency tier based on exposure percentage.
+      - name: route_confidence_score
+        description: Confidence tier of the modeled route assignment.
         tests:
           - accepted_values:
               arguments:
-                values: ['very_high', 'high', 'moderate', 'low', 'very_low']
+                values: ['HIGH', 'MEDIUM', 'LOW', 'VERY_LOW']
 
-      - name: risk_level
-        description: Categorical risk tier using exposure percentage, stress context, and event activity.
+      - name: route_applicability_status
+        description: Maritime applicability status inherited from route logic.
+
+      - name: used_transshipment_hub_flag
+        description: True when the routed path uses a transshipment hub according to the route model.
         tests:
+          - not_null
           - accepted_values:
               arguments:
-                values: ['high', 'medium', 'low']
+                quote: false
+                values: [true, false]
 
-  - name: mart_country_event_impact
-    description: Monthly reporter-event impact mart for before-during-after event windows and exposure context.
+      - name: total_trade_value_usd
+        description: Monthly total trade value in USD for the reporter-partner-commodity row routed through the named chokepoint.
+
+      - name: import_trade_value_usd
+        description: Monthly import trade value in USD for the row.
+
+      - name: export_trade_value_usd
+        description: Monthly export trade value in USD for the row.
+
+      - name: reporter_month_trade_value_usd
+        description: Reporter total monthly trade value in USD across all partners and commodities.
+
+      - name: reporter_chokepoint_trade_value_usd
+        description: Reporter total monthly trade value in USD exposed to the row's chokepoint across all partners and commodities.
+
+      - name: chokepoint_trade_exposure_ratio
+        description: Reporter-level share of total monthly trade exposed to the row's chokepoint, repeated across lower-grain partner and commodity rows.
+
+      - name: chokepoint_exposed_trade_share_of_reporter_total
+        description: Share of the reporter's total monthly trade represented by the current partner-commodity chokepoint-exposed row.
+
+      - name: partner_commodity_trade_share_of_reporter_chokepoint
+        description: Share of the reporter's chokepoint-exposed monthly trade represented by the current partner-commodity row.
+
+      - name: stress_index_weighted
+        description: Weighted monthly chokepoint stress index repeated from the monthly chokepoint stress mart.
+
+      - name: stress_deviation_score_capped
+        description: Display-oriented capped deviation score for the row's chokepoint-month.
+
+      - name: stress_severity_band
+        description: Display-oriented severity label for the row's chokepoint-month.
+
+      - name: event_active_flag
+        description: True when one or more active events are linked to the row's chokepoint-month.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                quote: false
+                values: [true, false]
+
+      - name: active_event_count
+        description: Count of active events linked to the row's chokepoint-month.
+        tests:
+          - not_null
+
+      - name: latest_month_flag
+        description: True when the row belongs to the latest available month in this semantic mart.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                quote: false
+                values: [true, false]
+
+  - name: mart_reporter_month_exposure_map
+    description: Monthly one-row-per-reporter semantic mart for the primary Page 4 country map, combining country geography with explicit chokepoint exposure, confidence-aware exposure, and top-chokepoint tooltip fields.
     columns:
-      - name: reporter_country_code
-        description: ISO3 code of the reporter country.
+      - name: reporter_iso3
+        description: ISO3 code of the reporting country used directly in Looker Studio geo charts.
         tests:
           - not_null
           - relationships:
@@ -238,99 +1236,154 @@ models:
                 to: ref('dim_country')
                 field: iso3
 
-      - name: event_id
-        description: Event identifier aligned to dim_event.
+      - name: reporter_country_name
+        description: Standardized reporter country name for geo labels and filters.
+        tests:
+          - not_null
+
+      - name: month_start_date
+        description: First calendar day of the month for date range controls.
+        tests:
+          - not_null
+
+      - name: total_chokepoint_exposed_trade_value_usd
+        description: Total reporter monthly trade value in USD exposed to any mapped chokepoint.
+
+      - name: total_chokepoint_exposed_trade_share
+        description: Share of reporter monthly trade value exposed to any mapped chokepoint.
+
+      - name: high_medium_chokepoint_exposed_trade_value_usd
+        description: Total reporter monthly exposed trade value in USD limited to HIGH and MEDIUM route-confidence rows.
+
+      - name: high_medium_chokepoint_exposed_trade_share
+        description: Share of reporter monthly trade value exposed through HIGH and MEDIUM confidence route assignments.
+
+      - name: exposed_chokepoint_count
+        description: Count of distinct chokepoints carrying exposed reporter trade in the month.
+
+      - name: exposed_route_pair_count
+        description: Sum of reporter-partner route pairs contributing to monthly chokepoint exposure.
+
+      - name: event_impacted_exposed_chokepoint_count
+        description: Count of exposed chokepoints with one or more active linked events in the month.
+
+      - name: max_exposed_chokepoint_stress_index_weighted
+        description: Maximum weighted stress index across the reporter's exposed chokepoints in the month.
+
+      - name: trade_value_weighted_stress_index_weighted
+        description: Trade-value-weighted average of monthly weighted chokepoint stress across the reporter's exposed chokepoints.
+
+      - name: top_exposed_chokepoint_id
+        description: Chokepoint identifier for the reporter's largest exposed chokepoint in the month.
+        tests:
+          - relationships:
+              arguments:
+                to: ref('dim_chokepoint')
+                field: chokepoint_id
+
+      - name: top_exposed_chokepoint_name
+        description: Chokepoint name for the reporter's largest exposed chokepoint in the month.
+
+      - name: top_exposed_chokepoint_trade_share_of_reporter_total
+        description: Share of reporter monthly trade value represented by the top exposed chokepoint.
+
+      - name: latest_month_flag
+        description: True when the row belongs to the latest available month in this map-support mart.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                quote: false
+                values: [true, false]
+
+  - name: mart_chokepoint_monthly_hotspot_map
+    description: Monthly one-row-per-chokepoint semantic mart for the supporting Page 4 point map, combining monthly stress, display-safe stress labels, and aggregated exposure counts with simple lat-lon geography.
+    columns:
+      - name: month_start_date
+        description: First calendar day of the month used by Looker Studio date controls.
+        tests:
+          - not_null
+
+      - name: chokepoint_id
+        description: Canonical chokepoint identifier used for joins and filters.
         tests:
           - not_null
           - relationships:
               arguments:
-                to: ref('dim_event')
-                field: event_id
+                to: ref('dim_chokepoint')
+                field: chokepoint_id
 
-      - name: event_name
-        description: Standardized event display name.
-
-      - name: severity_level
-        description: Manual event severity category from dim_event.
-        tests:
-          - accepted_values:
-              arguments:
-                values: ['low', 'medium', 'high', 'critical']
-
-      - name: year_month_key
-        description: Integer month key in YYYYMM format.
+      - name: chokepoint_name
+        description: Standardized chokepoint name shown in point-map labels and tooltips.
         tests:
           - not_null
 
-      - name: event_phase_label
-        description: Position of month relative to event window.
-        tests:
-          - accepted_values:
-              arguments:
-                values: ['before', 'during', 'after', 'outside_window']
+      - name: longitude
+        description: Chokepoint longitude in decimal degrees for Looker Studio point maps.
 
-      - name: event_exposed_trade_value_usd
-        description: Monthly reporter trade value exposed to event-linked chokepoints.
+      - name: latitude
+        description: Chokepoint latitude in decimal degrees for Looker Studio point maps.
 
-      - name: event_exposure_pct
-        description: Event-exposed trade value as percentage of reporter monthly total trade.
-
-      - name: dependency_level
-        description: Categorical dependency tier based on event exposure percentage.
-        tests:
-          - accepted_values:
-              arguments:
-                values: ['very_high', 'high', 'moderate', 'low', 'very_low']
-
-      - name: risk_level
-        description: Categorical risk tier combining event severity and reporter exposure.
-        tests:
-          - accepted_values:
-              arguments:
-                values: ['high', 'medium', 'low']
-
-  - name: mart_country_risk_summary
-    description: Monthly reporter-level composite risk summary combining concentration, chokepoint exposure, and event pressure.
-    columns:
-      - name: reporter_country_code
-        description: ISO3 code of the reporter country.
+      - name: has_map_coordinates_flag
+        description: True when the chokepoint has usable latitude and longitude for point-map rendering.
         tests:
           - not_null
+          - accepted_values:
+              arguments:
+                quote: false
+                values: [true, false]
+
+      - name: stress_deviation_score_capped
+        description: Display-oriented capped deviation score recommended for point size or color intensity.
+
+      - name: stress_deviation_index_100
+        description: Executive-friendly 0 to 100 stress scale recommended for color legends or tooltips.
+
+      - name: stress_severity_band
+        description: Display-oriented severity label for the chokepoint-month.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['INSUFFICIENT_BASELINE', 'EXTREME', 'SEVERE', 'ELEVATED', 'NORMAL']
+
+      - name: event_active_flag
+        description: True when one or more active events are linked to the chokepoint in the month.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                quote: false
+                values: [true, false]
+
+      - name: total_exposed_trade_value_usd
+        description: Total global trade value in USD exposed to the chokepoint in the month across all reporters.
+
+      - name: high_medium_exposed_trade_value_usd
+        description: Total global exposed trade value in USD limited to HIGH and MEDIUM route-confidence rows.
+
+      - name: exposed_reporter_count
+        description: Count of distinct reporting countries exposed to the chokepoint in the month.
+
+      - name: high_medium_exposed_reporter_count
+        description: Count of distinct reporting countries exposed through HIGH and MEDIUM route-confidence rows.
+
+      - name: top_exposed_reporter_iso3
+        description: ISO3 code of the reporting country with the highest exposed trade value on the chokepoint-month.
+        tests:
           - relationships:
               arguments:
                 to: ref('dim_country')
                 field: iso3
 
-      - name: year_month_key
-        description: Integer month key in YYYYMM format.
+      - name: top_exposed_reporter_country_name
+        description: Country name of the reporting country with the highest exposed trade value on the chokepoint-month.
+
+      - name: latest_month_flag
+        description: True when the row belongs to the latest available month in this map-support mart.
         tests:
           - not_null
-
-      - name: total_chokepoint_exposure_pct
-        description: Aggregated monthly chokepoint exposure percentage for the reporter.
-
-      - name: partner_concentration_index
-        description: Reporter-month partner concentration score derived from HHI.
-
-      - name: commodity_concentration_index
-        description: Reporter-month commodity concentration score derived from HHI.
-
-      - name: active_exposed_event_count
-        description: Count of active events intersecting reporter exposure in the month.
-
-      - name: composite_risk_score
-        description: Composite 0-100 summary score combining exposure and concentration components.
-
-      - name: dependency_level
-        description: Categorical dependency tier based on monthly chokepoint exposure.
-        tests:
           - accepted_values:
               arguments:
-                values: ['very_high', 'high', 'moderate', 'low', 'very_low']
-
-      - name: risk_level
-        description: Categorical risk tier based on composite risk score thresholds.
-        tests:
-          - accepted_values:
-              arguments:
-                values: ['high', 'medium', 'low']
+                quote: false
+                values: [true, false]

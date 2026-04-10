@@ -85,6 +85,17 @@ FIXED_TABLE_SPECS = (
         gcs_parts=("silver", "comtrade", "dimensions", "dim_trade_flow.parquet"),
     ),
     FixedTableSpec(
+        table_name="dim_chokepoint",
+        local_path=PROJECT_ROOT / "data" / "silver" / "comtrade" / "dimensions" / "dim_chokepoint.parquet",
+        gcs_parts=("silver", "comtrade", "dimensions", "dim_chokepoint.parquet"),
+    ),
+    FixedTableSpec(
+        table_name="dim_country_ports",
+        local_path=PROJECT_ROOT / "data" / "silver" / "comtrade" / "dimensions" / "dim_country_ports.parquet",
+        gcs_parts=("silver", "comtrade", "dimensions", "dim_country_ports.parquet"),
+        clustering_fields=("iso3",),
+    ),
+    FixedTableSpec(
         table_name="route_applicability",
         local_path=PROJECT_ROOT / "data" / "silver" / "comtrade" / "dimensions" / "bridge_country_route_applicability.parquet",
         gcs_parts=("silver", "comtrade", "dimensions", "bridge_country_route_applicability.parquet"),

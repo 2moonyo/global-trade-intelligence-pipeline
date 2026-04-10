@@ -49,8 +49,8 @@ The live warehouse is organized as:
 
 1. filesystem data assets in `data/bronze/*` and `data/silver/*`
 2. a `raw` landing schema loaded by `warehouse/bootstrap_silver_to_duckdb.sql`
-3. dbt staging models in `analytics_staging` and `analytics_analytics_staging`
-4. dbt marts in `analytics_marts` and `analytics_analytics_marts`
+3. dbt staging models in `analytics_staging`
+4. dbt marts in `analytics_marts`
 
 This is not a strict in-database medallion layout. In practice:
 
@@ -106,7 +106,7 @@ The canonical trade grain is reporter + partner + commodity + month + flow. The 
 - `bridge_event_location`
 - `mart_event_impact`
 
-The event area still materializes into `analytics_analytics_staging` and `analytics_analytics_marts`, while the main marts live in `analytics_marts`.
+The event area materializes alongside the rest of the project under the same dbt-managed staging and marts schemas.
 
 The current event silver contract is now built from `data/bronze/events.csv` by `ingest/events/events_silver.py`, which writes:
 
@@ -343,8 +343,8 @@ make dbt-bigquery-build
 
 Current limitation:
 
-- The BigQuery profile is ready, but a number of models still contain DuckDB-specific SQL such as `strptime`, `strftime`, `generate_series`, `varchar`, and `double`.
-- That means the profile swap is scaffolded, but the full dbt project will still need SQL adapter refactors before a successful BigQuery build.
+- The BigQuery profile is active and works for targeted validation runs such as selected marts.
+- Full-project BigQuery parity should still be treated as an ongoing migration task and validated model by model.
 
 ## Useful dbt vars
 

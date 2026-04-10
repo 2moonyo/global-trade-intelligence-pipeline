@@ -1,0 +1,11 @@
+-- Fails when expanding historical stress fields appear before there are enough prior observed months.
+select *
+from {{ ref('mart_chokepoint_monthly_stress') }}
+where historical_baseline_observation_count < 2
+  and (
+    z_score_historical is not null
+    or z_score_count_historical is not null
+    or z_score_vessel_size_historical is not null
+    or stress_index is not null
+    or stress_index_weighted is not null
+  )

@@ -23,6 +23,7 @@ DEFAULT_TARGET_CHOKEPOINTS = (
 
 LEGACY_PARTITION_FILENAME = "portwatch_chokepoint_stress_monthly.parquet"
 CONTRACT_PARTITION_FILENAME = "portwatch_monthly.parquet"
+CONTRACT_DAILY_PARTITION_FILENAME = "portwatch_daily.parquet"
 LOGGER_NAME = "portwatch.silver"
 
 
@@ -53,6 +54,7 @@ class PortWatchSilverConfig:
     silver_portwatch_dir: Optional[Path] = None
     legacy_monthly_dir: Optional[Path] = None
     contract_monthly_dir: Optional[Path] = None
+    contract_daily_dir: Optional[Path] = None
     full_output_path: Optional[Path] = None
     scaffold_output_path: Optional[Path] = None
     dimensions_dir: Optional[Path] = None
@@ -82,6 +84,9 @@ class PortWatchSilverConfig:
         )
         self.contract_monthly_dir = Path(
             self.contract_monthly_dir or self.silver_portwatch_dir / "portwatch_monthly"
+        )
+        self.contract_daily_dir = Path(
+            self.contract_daily_dir or self.silver_portwatch_dir / "portwatch_daily"
         )
         self.full_output_path = Path(
             self.full_output_path
@@ -349,6 +354,40 @@ def build_contract_monthly(
     return monthly_contract[contract_cols].copy()
 
 
+def build_contract_daily(df: pd.DataFrame) -> pd.DataFrame:
+    daily_contract = df.copy()
+    daily_contract["date_day"] = pd.to_datetime(daily_contract["date"]).dt.date
+    daily_contract["year_month"] = pd.to_datetime(daily_contract["date"]).dt.to_period("M").astype(str)
+    daily_contract["year"] = pd.to_datetime(daily_contract["date"]).dt.year.astype(int)
+    daily_contract["month"] = pd.to_datetime(daily_contract["date"]).dt.month.astype(int)
+    daily_contract["day"] = pd.to_datetime(daily_contract["date"]).dt.day.astype(int)
+    daily_contract = daily_contract.rename(
+        columns={
+            "portid": "chokepoint_id",
+            "portname": "chokepoint_name",
+        }
+    )
+
+    contract_cols = [
+        "date_day",
+        "year_month",
+        "year",
+        "month",
+        "day",
+        "chokepoint_id",
+        "chokepoint_name",
+        "n_total",
+        "capacity",
+        "n_tanker",
+        "n_container",
+        "n_dry_bulk",
+        "capacity_tanker",
+        "capacity_container",
+        "capacity_dry_bulk",
+    ]
+    return daily_contract[contract_cols].copy()
+
+
 def build_scaffold(
     monthly_legacy: pd.DataFrame,
     dim_month: pd.DataFrame,
@@ -418,6 +457,22 @@ def write_partitioned_monthly(
     return written_files
 
 
+def write_partitioned_daily(
+    daily_df: pd.DataFrame,
+    output_dir: Path,
+    partition_filename: str,
+) -> list[str]:
+    output_dir.mkdir(parents=True, exist_ok=True)
+    written_files: list[str] = []
+    for (year_value, month_value), part in daily_df.groupby(["year", "month"], sort=True):
+        part_dir = output_dir / f"year={int(year_value):04d}" / f"month={int(month_value):02d}"
+        part_dir.mkdir(parents=True, exist_ok=True)
+        out_path = part_dir / partition_filename
+        part.sort_values(["date_day", "chokepoint_name"]).to_parquet(out_path, index=False)
+        written_files.append(str(out_path))
+    return written_files
+
+
 def _json_ready(value: Any) -> Any:
     if isinstance(value, Path):
         return str(value)
@@ -474,6 +529,7 @@ def run(
         logger.info("Starting PortWatch silver build run_id=%s", run_id)
         logger.info("Project root: %s", config.project_root)
         logger.info("Bronze PortWatch root: %s", config.bronze_portwatch_dir)
+        logger.info("Contract daily output dir: %s", config.contract_daily_dir)
         logger.info("Legacy monthly output dir: %s", config.legacy_monthly_dir)
         logger.info("Contract monthly output dir: %s", config.contract_monthly_dir)
 
@@ -491,12 +547,14 @@ def run(
         if daily_df.empty:
             raise RuntimeError("No PortWatch rows remain after cleaning/filtering.")
 
+        daily_contract = build_contract_daily(daily_df)
         monthly_legacy = build_monthly_fact(daily_df)
         dim_chokepoint = build_dim_chokepoint(daily_df, monthly_legacy)
         dim_month = build_dim_month(monthly_legacy)
         monthly_contract = build_contract_monthly(monthly_legacy, dim_chokepoint)
         scaffold = build_scaffold(monthly_legacy, dim_month, dim_chokepoint)
 
+        logger.info("Built daily contract rows: %s", len(daily_contract))
         logger.info("Built monthly legacy rows: %s", len(monthly_legacy))
         logger.info("Built monthly contract rows: %s", len(monthly_contract))
         logger.info("Built chokepoint dimension rows: %s", len(dim_chokepoint))
@@ -504,6 +562,14 @@ def run(
         logger.info("Built scaffold rows: %s", len(scaffold))
 
         partitions_written: list[str] = []
+
+        daily_written = write_partitioned_daily(
+            daily_contract,
+            config.contract_daily_dir,
+            CONTRACT_DAILY_PARTITION_FILENAME,
+        )
+        partitions_written.extend(daily_written)
+        logger.info("Wrote %s contract daily partition files", len(daily_written))
 
         if config.write_legacy_outputs:
             legacy_written = write_partitioned_monthly(
@@ -558,9 +624,11 @@ def run(
                 "status": "completed",
                 "finished_at": finished_at.isoformat(),
                 "output_row_count": len(monthly_contract),
+                "daily_output_row_count": len(daily_contract),
                 "touched_year_months": sorted(monthly_contract["year_month"].dropna().unique().tolist()),
                 "partitions_written": partitions_written,
                 "output_counts": {
+                    "daily_contract": len(daily_contract),
                     "monthly_legacy": len(monthly_legacy),
                     "monthly_contract": len(monthly_contract),
                     "dim_chokepoint": len(dim_chokepoint),

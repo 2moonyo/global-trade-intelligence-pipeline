@@ -1,0 +1,25 @@
+
+    
+    
+
+with child as (
+    select cmd_code as from_field
+    from `capfractal`.`analytics_marts`.`mart_reporter_partner_commodity_month_enriched`
+    where cmd_code is not null
+),
+
+parent as (
+    select cmd_code as to_field
+    from `capfractal`.`analytics_marts`.`dim_commodity`
+)
+
+select
+    from_field
+
+from child
+left join parent
+    on child.from_field = parent.to_field
+
+where parent.to_field is null
+
+

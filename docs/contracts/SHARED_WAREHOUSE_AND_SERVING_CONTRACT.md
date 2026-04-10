@@ -13,11 +13,33 @@ It intentionally distinguishes between:
   - dbt staging and marts
   - Streamlit dashboard under `app/`
 - the first cloud slice:
-  - currently implemented only for PortWatch
-  - bronze and silver published to GCS
-  - BigQuery landing table `raw.portwatch_monthly`
-  - dbt BigQuery target scaffolded
+  - implemented for PortWatch and extended to additional slices such as Comtrade, Brent, and events ingestion paths
+  - bronze and silver published to GCS where those dataset pipelines exist
+  - BigQuery landing tables in `raw.*`
+  - dbt BigQuery target available as `bigquery_dev`
   - future BI target is Looker Studio
+
+## Active Environment Contract
+
+The current verified dbt runtime environment is:
+
+| Concern | Current contract |
+| --- | --- |
+| dbt profile | `capstone_monthly` |
+| default local target | `duckdb_dev` |
+| warehouse validation target | `bigquery_dev` |
+| local warehouse file | `warehouse/analytics.duckdb` |
+| local DuckDB base schema | `analytics` |
+| dbt staging schema | `analytics_staging` |
+| dbt marts schema | `analytics_marts` |
+| dbt model materialization defaults | staging = `view`, marts = `table` |
+
+Important current truths for environment handling:
+
+- `profiles.yml` sets `duckdb_dev` as the default target for local development.
+- `bigquery_dev` is the explicit target for cloud-side dbt validation and dashboard-serving preparation.
+- dbt model schemas are currently controlled centrally by `dbt_project.yml`, not by per-folder custom schema macros.
+- The canonical semantic layer reset has started in `models/marts/semantics` with `mart_dashboard_global_trade_overview` as the first new dashboard mart.
 
 ## Architecture Reality
 
@@ -33,8 +55,8 @@ The live warehouse is not a strict medallion-in-database design. It is:
 Important current truths:
 
 - `raw` is a mixed landing layer, not a pure bronze mirror.
-- PortWatch is the only dataset with a real GCS and BigQuery loading path in the repo today.
-- Brent, Comtrade, FX, World Bank energy, and events are still served locally through DuckDB.
+- PortWatch has the most mature cloud slice, but the repo also contains BigQuery-oriented publish/load paths for Comtrade, Brent, and events.
+- Local analytics and local app serving still center on DuckDB.
 - Events are currently owner-curated data assets in `data/silver/events/*`; there is no standardized bronze ingest job for them yet.
 - The current dashboard is Streamlit, not Looker Studio. Looker Studio is the target cloud BI pattern, not the current local serving layer.
 
@@ -58,8 +80,26 @@ The implemented dashboard contract is the Streamlit app under `app/`, backed by 
 | Executive Overview | `analytics_marts.mart_reporter_month_trade_summary`, `analytics_marts.mart_reporter_month_chokepoint_exposure` | High-level trade scale, exposure context, and source freshness. |
 | Trade Dependence | `analytics_marts.fct_reporter_partner_commodity_month` | Bilateral corridor, commodity dependence, and partner concentration analysis. |
 | Chokepoint Stress & Exposure | `analytics_staging.stg_portwatch_stress_metrics`, `analytics_marts.mart_reporter_month_chokepoint_exposure`, optional `analytics_marts.fct_reporter_partner_commodity_route_month` | Traffic stress, reporter exposure, and route-level evidence. |
-| Events & Commodity Impact | `analytics_analytics_marts.dim_event`, `analytics_analytics_marts.bridge_event_month`, `analytics_analytics_marts.bridge_event_chokepoint`, `analytics_marts.mart_event_impact`, `analytics_staging.stg_portwatch_stress_metrics`, `analytics_marts.fct_reporter_partner_commodity_month` | Event windows, affected chokepoints, commodity movement, and impact evidence. |
+| Events & Commodity Impact | `analytics_marts.dim_event`, `analytics_marts.bridge_event_month`, `analytics_marts.bridge_event_chokepoint`, `analytics_marts.mart_event_impact`, `analytics_staging.stg_portwatch_stress_metrics`, `analytics_marts.fct_reporter_partner_commodity_month` | Event windows, affected chokepoints, commodity movement, and impact evidence. |
 | Energy Vulnerability Context | `analytics_marts.mart_reporter_energy_vulnerability`, `analytics_marts.mart_reporter_commodity_month_trade_summary`, `analytics_marts.mart_trade_exposure` | Structural energy dependence overlaid with trade scale and chokepoint exposure. |
+
+### Current Semantic Dashboard Contract
+
+The semantic presentation layer is being rebuilt under `models/marts/semantics` for Looker Studio.
+
+Current implemented semantic mart:
+
+| Semantic mart | Grain | Current purpose |
+| --- | --- | --- |
+| `analytics_marts.mart_dashboard_global_trade_overview` | one row per reporter country per month across a full reporter-month coverage grid | Page 1 overview scorecards, monthly trend line, top reporter ranking, and completeness or missingness messaging |
+
+This semantic layer is intended to be dashboard-facing and business-readable:
+
+- country names should remain standardized and human-readable
+- compact labels such as `8.24B`, `645.00M`, and `1.40T` are allowed alongside raw numeric fields
+- Looker Studio should require minimal custom SQL
+- semantic marts should be updated incrementally, one mart at a time, with matching tests and explicit grain documentation
+- completeness fields repeated at month grain are intentional so Looker Studio scorecards can use `MAX` without blending
 
 ### Target Cloud Serving Pattern
 
@@ -71,6 +111,11 @@ The intended cloud serving pattern is:
 - BI in Looker Studio
 
 Today, only PortWatch has concrete repo support for that path.
+
+Current implementation note:
+
+- `bigquery_dev` is a real, usable target for targeted dbt validation.
+- Full-project parity across all models is still a migration effort and should not be assumed from a single successful targeted build.
 
 ## Cross-Source Computed Models And Justification
 

@@ -15,10 +15,10 @@ help:
 		"make cloud-bootstrap         ADC auth if needed, terraform init/apply, and render .env." \
 		"make infra-destroy           Destroy Terraform-managed cloud resources after confirmation." \
 		"make portwatch-extract       Run the PortWatch bronze extract with per-run logs and manifest output." \
-		"make portwatch-cloud-dry-run Preview the silver-only GCS publish and BigQuery load steps." \
-		"make portwatch-cloud         Publish silver PortWatch assets to GCS and load raw.portwatch_monthly." \
+		"make portwatch-cloud-dry-run Preview the silver-only GCS publish and BigQuery load steps for raw.portwatch_daily/raw.portwatch_monthly." \
+		"make portwatch-cloud         Publish silver PortWatch assets to GCS and load raw.portwatch_daily/raw.portwatch_monthly." \
 		"make portwatch-cloud-dry-run-with-bronze Preview the GCS publish/load steps including bronze." \
-		"make portwatch-cloud-with-bronze Publish PortWatch bronze and silver assets, then load raw.portwatch_monthly." \
+		"make portwatch-cloud-with-bronze Publish PortWatch bronze and silver assets, then load raw.portwatch_daily/raw.portwatch_monthly." \
 		"make portwatch-refresh-cloud Rebuild PortWatch silver, then publish and load it." \
 		"make comtrade-silver        Build canonical Comtrade silver fact slices and dimensions." \
 		"make comtrade-routing       Build Comtrade routing outputs from the modular routing package." \

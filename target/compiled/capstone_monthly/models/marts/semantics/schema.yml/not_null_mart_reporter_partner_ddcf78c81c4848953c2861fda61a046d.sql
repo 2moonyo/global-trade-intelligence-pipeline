@@ -1,0 +1,11 @@
+
+    
+    
+
+
+
+select partner_iso3
+from `capfractal`.`analytics_marts`.`mart_reporter_partner_commodity_month_enriched`
+where partner_iso3 is null
+
+

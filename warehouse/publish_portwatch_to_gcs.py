@@ -62,6 +62,15 @@ def _build_specs(include_bronze: bool, include_silver: bool, include_auxiliary: 
     if include_silver:
         specs.append(
             UploadSpec(
+                name="silver_portwatch_daily",
+                local_path=PROJECT_ROOT / "data" / "silver" / "portwatch" / "portwatch_daily",
+                destination_parts=("silver", "portwatch", "portwatch_daily"),
+                include_suffixes=(".parquet",),
+                partition_value_resolver=path_year_month,
+            )
+        )
+        specs.append(
+            UploadSpec(
                 name="silver_portwatch_monthly",
                 local_path=PROJECT_ROOT / "data" / "silver" / "portwatch" / "portwatch_monthly",
                 destination_parts=("silver", "portwatch", "portwatch_monthly"),

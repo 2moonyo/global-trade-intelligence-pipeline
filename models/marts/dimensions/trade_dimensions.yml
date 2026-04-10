@@ -45,3 +45,19 @@ models:
       - name: chokepoint_name
         description: "Business-readable chokepoint name."
         tests: [not_null]
+      - name: chokepoint_kind
+        description: "Routing-backed chokepoint classification such as canal, strait, or cape."
+      - name: longitude
+        description: "Chokepoint longitude in decimal degrees."
+      - name: latitude
+        description: "Chokepoint latitude in decimal degrees."
+      - name: zone_of_influence_radius_m
+        description: "Radius in meters used to build the circular chokepoint zone of influence."
+      - name: chokepoint_point_wkb
+        description: "WKB-encoded point geometry for the chokepoint centroid."
+      - name: zone_of_influence_wkb
+        description: "WKB-encoded polygon geometry for the chokepoint zone of influence."
+      - name: chokepoint_point_geog
+        description: "BigQuery geography generated from the chokepoint centroid WKB."
+      - name: zone_of_influence_geog
+        description: "BigQuery geography generated from the zone-of-influence WKB."

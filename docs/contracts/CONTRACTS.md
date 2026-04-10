@@ -2,6 +2,26 @@
 
 This directory now separates the warehouse contracts into one shared platform contract and one contract per dataset.
 
+## Contract Maintenance Rule
+
+These contract documents should be updated whenever a major repository change affects any of the following:
+
+- active dbt targets or default target selection
+- warehouse database or schema naming
+- the primary serving layer
+- canonical semantic marts exposed for dashboards
+- dataset publish or load paths that materially change downstream behavior
+
+Current verified environment:
+
+- dbt profile: `capstone_monthly`
+- default local target: `duckdb_dev`
+- warehouse target for cloud validation: `bigquery_dev`
+- local database file: `warehouse/analytics.duckdb`
+- dbt model schemas from `dbt_project.yml`:
+  - staging models -> `analytics_staging`
+  - marts models -> `analytics_marts`
+
 ## Shared Contracts
 
 - [SHARED_WAREHOUSE_AND_SERVING_CONTRACT.md](./SHARED_WAREHOUSE_AND_SERVING_CONTRACT.md)

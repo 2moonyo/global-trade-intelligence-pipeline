@@ -7,6 +7,20 @@ with route_chokepoints as (
   from `capfractal`.`analytics_marts`.`fct_reporter_partner_commodity_route_month`
   where main_chokepoint is not null
 ),
+raw_chokepoints as (
+  select
+    chokepoint_id,
+    chokepoint_name,
+    chokepoint_kind,
+    longitude,
+    latitude,
+    zone_of_influence_radius_m,
+    chokepoint_point_wkb,
+    zone_of_influence_wkb,
+    chokepoint_point_geog,
+    zone_of_influence_geog
+  from `capfractal`.`analytics_staging`.`stg_dim_chokepoint`
+),
 event_chokepoints as (
   select distinct
     
@@ -48,10 +62,20 @@ base as (
 )
 
 select
-  chokepoint_id,
-  chokepoint_name,
-  portwatch_source_chokepoint_id,
-  latest_tanker_share,
-  latest_container_share,
-  latest_dry_bulk_share
-from base
+  b.chokepoint_id,
+  coalesce(rc.chokepoint_name, b.chokepoint_name) as chokepoint_name,
+  rc.chokepoint_kind,
+  rc.longitude,
+  rc.latitude,
+  rc.zone_of_influence_radius_m,
+  rc.chokepoint_point_wkb,
+  rc.zone_of_influence_wkb,
+  rc.chokepoint_point_geog,
+  rc.zone_of_influence_geog,
+  b.portwatch_source_chokepoint_id,
+  b.latest_tanker_share,
+  b.latest_container_share,
+  b.latest_dry_bulk_share
+from base as b
+left join raw_chokepoints as rc
+  on b.chokepoint_id = rc.chokepoint_id

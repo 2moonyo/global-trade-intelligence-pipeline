@@ -33,6 +33,39 @@ models:
       - name: fx_mom_change
         description: Month-over-month percentage change in the presented view-specific monthly FX rate.
 
+  - name: stg_brent_daily
+    description: Daily Brent benchmark price series normalized to one row per benchmark trading day for daily system pulse marts.
+    columns:
+      - name: date_day
+        description: Trading day date for the benchmark observation.
+        tests:
+          - not_null
+
+      - name: year_month
+        description: Canonical month key in YYYY-MM format.
+        tests:
+          - not_null
+
+      - name: benchmark_code
+        description: Short code identifying the benchmark series.
+        tests:
+          - not_null
+
+      - name: benchmark_name
+        description: Human-readable benchmark name.
+
+      - name: region
+        description: Geographic region associated with the benchmark series.
+
+      - name: source_series_id
+        description: Upstream provider series identifier.
+
+      - name: price_usd_per_bbl
+        description: Daily oil price in USD per barrel.
+
+      - name: load_ts
+        description: Latest load timestamp retained when duplicate benchmark-day rows are present upstream.
+
   - name: stg_brent_monthly
     description: Monthly Brent benchmark price series normalized for mart joins.
     columns:
@@ -87,6 +120,94 @@ models:
 
       - name: trading_day_count
         description: Number of trading days included in the monthly aggregation.
+
+  - name: stg_portwatch_daily
+    description: >
+      Canonical PortWatch daily staging model at date-day and chokepoint grain.
+      Uses a scaffolded daily calendar to retain missing and stale source coverage
+      while standardizing daily traffic and throughput signals.
+    columns:
+      - name: date_day
+        description: Calendar day used by Looker Studio daily filters and trend charts.
+        tests:
+          - not_null
+
+      - name: portwatch_source_chokepoint_id
+        description: Source PortWatch chokepoint identifier retained for lineage to the raw landing table.
+        tests:
+          - not_null
+
+      - name: chokepoint_id
+        description: Stable canonical chokepoint identifier hashed from the standardized chokepoint name.
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_chokepoint')
+                field: chokepoint_id
+
+      - name: chokepoint_name
+        description: Human-readable chokepoint name standardized for downstream semantic marts.
+        tests:
+          - not_null
+
+      - name: year_month
+        description: Canonical month key in YYYY-MM format retained for daily-to-month filtering and grouping.
+        tests:
+          - not_null
+
+      - name: month_start_date
+        description: First calendar day of the row's month, retained for Looker Studio month filters.
+        tests:
+          - not_null
+
+      - name: n_total
+        description: Daily vessel count proxy sourced from PortWatch.
+
+      - name: capacity
+        description: Daily throughput proxy sourced from PortWatch.
+
+      - name: n_tanker
+        description: Daily tanker vessel count.
+
+      - name: n_container
+        description: Daily container vessel count.
+
+      - name: n_dry_bulk
+        description: Daily dry bulk vessel count.
+
+      - name: capacity_tanker
+        description: Daily tanker throughput proxy.
+
+      - name: capacity_container
+        description: Daily container throughput proxy.
+
+      - name: capacity_dry_bulk
+        description: Daily dry bulk throughput proxy.
+
+      - name: vessel_size_index
+        description: Capacity divided by total vessel count when both are available.
+
+      - name: tanker_share
+        description: Share of tracked daily vessel counts represented by tankers.
+
+      - name: container_share
+        description: Share of tracked daily vessel counts represented by container vessels.
+
+      - name: dry_bulk_share
+        description: Share of tracked daily vessel counts represented by dry bulk vessels.
+
+      - name: priority_vessel_share
+        description: Chokepoint-specific priority vessel share aligned to the project's monthly stress logic.
+
+      - name: has_portwatch_daily_data_flag
+        description: True when the raw PortWatch landing table contains an observed row for the day and chokepoint.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                quote: false
+                values: [0, 1]
 
   - name: stg_comtrade_fact
     description: >
@@ -319,6 +440,109 @@ models:
 
       - name: flow_group
         description: Group label for related trade flow codes.
+
+  - name: stg_dim_chokepoint
+    description: Routing-backed chokepoint staging model carrying chokepoint points, circular zones of influence, and BigQuery geography conversions.
+    columns:
+      - name: chokepoint_id
+        description: Stable hashed chokepoint identifier derived from the chokepoint name.
+        tests:
+          - not_null
+
+      - name: chokepoint_name
+        description: Business-readable chokepoint name.
+        tests:
+          - not_null
+
+      - name: chokepoint_kind
+        description: Routing classification for the chokepoint, such as canal, strait, or cape.
+
+      - name: longitude
+        description: Chokepoint longitude in decimal degrees.
+
+      - name: latitude
+        description: Chokepoint latitude in decimal degrees.
+
+      - name: zone_of_influence_radius_m
+        description: Radius in meters used to build the chokepoint zone-of-influence polygon.
+
+      - name: chokepoint_point_wkb
+        description: WKB-encoded point geometry for the chokepoint centroid.
+
+      - name: zone_of_influence_wkb
+        description: WKB-encoded polygon representing the chokepoint zone of influence.
+
+      - name: chokepoint_point_geog
+        description: BigQuery geography created from the chokepoint point WKB when the target is BigQuery.
+
+      - name: zone_of_influence_geog
+        description: BigQuery geography created from the chokepoint zone-of-influence WKB when the target is BigQuery.
+
+  - name: stg_dim_country_ports
+    description: Routing-backed port staging model carrying selected country ports and point geography for map joins.
+    columns:
+      - name: port_id
+        description: Stable hashed identifier for the selected port within its country context.
+        tests:
+          - not_null
+
+      - name: iso3
+        description: ISO3 code for the country that owns the selected port row.
+        tests:
+          - not_null
+
+      - name: port_name
+        description: Business-readable port name used by the routing engine.
+        tests:
+          - not_null
+
+      - name: longitude
+        description: Port longitude in decimal degrees.
+
+      - name: latitude
+        description: Port latitude in decimal degrees.
+
+      - name: harbor_size
+        description: World Port Index harbor size classification.
+
+      - name: port_score
+        description: Routing score derived from harbor size and facilities.
+
+      - name: port_rank
+        description: Country-level rank for the retained selected port set.
+
+      - name: port_point_wkb
+        description: WKB-encoded point geometry for the port location.
+
+      - name: port_point_geog
+        description: BigQuery geography created from the port point WKB when the target is BigQuery.
+
+  - name: stg_dim_trade_route_geography
+    description: Route-level staging model that converts exported route WKB into BigQuery geography without changing the canonical routing outputs.
+    columns:
+      - name: trade_route_id
+        description: Stable hashed identifier for a reporter-partner-partner2-scenario route row.
+        tests:
+          - not_null
+
+      - name: reporter_iso3
+        description: Reporter ISO3 code for the route row.
+        tests:
+          - not_null
+
+      - name: partner_iso3
+        description: Partner ISO3 code for the route row.
+        tests:
+          - not_null
+
+      - name: route_scenario
+        description: Routing scenario label used to generate the route.
+
+      - name: route_path_wkb
+        description: WKB-encoded linestring for the routed maritime path.
+
+      - name: route_path_geog
+        description: BigQuery geography created from the route path WKB when the target is BigQuery.
 
   - name: stg_route_applicability
     description: Route applicability bridge for reporter-partner pairs.

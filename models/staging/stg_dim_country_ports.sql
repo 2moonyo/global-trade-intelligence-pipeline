@@ -1,0 +1,21 @@
+select
+  {{ hash_text("upper(trim(coalesce(iso3, ''))) || '|' || lower(trim(coalesce(port_name, '')))") }} as port_id,
+  upper(trim({{ cast_string('iso3') }})) as iso3,
+  {{ cast_string('port_name') }} as port_name,
+  {{ cast_float('longitude') }} as longitude,
+  {{ cast_float('latitude') }} as latitude,
+  {{ cast_string('world_water_body') }} as world_water_body,
+  {{ cast_string('port_basin') }} as port_basin,
+  {{ cast_string('harbor_size') }} as harbor_size,
+  {{ cast_string('harbor_type') }} as harbor_type,
+  {{ cast_string('harbor_use') }} as harbor_use,
+  {{ cast_int('fac_container') }} as fac_container,
+  {{ cast_int('fac_solid_bulk') }} as fac_solid_bulk,
+  {{ cast_int('fac_liquid_bulk') }} as fac_liquid_bulk,
+  {{ cast_int('fac_oil_terminal') }} as fac_oil_terminal,
+  {{ cast_int('fac_lng_terminal') }} as fac_lng_terminal,
+  {{ cast_float('port_score') }} as port_score,
+  {{ cast_int('port_rank') }} as port_rank,
+  port_point_wkb,
+  {{ geography_from_wkb('port_point_wkb') }} as port_point_geog
+from {{ source('raw', 'dim_country_ports') }}

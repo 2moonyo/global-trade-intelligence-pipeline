@@ -78,11 +78,27 @@
   {% endif %}
 {%- endmacro %}
 
+{% macro date_series(start_expression, end_expression, column_name='date_day') -%}
+  {% if target.type == 'bigquery' %}
+    unnest(generate_date_array(cast({{ start_expression }} as date), cast({{ end_expression }} as date), interval 1 day)) as {{ column_name }}
+  {% else %}
+    generate_series(cast({{ start_expression }} as date), cast({{ end_expression }} as date), interval 1 day) as series({{ column_name }})
+  {% endif %}
+{%- endmacro %}
+
 {% macro date_add_months(expression, months) -%}
   {% if target.type == 'bigquery' %}
     date_add(cast({{ expression }} as date), interval {{ months }} month)
   {% else %}
     cast({{ expression }} as date) + interval {{ months }} month
+  {% endif %}
+{%- endmacro %}
+
+{% macro day_diff(later_expression, earlier_expression) -%}
+  {% if target.type == 'bigquery' %}
+    date_diff(cast({{ later_expression }} as date), cast({{ earlier_expression }} as date), day)
+  {% else %}
+    date_diff('day', cast({{ earlier_expression }} as date), cast({{ later_expression }} as date))
   {% endif %}
 {%- endmacro %}
 
@@ -107,5 +123,13 @@
     to_hex(md5(cast({{ expression }} as string)))
   {% else %}
     md5(cast({{ expression }} as varchar))
+  {% endif %}
+{%- endmacro %}
+
+{% macro geography_from_wkb(expression) -%}
+  {% if target.type == 'bigquery' %}
+    ST_GEOGFROMWKB({{ expression }})
+  {% else %}
+    null
   {% endif %}
 {%- endmacro %}

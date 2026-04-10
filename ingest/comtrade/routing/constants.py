@@ -72,6 +72,17 @@ CHOKEPOINT_ROWS = [
     {"chokepoint_name": "Open Sea", "longitude": np.nan, "latitude": np.nan, "kind": "open_sea"},
 ]
 
+CHOKEPOINT_ZONE_OF_INFLUENCE_METERS = {
+    "Turkish Straits": 25_000,
+    "Suez Canal": 30_000,
+    "Hormuz Strait": 60_000,
+    "Bab el-Mandeb": 60_000,
+    "Panama Canal": 30_000,
+    "Malacca Strait": 60_000,
+    "Gibraltar Strait": 50_000,
+    "Cape of Good Hope": 200_000,
+}
+
 BASIN_GRAPH_EDGE_ROWS = [
     {"origin_basin": "BLACK_SEA", "destination_basin": "MEDITERRANEAN", "chokepoint_name": "Turkish Straits", "base_cost": 2.0},
     {"origin_basin": "MEDITERRANEAN", "destination_basin": "BLACK_SEA", "chokepoint_name": "Turkish Straits", "base_cost": 2.0},

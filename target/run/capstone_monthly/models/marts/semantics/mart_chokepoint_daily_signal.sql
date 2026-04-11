@@ -2,7 +2,7 @@
   
     
 
-    create or replace table `capfractal`.`analytics_marts`.`mart_chokepoint_daily_signal`
+    create or replace table `chokepoint-capfractal`.`analytics_marts`.`mart_chokepoint_daily_signal`
       
     
     
@@ -29,7 +29,7 @@ with base as (
     container_share,
     dry_bulk_share,
     priority_vessel_share
-  from `capfractal`.`analytics_staging`.`stg_portwatch_daily`
+  from `chokepoint-capfractal`.`analytics_staging`.`stg_portwatch_daily`
 ),
 freshness as (
   select

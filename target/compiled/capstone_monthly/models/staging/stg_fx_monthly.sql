@@ -10,7 +10,7 @@ with raw_fx as (
     upper(trim(base_currency_code)) as base_currency_code,
     upper(trim(quote_currency_code)) as quote_currency_code,
     cast(fx_rate as FLOAT64) as fx_rate
-  from `capfractal`.`raw`.`ecb_fx_eu_monthly`
+  from `chokepoint-capfractal`.`raw`.`ecb_fx_eu_monthly`
   where year_month is not null
     and 
     regexp_contains(cast(year_month as string), r'^\d{4}-\d{2}$')
@@ -44,7 +44,7 @@ eur_base_direct as (
       when raw.quote_currency_code = 'USD' then 1.0
       else case
     when raw.fx_rate is null or raw.fx_rate = 0 then null
-    else bridge.eur_usd_rate / raw.fx_rate
+    else (bridge.eur_usd_rate) / (raw.fx_rate)
   end
     end as fx_rate_to_usd
   from raw_fx as raw
@@ -64,7 +64,7 @@ usd_eur_bridge as (
     'EUR' as fx_currency_code,
     case
     when bridge.eur_usd_rate is null or bridge.eur_usd_rate = 0 then null
-    else 1.0 / bridge.eur_usd_rate
+    else (1.0) / (bridge.eur_usd_rate)
   end as fx_rate,
     bridge.eur_usd_rate as fx_rate_to_usd
   from eur_usd_bridge as bridge
@@ -80,7 +80,7 @@ usd_base_derived as (
     eur.fx_currency_code,
     case
     when bridge.eur_usd_rate is null or bridge.eur_usd_rate = 0 then null
-    else eur.fx_rate / bridge.eur_usd_rate
+    else (eur.fx_rate) / (bridge.eur_usd_rate)
   end as fx_rate,
     eur.fx_rate_to_usd
   from eur_base_direct as eur

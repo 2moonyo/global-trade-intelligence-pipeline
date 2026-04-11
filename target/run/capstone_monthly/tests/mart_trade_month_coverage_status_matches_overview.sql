@@ -17,7 +17,7 @@
     max(complete_month_flag) as complete_month_flag,
     max(latest_complete_month_flag) as latest_complete_month_flag,
     max(latest_month_flag) as latest_month_flag
-  from `capfractal`.`analytics_marts`.`mart_dashboard_global_trade_overview`
+  from `chokepoint-capfractal`.`analytics_marts`.`mart_dashboard_global_trade_overview`
   group by 1
 ),
 coverage_status as (
@@ -30,7 +30,7 @@ coverage_status as (
     complete_month_flag,
     latest_complete_month_flag,
     latest_month_flag
-  from `capfractal`.`analytics_marts`.`mart_trade_month_coverage_status`
+  from `chokepoint-capfractal`.`analytics_marts`.`mart_trade_month_coverage_status`
 )
 
 select

@@ -2,7 +2,7 @@
   
     
 
-    create or replace table `capfractal`.`analytics_marts`.`mart_reporter_partner_commodity_month_enriched`
+    create or replace table `chokepoint-capfractal`.`analytics_marts`.`mart_reporter_partner_commodity_month_enriched`
       
     
     
@@ -32,7 +32,7 @@ with exposed_trade as (
     route_applicability_status,
     used_transshipment_hub,
     hub_iso3
-  from `capfractal`.`analytics_marts`.`fct_reporter_partner_commodity_route_month`
+  from `chokepoint-capfractal`.`analytics_marts`.`fct_reporter_partner_commodity_route_month`
   where main_chokepoint is not null
     and coalesce(is_maritime_routed, false)
 ),
@@ -65,7 +65,7 @@ with_chokepoint_id as (
     a.*,
     dc.chokepoint_id
   from aggregated_trade as a
-  left join `capfractal`.`analytics_marts`.`dim_chokepoint` as dc
+  left join `chokepoint-capfractal`.`analytics_marts`.`dim_chokepoint` as dc
     on a.chokepoint_name = dc.chokepoint_name
 ),
 reporter_month_totals as (
@@ -75,7 +75,7 @@ reporter_month_totals as (
     year_month,
     month_start_date,
     total_trade_value_usd as reporter_month_trade_value_usd
-  from `capfractal`.`analytics_marts`.`mart_reporter_month_trade_summary`
+  from `chokepoint-capfractal`.`analytics_marts`.`mart_reporter_month_trade_summary`
 ),
 reporter_chokepoint_totals as (
   select
@@ -85,7 +85,7 @@ reporter_chokepoint_totals as (
     chokepoint_id,
     chokepoint_trade_value_usd as reporter_chokepoint_trade_value_usd,
     chokepoint_trade_exposure_ratio
-  from `capfractal`.`analytics_marts`.`mart_reporter_month_chokepoint_exposure`
+  from `chokepoint-capfractal`.`analytics_marts`.`mart_reporter_month_chokepoint_exposure`
 ),
 stress_context as (
   select
@@ -99,7 +99,7 @@ stress_context as (
     stress_severity_band,
     event_active_flag,
     active_event_count
-  from `capfractal`.`analytics_marts`.`mart_chokepoint_monthly_stress_detail`
+  from `chokepoint-capfractal`.`analytics_marts`.`mart_chokepoint_monthly_stress_detail`
 ),
 global_bounds as (
   select max(month_start_date) as latest_month_start_date
@@ -180,11 +180,11 @@ left join reporter_chokepoint_totals as rct
 left join stress_context as sc
   on a.year_month = sc.year_month
  and a.chokepoint_id = sc.chokepoint_id
-left join `capfractal`.`analytics_marts`.`dim_country` as rc
+left join `chokepoint-capfractal`.`analytics_marts`.`dim_country` as rc
   on a.reporter_iso3 = rc.iso3
-left join `capfractal`.`analytics_marts`.`dim_country` as pc
+left join `chokepoint-capfractal`.`analytics_marts`.`dim_country` as pc
   on a.partner_iso3 = pc.iso3
-left join `capfractal`.`analytics_marts`.`dim_commodity` as co
+left join `chokepoint-capfractal`.`analytics_marts`.`dim_commodity` as co
   on a.cmd_code = co.cmd_code
 cross join global_bounds as g
     );

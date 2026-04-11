@@ -2,7 +2,7 @@
   
     
 
-    create or replace table `capfractal`.`analytics_marts`.`mart_global_daily_market_signal`
+    create or replace table `chokepoint-capfractal`.`analytics_marts`.`mart_global_daily_market_signal`
       
     
     
@@ -21,7 +21,7 @@ with portwatch_daily as (
     chokepoint_id,
     has_portwatch_daily_data_flag,
     signal_index_rolling_30d
-  from `capfractal`.`analytics_marts`.`mart_chokepoint_daily_signal`
+  from `chokepoint-capfractal`.`analytics_marts`.`mart_chokepoint_daily_signal`
 ),
 expected_chokepoints as (
   select count(distinct chokepoint_id) as expected_chokepoint_count
@@ -51,7 +51,7 @@ brent_base as (
   select
     date_day,
     price_usd_per_bbl as brent_price_usd
-  from `capfractal`.`analytics_staging`.`stg_brent_daily`
+  from `chokepoint-capfractal`.`analytics_staging`.`stg_brent_daily`
   where benchmark_code = 'BRENT_EU'
 ),
 brent_features as (

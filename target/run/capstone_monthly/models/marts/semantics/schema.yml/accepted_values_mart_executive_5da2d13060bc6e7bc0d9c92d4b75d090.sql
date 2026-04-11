@@ -17,7 +17,7 @@ with all_values as (
         system_stress_level as value_field,
         count(*) as n_records
 
-    from `capfractal`.`analytics_marts`.`mart_executive_monthly_system_snapshot`
+    from `chokepoint-capfractal`.`analytics_marts`.`mart_executive_monthly_system_snapshot`
     group by system_stress_level
 
 )

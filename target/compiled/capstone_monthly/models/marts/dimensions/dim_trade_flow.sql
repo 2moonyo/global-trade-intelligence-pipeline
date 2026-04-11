@@ -3,7 +3,7 @@ with base as (
     flow_code,
     flow_desc,
     flow_group
-  from `capfractal`.`analytics_staging`.`stg_dim_trade_flow`
+  from `chokepoint-capfractal`.`analytics_staging`.`stg_dim_trade_flow`
 )
 
 select

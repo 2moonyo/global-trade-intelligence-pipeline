@@ -11,7 +11,7 @@
 
 select
   *
-from `capfractal`.`analytics_marts`.`mart_dashboard_global_trade_overview`
+from `chokepoint-capfractal`.`analytics_marts`.`mart_dashboard_global_trade_overview`
 where has_reported_trade_data_flag
   and abs(total_trade_value_usd - (import_trade_value_usd + export_trade_value_usd)) > 0.01
   

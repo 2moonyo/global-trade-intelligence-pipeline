@@ -4,7 +4,7 @@ with duplicate_grain as (
     date_day,
     benchmark_code,
     count(*) as row_count
-  from `capfractal`.`analytics_staging`.`stg_brent_daily`
+  from `chokepoint-capfractal`.`analytics_staging`.`stg_brent_daily`
   group by 1, 2
   having count(*) > 1
 )

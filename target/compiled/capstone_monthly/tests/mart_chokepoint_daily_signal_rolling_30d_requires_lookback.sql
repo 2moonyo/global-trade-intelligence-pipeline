@@ -1,6 +1,6 @@
 -- Fails when 30-day rolling signal fields appear before the model has enough prior observations.
 select *
-from `capfractal`.`analytics_marts`.`mart_chokepoint_daily_signal`
+from `chokepoint-capfractal`.`analytics_marts`.`mart_chokepoint_daily_signal`
 where (
     observed_days_in_30d_window < 2
     or has_portwatch_daily_data_flag = 0

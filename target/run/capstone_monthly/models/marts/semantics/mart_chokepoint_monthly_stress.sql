@@ -2,7 +2,7 @@
   
     
 
-    create or replace table `capfractal`.`analytics_marts`.`mart_chokepoint_monthly_stress`
+    create or replace table `chokepoint-capfractal`.`analytics_marts`.`mart_chokepoint_monthly_stress`
       
     
     
@@ -48,7 +48,7 @@ with base as (
     z_score_vessel_size_rolling_6m,
     stress_index_rolling_6m,
     stress_index_weighted_rolling_6m
-  from `capfractal`.`analytics_staging`.`stg_portwatch_stress_metrics`
+  from `chokepoint-capfractal`.`analytics_staging`.`stg_portwatch_stress_metrics`
 ),
 active_event_overlay as (
   -- Aggregate event rows before the join so monthly stress stays at month + chokepoint grain.
@@ -60,7 +60,7 @@ active_event_overlay as (
     count(distinct case when is_event_active then event_id end) as active_event_count,
     max(case when is_event_active then severity_weight end) as max_active_event_severity,
     avg(case when is_event_active then severity_weight end) as avg_active_event_severity
-  from `capfractal`.`analytics_staging`.`stg_chokepoint_bridge`
+  from `chokepoint-capfractal`.`analytics_staging`.`stg_chokepoint_bridge`
   group by 1, 2
 ),
 freshness as (

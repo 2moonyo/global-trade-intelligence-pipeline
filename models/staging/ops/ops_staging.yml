@@ -1,0 +1,13 @@
+version: 2
+
+models:
+  - name: stg_ops_pipeline_run
+    description: Latest snapshot of each manifest-driven batch run mirrored from the operational ops ledger.
+  - name: stg_ops_task_run
+    description: Latest snapshot of each task-level execution step mirrored from the operational ops ledger.
+  - name: stg_ops_task_artifact
+    description: Artifact bridge table linking source and output files to the task runs that touched them.
+  - name: stg_ops_partition_checkpoint
+    description: Latest checkpoint state for each tracked batch partition key.
+  - name: stg_ops_retry_registry
+    description: Latest retry registry state for each retry event emitted by the batch runner.

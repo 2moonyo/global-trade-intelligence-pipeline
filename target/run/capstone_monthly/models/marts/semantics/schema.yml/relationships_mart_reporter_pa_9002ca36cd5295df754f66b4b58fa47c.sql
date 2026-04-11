@@ -13,13 +13,13 @@
 
 with child as (
     select reporter_iso3 as from_field
-    from `capfractal`.`analytics_marts`.`mart_reporter_partner_commodity_month_enriched`
+    from `chokepoint-capfractal`.`analytics_marts`.`mart_reporter_partner_commodity_month_enriched`
     where reporter_iso3 is not null
 ),
 
 parent as (
     select iso3 as to_field
-    from `capfractal`.`analytics_marts`.`dim_country`
+    from `chokepoint-capfractal`.`analytics_marts`.`dim_country`
 )
 
 select

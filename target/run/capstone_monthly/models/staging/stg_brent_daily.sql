@@ -1,6 +1,6 @@
 
 
-  create or replace view `capfractal`.`analytics_staging`.`stg_brent_daily`
+  create or replace view `chokepoint-capfractal`.`analytics_staging`.`stg_brent_daily`
   OPTIONS()
   as -- Grain: one row per date_day + benchmark_code.
 -- Deduplicates the raw Brent daily landing table to the latest loaded record
@@ -27,7 +27,7 @@ with raw_brent as (
     safe_cast(price_usd_per_bbl as FLOAT64)
    as price_usd_per_bbl,
     cast(load_ts as timestamp) as load_ts
-  from `capfractal`.`raw`.`brent_daily`
+  from `chokepoint-capfractal`.`raw`.`brent_daily`
   where trade_date is not null
     and benchmark_code is not null
 ),

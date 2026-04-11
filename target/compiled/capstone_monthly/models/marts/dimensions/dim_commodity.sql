@@ -9,7 +9,7 @@ with base as (
     food_flag,
     energy_flag,
     industrial_flag
-  from `capfractal`.`analytics_staging`.`stg_dim_commodity`
+  from `chokepoint-capfractal`.`analytics_staging`.`stg_dim_commodity`
 )
 
 select

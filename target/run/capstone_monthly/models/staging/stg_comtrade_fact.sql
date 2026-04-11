@@ -1,6 +1,6 @@
 
 
-  create or replace view `capfractal`.`analytics_staging`.`stg_comtrade_fact`
+  create or replace view `chokepoint-capfractal`.`analytics_staging`.`stg_comtrade_fact`
   OPTIONS()
   as select
   canonical_grain_key,
@@ -19,5 +19,5 @@
   qty,
   mot_code,
   partner2_code
-from `capfractal`.`analytics_staging`.`stg_comtrade_trade_base`;
+from `chokepoint-capfractal`.`analytics_staging`.`stg_comtrade_trade_base`;
 

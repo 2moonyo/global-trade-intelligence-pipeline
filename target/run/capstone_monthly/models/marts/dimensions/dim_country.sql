@@ -2,7 +2,7 @@
   
     
 
-    create or replace table `capfractal`.`analytics_marts`.`dim_country`
+    create or replace table `chokepoint-capfractal`.`analytics_marts`.`dim_country`
       
     
     
@@ -20,7 +20,7 @@
     continent,
     is_eu,
     is_oecd
-  from `capfractal`.`analytics_staging`.`stg_dim_country`
+  from `chokepoint-capfractal`.`analytics_staging`.`stg_dim_country`
 )
 
 select

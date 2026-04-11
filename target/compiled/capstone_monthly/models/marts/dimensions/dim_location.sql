@@ -7,7 +7,7 @@ with base as (
         location_type,
         location_layer,
         is_core_chokepoint
-    from `capfractal`.`analytics_analytics_staging`.`stg_event_location`
+    from `chokepoint-capfractal`.`analytics_analytics_staging`.`stg_event_location`
 
 )
 

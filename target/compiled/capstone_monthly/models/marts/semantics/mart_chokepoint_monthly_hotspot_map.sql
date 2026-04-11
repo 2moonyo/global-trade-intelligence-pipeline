@@ -18,7 +18,7 @@ with stress_base as (
     latest_month_flag,
     event_active_flag,
     active_event_count
-  from `capfractal`.`analytics_marts`.`mart_chokepoint_monthly_stress_detail`
+  from `chokepoint-capfractal`.`analytics_marts`.`mart_chokepoint_monthly_stress_detail`
 ),
 exposure_base as (
   select
@@ -31,7 +31,7 @@ exposure_base as (
     chokepoint_trade_value_usd,
     chokepoint_trade_exposure_ratio,
     route_pair_count
-  from `capfractal`.`analytics_marts`.`mart_reporter_month_chokepoint_exposure`
+  from `chokepoint-capfractal`.`analytics_marts`.`mart_reporter_month_chokepoint_exposure`
 ),
 exposure_aggregated as (
   select
@@ -53,7 +53,7 @@ high_medium_exposure as (
     te.chokepoint_id,
     sum(te.chokepoint_trade_value_usd) as high_medium_exposed_trade_value_usd,
     count(distinct te.reporter_iso3) as high_medium_exposed_reporter_count
-  from `capfractal`.`analytics_marts`.`mart_trade_exposure` as te
+  from `chokepoint-capfractal`.`analytics_marts`.`mart_trade_exposure` as te
   where te.route_confidence_score in ('HIGH', 'MEDIUM')
   group by 1, 2
 ),
@@ -129,5 +129,5 @@ left join high_medium_exposure as hm
 left join top_reporter as tr
   on sb.month_start_date = tr.month_start_date
  and sb.chokepoint_id = tr.chokepoint_id
-left join `capfractal`.`analytics_marts`.`dim_chokepoint` as dc
+left join `chokepoint-capfractal`.`analytics_marts`.`dim_chokepoint` as dc
   on sb.chokepoint_id = dc.chokepoint_id

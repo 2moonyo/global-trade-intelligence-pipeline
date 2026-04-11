@@ -17,7 +17,7 @@ with duplicate_grain as (
     year_month,
     trade_flow,
     count(*) as row_count
-  from `capfractal`.`analytics_marts`.`fct_reporter_partner_commodity_route_month`
+  from `chokepoint-capfractal`.`analytics_marts`.`fct_reporter_partner_commodity_route_month`
   group by 1, 2, 3, 4, 5, 6
   having count(*) > 1
 )

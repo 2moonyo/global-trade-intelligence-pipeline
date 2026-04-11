@@ -13,13 +13,13 @@
 
 with child as (
     select top_exposed_reporter_iso3 as from_field
-    from `capfractal`.`analytics_marts`.`mart_chokepoint_monthly_hotspot_map`
+    from `chokepoint-capfractal`.`analytics_marts`.`mart_chokepoint_monthly_hotspot_map`
     where top_exposed_reporter_iso3 is not null
 ),
 
 parent as (
     select iso3 as to_field
-    from `capfractal`.`analytics_marts`.`dim_country`
+    from `chokepoint-capfractal`.`analytics_marts`.`dim_country`
 )
 
 select

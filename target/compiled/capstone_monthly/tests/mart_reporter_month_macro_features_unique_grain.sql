@@ -8,7 +8,7 @@ with duplicate_grain as (
     base_currency_code,
     fx_currency_code,
     count(*) as row_count
-  from `capfractal`.`analytics_marts`.`mart_reporter_month_macro_features`
+  from `chokepoint-capfractal`.`analytics_marts`.`mart_reporter_month_macro_features`
   group by 1, 2, 3, 4, 5, 6
   having count(*) > 1
 )

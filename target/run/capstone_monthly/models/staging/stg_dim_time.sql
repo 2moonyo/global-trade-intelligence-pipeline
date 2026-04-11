@@ -1,6 +1,6 @@
 
 
-  create or replace view `capfractal`.`analytics_staging`.`stg_dim_time`
+  create or replace view `chokepoint-capfractal`.`analytics_staging`.`stg_dim_time`
   OPTIONS()
   as 
 
@@ -11,7 +11,7 @@ with observed_months as (
     
     safe_cast(concat(cast(year_month as string), '-01') as date)
    as month_start_date
-  from `capfractal`.`raw`.`comtrade_fact`
+  from `chokepoint-capfractal`.`raw`.`comtrade_fact`
   where year_month is not null
     and 
     regexp_contains(cast(year_month as string), r'^\d{4}-\d{2}$')
@@ -23,7 +23,7 @@ with observed_months as (
     
     safe_cast(concat(cast(year_month as string), '-01') as date)
    as month_start_date
-  from `capfractal`.`raw`.`portwatch_monthly`
+  from `chokepoint-capfractal`.`raw`.`portwatch_monthly`
   where year_month is not null
     and 
     regexp_contains(cast(year_month as string), r'^\d{4}-\d{2}$')
@@ -33,7 +33,7 @@ with observed_months as (
 
   select distinct
     cast(month_start_date as date) as month_start_date
-  from `capfractal`.`raw`.`brent_monthly`
+  from `chokepoint-capfractal`.`raw`.`brent_monthly`
   where month_start_date is not null
 
   union distinct
@@ -42,7 +42,7 @@ with observed_months as (
     
     safe_cast(concat(cast(year_month as string), '-01') as date)
    as month_start_date
-  from `capfractal`.`raw`.`ecb_fx_eu_monthly`
+  from `chokepoint-capfractal`.`raw`.`ecb_fx_eu_monthly`
   where year_month is not null
     and 
     regexp_contains(cast(year_month as string), r'^\d{4}-\d{2}$')
@@ -54,7 +54,7 @@ with observed_months as (
     
     safe_cast(concat(cast(year_month as string), '-01') as date)
    as month_start_date
-  from `capfractal`.`raw`.`bridge_event_month_chokepoint_core`
+  from `chokepoint-capfractal`.`raw`.`bridge_event_month_chokepoint_core`
   where year_month is not null
     and 
     regexp_contains(cast(year_month as string), r'^\d{4}-\d{2}$')
@@ -66,7 +66,7 @@ with observed_months as (
     
     safe_cast(concat(cast(year_month as string), '-01') as date)
    as month_start_date
-  from `capfractal`.`raw`.`bridge_event_month_maritime_region`
+  from `chokepoint-capfractal`.`raw`.`bridge_event_month_maritime_region`
   where year_month is not null
     and 
     regexp_contains(cast(year_month as string), r'^\d{4}-\d{2}$')
@@ -78,7 +78,7 @@ with observed_months as (
     
     safe_cast(concat(cast(year as string), '-01-01') as date)
    as month_start_date
-  from `capfractal`.`raw`.`energy_vulnerability`
+  from `chokepoint-capfractal`.`raw`.`energy_vulnerability`
   where year is not null
 
 ),

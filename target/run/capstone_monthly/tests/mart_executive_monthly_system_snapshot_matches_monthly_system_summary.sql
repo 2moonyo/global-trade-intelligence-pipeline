@@ -22,7 +22,7 @@
     event_impacted_chokepoint_count,
     system_stress_level,
     latest_month_flag
-  from `capfractal`.`analytics_marts`.`mart_executive_monthly_system_snapshot`
+  from `chokepoint-capfractal`.`analytics_marts`.`mart_executive_monthly_system_snapshot`
 ),
 system_summary as (
   select
@@ -39,7 +39,7 @@ system_summary as (
     event_impacted_chokepoint_count,
     system_stress_level,
     latest_month_flag
-  from `capfractal`.`analytics_marts`.`mart_global_monthly_system_stress_summary`
+  from `chokepoint-capfractal`.`analytics_marts`.`mart_global_monthly_system_stress_summary`
 )
 
 select

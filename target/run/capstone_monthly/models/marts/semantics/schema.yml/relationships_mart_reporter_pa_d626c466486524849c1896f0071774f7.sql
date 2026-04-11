@@ -13,13 +13,13 @@
 
 with child as (
     select cmd_code as from_field
-    from `capfractal`.`analytics_marts`.`mart_reporter_partner_commodity_month_enriched`
+    from `chokepoint-capfractal`.`analytics_marts`.`mart_reporter_partner_commodity_month_enriched`
     where cmd_code is not null
 ),
 
 parent as (
     select cmd_code as to_field
-    from `capfractal`.`analytics_marts`.`dim_commodity`
+    from `chokepoint-capfractal`.`analytics_marts`.`dim_commodity`
 )
 
 select

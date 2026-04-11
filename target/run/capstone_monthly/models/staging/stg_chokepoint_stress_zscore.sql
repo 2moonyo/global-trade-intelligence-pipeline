@@ -1,6 +1,6 @@
 
 
-  create or replace view `capfractal`.`analytics_staging`.`stg_chokepoint_stress_zscore`
+  create or replace view `chokepoint-capfractal`.`analytics_staging`.`stg_chokepoint_stress_zscore`
   OPTIONS()
   as -- Compatibility layer over the canonical PortWatch stress metrics model.
 -- Keeps the existing event-impact interface stable while sourcing all z-scores
@@ -18,5 +18,5 @@ select
   z_score_count,
   vessel_size_index,
   z_score_vessel_size
-from `capfractal`.`analytics_staging`.`stg_portwatch_stress_metrics`;
+from `chokepoint-capfractal`.`analytics_staging`.`stg_portwatch_stress_metrics`;
 

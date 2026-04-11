@@ -22,4 +22,4 @@ select
   
     ST_GEOGFROMWKB(port_point_wkb)
    as port_point_geog
-from `capfractal`.`raw`.`dim_country_ports`
+from `chokepoint-capfractal`.`raw`.`dim_country_ports`

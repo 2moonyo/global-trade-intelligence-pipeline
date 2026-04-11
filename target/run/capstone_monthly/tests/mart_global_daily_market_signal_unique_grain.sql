@@ -12,7 +12,7 @@ with duplicate_grain as (
   select
     date_day,
     count(*) as row_count
-  from `capfractal`.`analytics_marts`.`mart_global_daily_market_signal`
+  from `chokepoint-capfractal`.`analytics_marts`.`mart_global_daily_market_signal`
   group by 1
   having count(*) > 1
 )

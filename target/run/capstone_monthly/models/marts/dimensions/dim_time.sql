@@ -2,7 +2,7 @@
   
     
 
-    create or replace table `capfractal`.`analytics_marts`.`dim_time`
+    create or replace table `chokepoint-capfractal`.`analytics_marts`.`dim_time`
       
     
     
@@ -19,7 +19,7 @@
     quarter,
     year_month,
     month_start_date
-  from `capfractal`.`analytics_staging`.`stg_dim_time`
+  from `chokepoint-capfractal`.`analytics_staging`.`stg_dim_time`
 )
 
 select

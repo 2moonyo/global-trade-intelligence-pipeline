@@ -12,7 +12,7 @@ with event_months_union as (
         is_lag_period,
         severity_weight,
         is_global_event
-    from `capfractal`.`analytics_analytics_staging`.`stg_event_location`
+    from `chokepoint-capfractal`.`analytics_analytics_staging`.`stg_event_location`
 
 ),
 
@@ -41,7 +41,7 @@ time_map as (
         period as month_key,
         year_month,
         month_start_date
-    from `capfractal`.`analytics_marts`.`dim_time`
+    from `chokepoint-capfractal`.`analytics_marts`.`dim_time`
 
 )
 

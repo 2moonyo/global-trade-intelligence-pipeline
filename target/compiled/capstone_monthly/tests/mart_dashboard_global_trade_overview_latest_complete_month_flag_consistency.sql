@@ -3,12 +3,12 @@
 with latest_complete_month as (
   select
     max(case when complete_month_flag then month_start_date end) as latest_complete_month_start_date
-  from `capfractal`.`analytics_marts`.`mart_dashboard_global_trade_overview`
+  from `chokepoint-capfractal`.`analytics_marts`.`mart_dashboard_global_trade_overview`
 )
 
 select
   mart.*
-from `capfractal`.`analytics_marts`.`mart_dashboard_global_trade_overview` as mart
+from `chokepoint-capfractal`.`analytics_marts`.`mart_dashboard_global_trade_overview` as mart
 cross join latest_complete_month as lcm
 where (
   lcm.latest_complete_month_start_date is null

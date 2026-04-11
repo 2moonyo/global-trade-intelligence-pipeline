@@ -17,7 +17,7 @@ with canonical_reporter_month as (
     rmts.import_trade_value_usd,
     rmts.export_trade_value_usd,
     rmts.source_row_count
-  from `capfractal`.`analytics_marts`.`mart_reporter_month_trade_summary` as rmts
+  from `chokepoint-capfractal`.`analytics_marts`.`mart_reporter_month_trade_summary` as rmts
   where rmts.reporter_iso3 is not null
     and rmts.reporter_country_name is not null
     and rmts.month_start_date is not null
@@ -93,7 +93,7 @@ month_completeness as (
     countif(gwt.has_reported_trade_data_flag) as reporters_with_data_in_month,
     case
     when count(*) is null or count(*) = 0 then null
-    else countif(gwt.has_reported_trade_data_flag) / count(*)
+    else (countif(gwt.has_reported_trade_data_flag)) / (count(*))
   end as reporting_completeness_pct,
     case
       when countif(gwt.has_reported_trade_data_flag) = count(*) then true
@@ -292,15 +292,15 @@ final as (
     mc.export_trade_value_usd - mc.previous_month_export_trade_value_usd as export_trade_value_mom_change_usd,
     case
     when mc.previous_month_total_trade_value_usd is null or mc.previous_month_total_trade_value_usd = 0 then null
-    else mc.total_trade_value_usd - mc.previous_month_total_trade_value_usd / mc.previous_month_total_trade_value_usd
+    else (mc.total_trade_value_usd - mc.previous_month_total_trade_value_usd) / (mc.previous_month_total_trade_value_usd)
   end * 100 as total_trade_value_mom_change_pct,
     case
     when mc.previous_month_import_trade_value_usd is null or mc.previous_month_import_trade_value_usd = 0 then null
-    else mc.import_trade_value_usd - mc.previous_month_import_trade_value_usd / mc.previous_month_import_trade_value_usd
+    else (mc.import_trade_value_usd - mc.previous_month_import_trade_value_usd) / (mc.previous_month_import_trade_value_usd)
   end * 100 as import_trade_value_mom_change_pct,
     case
     when mc.previous_month_export_trade_value_usd is null or mc.previous_month_export_trade_value_usd = 0 then null
-    else mc.export_trade_value_usd - mc.previous_month_export_trade_value_usd / mc.previous_month_export_trade_value_usd
+    else (mc.export_trade_value_usd - mc.previous_month_export_trade_value_usd) / (mc.previous_month_export_trade_value_usd)
   end * 100 as export_trade_value_mom_change_pct,
     case
     when mc.total_trade_value_usd is null then null
@@ -329,39 +329,39 @@ final as (
     case
       when case
     when mc.previous_month_total_trade_value_usd is null or mc.previous_month_total_trade_value_usd = 0 then null
-    else mc.total_trade_value_usd - mc.previous_month_total_trade_value_usd / mc.previous_month_total_trade_value_usd
+    else (mc.total_trade_value_usd - mc.previous_month_total_trade_value_usd) / (mc.previous_month_total_trade_value_usd)
   end * 100 is null then null
       else format(
         '%.2f%%',
         case
     when mc.previous_month_total_trade_value_usd is null or mc.previous_month_total_trade_value_usd = 0 then null
-    else mc.total_trade_value_usd - mc.previous_month_total_trade_value_usd / mc.previous_month_total_trade_value_usd
+    else (mc.total_trade_value_usd - mc.previous_month_total_trade_value_usd) / (mc.previous_month_total_trade_value_usd)
   end * 100
       )
     end as total_trade_value_mom_change_pct_label,
     case
       when case
     when mc.previous_month_import_trade_value_usd is null or mc.previous_month_import_trade_value_usd = 0 then null
-    else mc.import_trade_value_usd - mc.previous_month_import_trade_value_usd / mc.previous_month_import_trade_value_usd
+    else (mc.import_trade_value_usd - mc.previous_month_import_trade_value_usd) / (mc.previous_month_import_trade_value_usd)
   end * 100 is null then null
       else format(
         '%.2f%%',
         case
     when mc.previous_month_import_trade_value_usd is null or mc.previous_month_import_trade_value_usd = 0 then null
-    else mc.import_trade_value_usd - mc.previous_month_import_trade_value_usd / mc.previous_month_import_trade_value_usd
+    else (mc.import_trade_value_usd - mc.previous_month_import_trade_value_usd) / (mc.previous_month_import_trade_value_usd)
   end * 100
       )
     end as import_trade_value_mom_change_pct_label,
     case
       when case
     when mc.previous_month_export_trade_value_usd is null or mc.previous_month_export_trade_value_usd = 0 then null
-    else mc.export_trade_value_usd - mc.previous_month_export_trade_value_usd / mc.previous_month_export_trade_value_usd
+    else (mc.export_trade_value_usd - mc.previous_month_export_trade_value_usd) / (mc.previous_month_export_trade_value_usd)
   end * 100 is null then null
       else format(
         '%.2f%%',
         case
     when mc.previous_month_export_trade_value_usd is null or mc.previous_month_export_trade_value_usd = 0 then null
-    else mc.export_trade_value_usd - mc.previous_month_export_trade_value_usd / mc.previous_month_export_trade_value_usd
+    else (mc.export_trade_value_usd - mc.previous_month_export_trade_value_usd) / (mc.previous_month_export_trade_value_usd)
   end * 100
       )
     end as export_trade_value_mom_change_pct_label,

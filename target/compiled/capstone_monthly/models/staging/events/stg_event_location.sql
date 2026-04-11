@@ -18,7 +18,7 @@ select
     event_type,
     raw_event_scope,
     link_role
-from `capfractal`.`analytics_analytics_staging`.`stg_event_month_chokepoint`
+from `chokepoint-capfractal`.`analytics_analytics_staging`.`stg_event_month_chokepoint`
 
 union all
 
@@ -40,4 +40,4 @@ select
     event_type,
     raw_event_scope,
     link_role
-from `capfractal`.`analytics_analytics_staging`.`stg_event_month_region`
+from `chokepoint-capfractal`.`analytics_analytics_staging`.`stg_event_month_region`

@@ -1,6 +1,6 @@
 -- Fails when expanding historical stress fields appear before there are enough prior observed months.
 select *
-from `capfractal`.`analytics_marts`.`mart_chokepoint_monthly_stress`
+from `chokepoint-capfractal`.`analytics_marts`.`mart_chokepoint_monthly_stress`
 where historical_baseline_observation_count < 2
   and (
     z_score_historical is not null

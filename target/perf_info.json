@@ -1,40 +1,56 @@
 {
     "path_count": 294,
-    "parsed_path_count": 1,
-    "static_analysis_path_count": 0,
-    "static_analysis_parsed_path_count": 0,
+    "parsed_path_count": 294,
+    "static_analysis_path_count": 58,
+    "static_analysis_parsed_path_count": 25,
     "is_partial_parse_enabled": true,
     "is_static_analysis_enabled": true,
-    "read_files_elapsed": 0.013680999996722676,
-    "load_macros_elapsed": 0.000319957995088771,
-    "parse_project_elapsed": 0.05175008399237413,
-    "patch_sources_elapsed": 2.19999928958714e-05,
-    "process_manifest_elapsed": 0.00047312499373219907,
-    "load_all_elapsed": 0.2559483750083018,
+    "read_files_elapsed": 0.07518595800502226,
+    "load_macros_elapsed": 0.32224570799735375,
+    "parse_project_elapsed": 0.8741696249926463,
+    "patch_sources_elapsed": 0.013682249991688877,
+    "process_manifest_elapsed": 0.058163082983810455,
+    "load_all_elapsed": 1.515096542018,
     "projects": [
         {
             "project_name": "capstone_monthly",
-            "elapsed": 0.051490208017639816,
+            "elapsed": 0.8701747500163037,
             "parsers": [
                 {
+                    "parser": "model",
+                    "elapsed": 0.23464916599914432,
+                    "parsed_path_count": 58
+                },
+                {
                     "parser": "test",
-                    "elapsed": 0.05148075000033714,
-                    "parsed_path_count": 1
+                    "elapsed": 0.13407020800514147,
+                    "parsed_path_count": 59
+                },
+                {
+                    "parser": "test",
+                    "elapsed": 0.49969500000588596,
+                    "parsed_path_count": 7
                 }
             ],
-            "parsed_path_count": 1
+            "parsed_path_count": 124
         },
         {
             "project_name": "dbt_bigquery",
-            "elapsed": 0,
+            "elapsed": 0.001604209013748914,
             "parsers": [],
             "parsed_path_count": 0
         },
         {
             "project_name": "dbt",
-            "elapsed": 0,
-            "parsers": [],
-            "parsed_path_count": 0
+            "elapsed": 0.00203312499797903,
+            "parsers": [
+                {
+                    "parser": "doc",
+                    "elapsed": 0.00012466698535718024,
+                    "parsed_path_count": 1
+                }
+            ],
+            "parsed_path_count": 1
         }
     ]
 }

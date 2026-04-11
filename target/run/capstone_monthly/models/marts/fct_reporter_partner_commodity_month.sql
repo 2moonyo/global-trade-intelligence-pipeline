@@ -2,7 +2,7 @@
   
     
 
-    create or replace table `capfractal`.`analytics_marts`.`fct_reporter_partner_commodity_month`
+    create or replace table `chokepoint-capfractal`.`analytics_marts`.`fct_reporter_partner_commodity_month`
       
     
     
@@ -24,7 +24,7 @@
     net_weight_kg,
     gross_weight_kg,
     qty
-  from `capfractal`.`analytics_staging`.`stg_comtrade_trade_base`
+  from `chokepoint-capfractal`.`analytics_staging`.`stg_comtrade_trade_base`
 )
 
 select

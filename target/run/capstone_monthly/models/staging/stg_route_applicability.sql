@@ -1,6 +1,6 @@
 
 
-  create or replace view `capfractal`.`analytics_staging`.`stg_route_applicability`
+  create or replace view `chokepoint-capfractal`.`analytics_staging`.`stg_route_applicability`
   OPTIONS()
   as select
   upper(trim(reporter_iso3)) as reporter_iso3,
@@ -14,5 +14,5 @@
   cast(has_non_marine as boolean) as has_non_marine,
   mot_codes_seen,
   route_applicability_status
-from `capfractal`.`raw`.`route_applicability`;
+from `chokepoint-capfractal`.`raw`.`route_applicability`;
 

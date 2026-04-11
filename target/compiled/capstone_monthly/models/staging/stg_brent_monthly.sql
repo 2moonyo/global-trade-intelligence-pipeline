@@ -37,4 +37,4 @@ select
   
     safe_cast(trading_day_count as INT64)
    as trading_day_count
-from `capfractal`.`raw`.`brent_monthly`
+from `chokepoint-capfractal`.`raw`.`brent_monthly`

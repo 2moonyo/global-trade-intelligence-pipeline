@@ -5,6 +5,6 @@ select
   cmd_code,
   chokepoint_id,
   count(*) as row_count
-from `capfractal`.`analytics_marts`.`mart_reporter_partner_commodity_month_enriched`
+from `chokepoint-capfractal`.`analytics_marts`.`mart_reporter_partner_commodity_month_enriched`
 group by 1, 2, 3, 4, 5
 having count(*) > 1

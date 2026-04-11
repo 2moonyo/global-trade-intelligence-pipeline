@@ -1,0 +1,24 @@
+{
+  "project_id": "capfractal",
+  "gcp_location": "us-central1",
+  "gcs_bucket_name": "test-bucket9182",
+  "gcs_prefix": "cap",
+  "raw_dataset_id": "raw",
+  "analytics_dataset_id": "analytics",
+  "project_job_user_members": [
+    "user:tummodz@gmail.com"
+  ],
+  "storage_object_admin_members": [
+    "user:tummodz@gmail.com"
+  ],
+  "raw_dataset_editor_members": [
+    "user:tummodz@gmail.com"
+  ],
+  "analytics_dataset_editor_members": [
+    "user:tummodz@gmail.com"
+  ],
+  "analytics_dataset_viewer_members": [],
+  "labels": {
+    "env": "dev"
+  }
+}

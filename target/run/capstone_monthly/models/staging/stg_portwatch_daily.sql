@@ -1,6 +1,6 @@
 
 
-  create or replace view `capfractal`.`analytics_staging`.`stg_portwatch_daily`
+  create or replace view `chokepoint-capfractal`.`analytics_staging`.`stg_portwatch_daily`
   OPTIONS()
   as -- Grain: one row per date_day + chokepoint_id.
 -- Builds a scaffolded PortWatch daily calendar so missing or stale chokepoint
@@ -22,7 +22,7 @@ with raw_portwatch as (
     cast(capacity_tanker as FLOAT64) as capacity_tanker,
     cast(capacity_container as FLOAT64) as capacity_container,
     cast(capacity_dry_bulk as FLOAT64) as capacity_dry_bulk
-  from `capfractal`.`raw`.`portwatch_daily`
+  from `chokepoint-capfractal`.`raw`.`portwatch_daily`
   where date_day is not null
     and chokepoint_id is not null
     and chokepoint_name is not null

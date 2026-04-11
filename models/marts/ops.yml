@@ -1,0 +1,12 @@
+version: 2
+
+models:
+  - name: fct_reporter_partner_commodity_month_lineage_detail
+    description: >
+      Normalized Comtrade lineage detail at canonical trade grain plus source-file lineage,
+      allowing drill-back from dashboard aggregates to load_batch_id, source_file, and bronze_extracted_at
+      without changing the existing dashboard marts.
+  - name: mart_pipeline_progress
+    description: >
+      Separate operational progress mart showing manifest-defined batch status, retries, checkpoints,
+      and artifact coverage without changing any existing dashboard-facing marts.

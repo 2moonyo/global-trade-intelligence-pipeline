@@ -5,7 +5,7 @@
 with dbt_test__target as (
 
   select event_id as unique_field
-  from `capfractal`.`analytics_marts`.`mart_event_impact`
+  from `chokepoint-capfractal`.`analytics_marts`.`mart_event_impact`
   where event_id is not null
 
 )

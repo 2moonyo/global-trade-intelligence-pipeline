@@ -1,5 +1,5 @@
 select *
-from `capfractal`.`analytics_marts`.`mart_chokepoint_monthly_stress_detail`
+from `chokepoint-capfractal`.`analytics_marts`.`mart_chokepoint_monthly_stress_detail`
 where (
     z_score_historical_capped is not null
     and (

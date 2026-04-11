@@ -5,7 +5,7 @@
 with dbt_test__target as (
 
   select location_id as unique_field
-  from `capfractal`.`analytics_analytics_marts`.`dim_location`
+  from `chokepoint-capfractal`.`analytics_analytics_marts`.`dim_location`
   where location_id is not null
 
 )

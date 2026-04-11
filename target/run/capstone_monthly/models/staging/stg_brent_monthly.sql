@@ -1,6 +1,6 @@
 
 
-  create or replace view `capfractal`.`analytics_staging`.`stg_brent_monthly`
+  create or replace view `chokepoint-capfractal`.`analytics_staging`.`stg_brent_monthly`
   OPTIONS()
   as select
   year_month,
@@ -41,5 +41,5 @@
   
     safe_cast(trading_day_count as INT64)
    as trading_day_count
-from `capfractal`.`raw`.`brent_monthly`;
+from `chokepoint-capfractal`.`raw`.`brent_monthly`;
 

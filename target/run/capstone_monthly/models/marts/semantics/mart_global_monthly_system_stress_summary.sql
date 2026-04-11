@@ -2,7 +2,7 @@
   
     
 
-    create or replace table `capfractal`.`analytics_marts`.`mart_global_monthly_system_stress_summary`
+    create or replace table `chokepoint-capfractal`.`analytics_marts`.`mart_global_monthly_system_stress_summary`
       
     
     
@@ -22,7 +22,7 @@ with base as (
     stress_index,
     stress_index_weighted,
     event_active_flag
-  from `capfractal`.`analytics_marts`.`mart_chokepoint_monthly_stress`
+  from `chokepoint-capfractal`.`analytics_marts`.`mart_chokepoint_monthly_stress`
 ),
 expected_chokepoints as (
   select count(distinct chokepoint_id) as expected_chokepoint_count
@@ -63,7 +63,7 @@ select
   e.expected_chokepoint_count,
   case
     when e.expected_chokepoint_count is null or e.expected_chokepoint_count = 0 then null
-    else m.observed_chokepoint_count / e.expected_chokepoint_count
+    else (m.observed_chokepoint_count) / (e.expected_chokepoint_count)
   end as monthly_coverage_ratio,
   case
     when m.observed_chokepoint_count = 0 then 'NO_PORTWATCH_DATA'

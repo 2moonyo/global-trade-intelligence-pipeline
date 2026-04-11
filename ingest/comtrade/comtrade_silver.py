@@ -194,6 +194,7 @@ def _load_payload_rows(json_path: Path, run_id: str) -> tuple[pd.DataFrame, dict
             **file_meta,
             "record_count": int(metadata.get("record_count") or 0),
             "bronze_extracted_at": metadata.get("extracted_at_utc"),
+            "load_batch_id": _source_batch_id(file_meta, metadata),
         }
 
     for key, value in file_meta.items():
@@ -210,6 +211,7 @@ def _load_payload_rows(json_path: Path, run_id: str) -> tuple[pd.DataFrame, dict
         **file_meta,
         "record_count": int(metadata.get("record_count") or len(rows)),
         "bronze_extracted_at": metadata.get("extracted_at_utc"),
+        "load_batch_id": _source_batch_id(file_meta, metadata),
     }
 
 

@@ -9,7 +9,7 @@
     
   -- Fails when month-over-month fields are populated without an immediately prior calendar month.
 select *
-from `capfractal`.`analytics_marts`.`mart_chokepoint_monthly_stress`
+from `chokepoint-capfractal`.`analytics_marts`.`mart_chokepoint_monthly_stress`
 where previous_month_available_flag = false
   and (
     previous_month_throughput_metric is not null

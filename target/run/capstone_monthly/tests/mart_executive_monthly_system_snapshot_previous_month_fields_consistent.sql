@@ -8,7 +8,7 @@
       
     
   select *
-from `capfractal`.`analytics_marts`.`mart_executive_monthly_system_snapshot`
+from `chokepoint-capfractal`.`analytics_marts`.`mart_executive_monthly_system_snapshot`
 where not previous_month_available_flag
   and (
     previous_month_avg_stress_index is not null

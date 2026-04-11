@@ -2,7 +2,7 @@
   
     
 
-    create or replace table `capfractal`.`analytics_marts`.`mart_macro_monthly_features`
+    create or replace table `chokepoint-capfractal`.`analytics_marts`.`mart_macro_monthly_features`
       
     
     
@@ -19,7 +19,7 @@ with brent_monthly_long as (
     benchmark_code,
     avg_price_usd_per_bbl,
     mom_pct_change
-  from `capfractal`.`analytics_staging`.`stg_brent_monthly`
+  from `chokepoint-capfractal`.`analytics_staging`.`stg_brent_monthly`
   where benchmark_code in ('BRENT_EU', 'WTI_US')
 ),
 brent_monthly as (
@@ -40,7 +40,7 @@ fx_monthly as (
     fx_rate,
     fx_rate_to_usd,
     fx_mom_change
-  from `capfractal`.`analytics_staging`.`stg_fx_monthly`
+  from `chokepoint-capfractal`.`analytics_staging`.`stg_fx_monthly`
 )
 
 select

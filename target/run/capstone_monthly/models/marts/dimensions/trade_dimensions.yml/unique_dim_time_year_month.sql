@@ -14,7 +14,7 @@
 with dbt_test__target as (
 
   select year_month as unique_field
-  from `capfractal`.`analytics_marts`.`dim_time`
+  from `chokepoint-capfractal`.`analytics_marts`.`dim_time`
   where year_month is not null
 
 )

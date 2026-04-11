@@ -17,7 +17,7 @@ with all_values as (
         complete_month_flag as value_field,
         count(*) as n_records
 
-    from `capfractal`.`analytics_marts`.`mart_dashboard_global_trade_overview`
+    from `chokepoint-capfractal`.`analytics_marts`.`mart_dashboard_global_trade_overview`
     group by complete_month_flag
 
 )

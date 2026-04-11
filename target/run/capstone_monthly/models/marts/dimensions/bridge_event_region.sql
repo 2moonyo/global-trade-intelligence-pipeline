@@ -2,7 +2,7 @@
   
     
 
-    create or replace table `capfractal`.`analytics_analytics_marts`.`bridge_event_region`
+    create or replace table `chokepoint-capfractal`.`analytics_analytics_marts`.`bridge_event_region`
       
     
     
@@ -18,7 +18,7 @@ with base as (
         event_id,
         location_name as region_name,
         link_role
-    from `capfractal`.`analytics_analytics_staging`.`stg_event_location`
+    from `chokepoint-capfractal`.`analytics_analytics_staging`.`stg_event_location`
     where location_type <> 'chokepoint'
 
 )

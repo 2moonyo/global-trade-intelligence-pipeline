@@ -2,7 +2,7 @@
 
 select
   *
-from `capfractal`.`analytics_marts`.`mart_dashboard_global_trade_overview`
+from `chokepoint-capfractal`.`analytics_marts`.`mart_dashboard_global_trade_overview`
 where not previous_month_available_flag
   and (
     previous_month_total_trade_value_usd is not null

@@ -11,7 +11,7 @@
 
 select
   *
-from `capfractal`.`analytics_marts`.`mart_dashboard_global_trade_overview`
+from `chokepoint-capfractal`.`analytics_marts`.`mart_dashboard_global_trade_overview`
 where (
   top_5_reporter_in_month_flag
   and (

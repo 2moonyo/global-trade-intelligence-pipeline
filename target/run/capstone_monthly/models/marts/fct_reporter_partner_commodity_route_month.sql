@@ -2,7 +2,7 @@
   
     
 
-    create or replace table `capfractal`.`analytics_marts`.`fct_reporter_partner_commodity_route_month`
+    create or replace table `chokepoint-capfractal`.`analytics_marts`.`fct_reporter_partner_commodity_route_month`
       
     
     
@@ -48,7 +48,7 @@
         end,
         route_scenario
     ) as _rn
-  from `capfractal`.`raw`.`dim_trade_routes`
+  from `chokepoint-capfractal`.`raw`.`dim_trade_routes`
 ),
 route_map as (
   select
@@ -116,7 +116,7 @@ pair_applicability as (
    then 'NO_MOT_DATA'
       else null
     end as pair_route_applicability_status
-  from `capfractal`.`analytics_staging`.`stg_route_applicability`
+  from `chokepoint-capfractal`.`analytics_staging`.`stg_route_applicability`
   group by 1, 2
 ),
 base_fact as (
@@ -221,7 +221,7 @@ base_fact as (
       ) then true
       else false
     end as _is_maritime_routed_base
-  from `capfractal`.`analytics_marts`.`fct_reporter_partner_commodity_month` as f
+  from `chokepoint-capfractal`.`analytics_marts`.`fct_reporter_partner_commodity_month` as f
   -- Pair-level motCode evidence comes from route applicability and is used for routing confidence gating.
   left join route_map as rm
     on f.reporter_iso3 = rm.reporter_iso3

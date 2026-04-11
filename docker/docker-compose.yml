@@ -1,0 +1,145 @@
+name: capstone
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: capstone-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-capstone}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-capstone}
+      POSTGRES_DB: ${POSTGRES_DB:-capstone}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - capstone_internal
+
+  pipeline:
+    build:
+      context: ..
+      dockerfile: docker/pipeline/Dockerfile
+    image: capstone-pipeline:local
+    container_name: capstone-pipeline
+    restart: unless-stopped
+    env_file:
+      - ../.env
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER:-capstone}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-capstone}
+      POSTGRES_DB: ${POSTGRES_DB:-capstone}
+      UV_CACHE_DIR: /workspace/.uv-cache
+    command: ["tail", "-f", "/dev/null"]
+    volumes:
+      - ../data:/workspace/data
+      - ../logs:/workspace/logs
+      - ../target:/workspace/target
+      - ../dbt_packages:/workspace/dbt_packages
+      - ../.uv-cache:/workspace/.uv-cache
+      - ../.secrets/gcp:/var/secrets/google:ro
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - python -c "import pandas, pyarrow, duckdb, geopandas, pyproj, shapely, searoute; import google.cloud.storage, google.cloud.bigquery"
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - capstone_internal
+
+  dbt:
+    image: capstone-pipeline:local
+    container_name: capstone-dbt
+    restart: unless-stopped
+    env_file:
+      - ../.env
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER:-capstone}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-capstone}
+      POSTGRES_DB: ${POSTGRES_DB:-capstone}
+      UV_CACHE_DIR: /workspace/.uv-cache
+    command: ["tail", "-f", "/dev/null"]
+    volumes:
+      - ../data:/workspace/data
+      - ../logs:/workspace/logs
+      - ../target:/workspace/target
+      - ../dbt_packages:/workspace/dbt_packages
+      - ../.uv-cache:/workspace/.uv-cache
+      - ../.secrets/gcp:/var/secrets/google:ro
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - dbt --version >/dev/null 2>&1
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    depends_on:
+      pipeline:
+        condition: service_healthy
+    networks:
+      - capstone_internal
+
+  orchestrator:
+    build:
+      context: ..
+      dockerfile: docker/orchestrator/Dockerfile
+    image: capstone-orchestrator:local
+    container_name: capstone-orchestrator
+    restart: unless-stopped
+    env_file:
+      - ../.env
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER:-capstone}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-capstone}
+      POSTGRES_DB: ${POSTGRES_DB:-capstone}
+      UV_CACHE_DIR: /workspace/.uv-cache
+    command: ["tail", "-f", "/dev/null"]
+    volumes:
+      - ../data:/workspace/data
+      - ../logs:/workspace/logs
+      - ../target:/workspace/target
+      - ../dbt_packages:/workspace/dbt_packages
+      - ../.uv-cache:/workspace/.uv-cache
+      - ../.secrets/gcp:/var/secrets/google:ro
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - bruin version >/dev/null 2>&1
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    depends_on:
+      postgres:
+        condition: service_healthy
+      pipeline:
+        condition: service_healthy
+      dbt:
+        condition: service_healthy
+    networks:
+      - capstone_internal
+
+volumes:
+  postgres_data:
+
+networks:
+  capstone_internal:
+    driver: bridge

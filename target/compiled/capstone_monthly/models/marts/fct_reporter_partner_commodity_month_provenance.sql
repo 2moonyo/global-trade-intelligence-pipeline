@@ -33,7 +33,7 @@ with raw_source as (
     cast(load_batch_id as string) as load_batch_id,
     cast(source_file as string) as source_file,
     cast(bronze_extracted_at as timestamp) as bronze_extracted_at
-  from `capfractal`.`raw`.`comtrade_fact`
+  from `chokepoint-capfractal`.`raw`.`comtrade_fact`
 ),
 
 filtered as (
@@ -102,5 +102,5 @@ select
   a.load_batch_ids,
   a.source_files
 from aggregated as a
-inner join `capfractal`.`analytics_marts`.`fct_reporter_partner_commodity_month` as f
+inner join `chokepoint-capfractal`.`analytics_marts`.`fct_reporter_partner_commodity_month` as f
   on a.canonical_grain_key = f.canonical_grain_key

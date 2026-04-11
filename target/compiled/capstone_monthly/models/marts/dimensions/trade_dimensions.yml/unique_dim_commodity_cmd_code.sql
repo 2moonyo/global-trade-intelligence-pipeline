@@ -5,7 +5,7 @@
 with dbt_test__target as (
 
   select cmd_code as unique_field
-  from `capfractal`.`analytics_marts`.`dim_commodity`
+  from `chokepoint-capfractal`.`analytics_marts`.`dim_commodity`
   where cmd_code is not null
 
 )

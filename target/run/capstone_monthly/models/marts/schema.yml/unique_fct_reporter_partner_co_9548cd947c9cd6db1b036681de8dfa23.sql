@@ -14,7 +14,7 @@
 with dbt_test__target as (
 
   select canonical_grain_key as unique_field
-  from `capfractal`.`analytics_marts`.`fct_reporter_partner_commodity_month_provenance`
+  from `chokepoint-capfractal`.`analytics_marts`.`fct_reporter_partner_commodity_month_provenance`
   where canonical_grain_key is not null
 
 )

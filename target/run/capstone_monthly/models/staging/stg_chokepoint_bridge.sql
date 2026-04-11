@@ -1,6 +1,6 @@
 
 
-  create or replace view `capfractal`.`analytics_staging`.`stg_chokepoint_bridge`
+  create or replace view `chokepoint-capfractal`.`analytics_staging`.`stg_chokepoint_bridge`
   OPTIONS()
   as select
   event_id,
@@ -19,5 +19,5 @@
   event_type,
   event_scope,
   link_role
-from `capfractal`.`raw`.`bridge_event_month_chokepoint_core`;
+from `chokepoint-capfractal`.`raw`.`bridge_event_month_chokepoint_core`;
 

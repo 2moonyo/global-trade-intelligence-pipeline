@@ -2,7 +2,7 @@
   
     
 
-    create or replace table `capfractal`.`analytics_marts`.`mart_reporter_month_chokepoint_exposure_with_brent`
+    create or replace table `chokepoint-capfractal`.`analytics_marts`.`mart_reporter_month_chokepoint_exposure_with_brent`
       
     
     
@@ -11,11 +11,11 @@
     OPTIONS()
     as (
       with exposure as (
-  select * from `capfractal`.`analytics_marts`.`mart_reporter_month_chokepoint_exposure`
+  select * from `chokepoint-capfractal`.`analytics_marts`.`mart_reporter_month_chokepoint_exposure`
 ),
 brent_long as (
   select *
-  from `capfractal`.`analytics_staging`.`stg_brent_monthly`
+  from `chokepoint-capfractal`.`analytics_staging`.`stg_brent_monthly`
   where benchmark_code in ('BRENT_EU', 'WTI_US')
 ),
 brent as (

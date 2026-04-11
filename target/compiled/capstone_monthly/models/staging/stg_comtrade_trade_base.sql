@@ -15,7 +15,7 @@ with raw_source as (
     cast(qty as FLOAT64) as qty,
     cast(motCode as integer) as mot_code,
     cast(partner2Code as integer) as partner2_code
-  from `capfractal`.`raw`.`comtrade_fact`
+  from `chokepoint-capfractal`.`raw`.`comtrade_fact`
 ),
 source_data as (
   select

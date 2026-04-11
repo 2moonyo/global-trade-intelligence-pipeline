@@ -15,4 +15,4 @@ select
   
     ST_GEOGFROMWKB(zone_of_influence_wkb)
    as zone_of_influence_geog
-from `capfractal`.`raw`.`dim_chokepoint`
+from `chokepoint-capfractal`.`raw`.`dim_chokepoint`

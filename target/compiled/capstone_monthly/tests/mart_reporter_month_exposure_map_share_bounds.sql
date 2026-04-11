@@ -1,5 +1,5 @@
 select *
-from `capfractal`.`analytics_marts`.`mart_reporter_month_exposure_map`
+from `chokepoint-capfractal`.`analytics_marts`.`mart_reporter_month_exposure_map`
 where (
     total_chokepoint_exposed_trade_share is not null
     and (

@@ -6,7 +6,7 @@ with base as (
         event_id,
         location_name as region_name,
         link_role
-    from `capfractal`.`analytics_analytics_staging`.`stg_event_location`
+    from `chokepoint-capfractal`.`analytics_analytics_staging`.`stg_event_location`
     where location_type <> 'chokepoint'
 
 )

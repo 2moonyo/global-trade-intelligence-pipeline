@@ -7,4 +7,4 @@ select
   continent,
   cast(is_eu as boolean) as is_eu,
   cast(is_oecd as boolean) as is_oecd
-from `capfractal`.`raw`.`dim_country`
+from `chokepoint-capfractal`.`raw`.`dim_country`

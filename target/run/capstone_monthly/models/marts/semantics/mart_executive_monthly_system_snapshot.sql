@@ -2,7 +2,7 @@
   
     
 
-    create or replace table `capfractal`.`analytics_marts`.`mart_executive_monthly_system_snapshot`
+    create or replace table `chokepoint-capfractal`.`analytics_marts`.`mart_executive_monthly_system_snapshot`
       
     
     
@@ -29,7 +29,7 @@ with system_summary as (
     event_impacted_chokepoint_count,
     system_stress_level,
     latest_month_flag
-  from `capfractal`.`analytics_marts`.`mart_global_monthly_system_stress_summary`
+  from `chokepoint-capfractal`.`analytics_marts`.`mart_global_monthly_system_stress_summary`
 ),
 hotspot_candidates as (
   -- One hotspot row per month keeps the executive mart compact and avoids map-style duplication.
@@ -51,7 +51,7 @@ hotspot_candidates as (
         abs(stress_index_weighted) desc,
         chokepoint_name
     ) as hotspot_rank
-  from `capfractal`.`analytics_marts`.`mart_chokepoint_monthly_stress`
+  from `chokepoint-capfractal`.`analytics_marts`.`mart_chokepoint_monthly_stress`
   where z_score_historical is not null
 ),
 top_hotspot as (

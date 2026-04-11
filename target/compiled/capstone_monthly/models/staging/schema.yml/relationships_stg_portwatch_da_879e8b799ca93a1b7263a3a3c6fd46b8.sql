@@ -4,13 +4,13 @@
 
 with child as (
     select chokepoint_id as from_field
-    from `capfractal`.`analytics_staging`.`stg_portwatch_daily`
+    from `chokepoint-capfractal`.`analytics_staging`.`stg_portwatch_daily`
     where chokepoint_id is not null
 ),
 
 parent as (
     select chokepoint_id as to_field
-    from `capfractal`.`analytics_marts`.`dim_chokepoint`
+    from `chokepoint-capfractal`.`analytics_marts`.`dim_chokepoint`
 )
 
 select

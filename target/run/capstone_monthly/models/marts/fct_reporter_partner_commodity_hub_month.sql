@@ -2,7 +2,7 @@
   
     
 
-    create or replace table `capfractal`.`analytics_marts`.`fct_reporter_partner_commodity_hub_month`
+    create or replace table `chokepoint-capfractal`.`analytics_marts`.`fct_reporter_partner_commodity_hub_month`
       
     
     
@@ -33,7 +33,7 @@
         end,
         route_scenario
     ) as _rn
-  from `capfractal`.`raw`.`dim_trade_routes`
+  from `chokepoint-capfractal`.`raw`.`dim_trade_routes`
 ),
 route_map as (
   select
@@ -85,7 +85,7 @@ hub_applicability as (
    then 'NO_MOT_DATA'
       else null
     end as route_applicability_status
-  from `capfractal`.`analytics_staging`.`stg_route_applicability`
+  from `chokepoint-capfractal`.`analytics_staging`.`stg_route_applicability`
   group by 1, 2, 3
 ),
 pair_applicability_totals as (
@@ -121,7 +121,7 @@ base_pairs as (
   select distinct
     reporter_iso3,
     partner_iso3
-  from `capfractal`.`analytics_marts`.`fct_reporter_partner_commodity_month`
+  from `chokepoint-capfractal`.`analytics_marts`.`fct_reporter_partner_commodity_month`
 ),
 fallback_allocation as (
   select
@@ -255,7 +255,7 @@ base_fact as (
       ) then true
       else false
     end as _is_maritime_routed_base
-  from `capfractal`.`analytics_marts`.`fct_reporter_partner_commodity_month` as f
+  from `chokepoint-capfractal`.`analytics_marts`.`fct_reporter_partner_commodity_month` as f
   inner join resolved_allocation as ra
     on f.reporter_iso3 = ra.reporter_iso3
    and f.partner_iso3 = ra.partner_iso3

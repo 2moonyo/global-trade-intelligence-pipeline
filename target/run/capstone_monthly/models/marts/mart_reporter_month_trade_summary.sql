@@ -2,7 +2,7 @@
   
     
 
-    create or replace table `capfractal`.`analytics_marts`.`mart_reporter_month_trade_summary`
+    create or replace table `chokepoint-capfractal`.`analytics_marts`.`mart_reporter_month_trade_summary`
       
     
     
@@ -22,7 +22,7 @@
     sum(f.net_weight_kg) as total_net_weight_kg,
     sum(f.gross_weight_kg) as total_gross_weight_kg,
     sum(f.record_count) as source_row_count
-  from `capfractal`.`analytics_marts`.`fct_reporter_partner_commodity_month` as f
+  from `chokepoint-capfractal`.`analytics_marts`.`fct_reporter_partner_commodity_month` as f
   group by 1, 2, 3, 4
 )
 
@@ -47,9 +47,9 @@ select
   rm.total_gross_weight_kg,
   rm.source_row_count
 from reporter_month as rm
-left join `capfractal`.`analytics_marts`.`dim_country` as c
+left join `chokepoint-capfractal`.`analytics_marts`.`dim_country` as c
   on rm.reporter_iso3 = c.iso3
-left join `capfractal`.`analytics_marts`.`dim_time` as t
+left join `chokepoint-capfractal`.`analytics_marts`.`dim_time` as t
   on rm.period = t.period
     );
   

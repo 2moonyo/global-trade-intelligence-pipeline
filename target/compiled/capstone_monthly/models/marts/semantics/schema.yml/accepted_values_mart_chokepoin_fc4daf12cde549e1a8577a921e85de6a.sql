@@ -8,7 +8,7 @@ with all_values as (
         direction_of_change as value_field,
         count(*) as n_records
 
-    from `capfractal`.`analytics_marts`.`mart_chokepoint_daily_signal`
+    from `chokepoint-capfractal`.`analytics_marts`.`mart_chokepoint_daily_signal`
     group by direction_of_change
 
 )

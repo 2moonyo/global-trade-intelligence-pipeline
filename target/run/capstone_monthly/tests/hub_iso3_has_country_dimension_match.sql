@@ -11,8 +11,8 @@
 select
   h.hub_iso3,
   count(*) as row_count
-from `capfractal`.`analytics_marts`.`fct_reporter_partner_commodity_hub_month` as h
-left join `capfractal`.`analytics_staging`.`stg_dim_country` as c
+from `chokepoint-capfractal`.`analytics_marts`.`fct_reporter_partner_commodity_hub_month` as h
+left join `chokepoint-capfractal`.`analytics_staging`.`stg_dim_country` as c
   on h.hub_iso3 = c.iso3
 where h.hub_iso3 is not null
   and c.iso3 is null

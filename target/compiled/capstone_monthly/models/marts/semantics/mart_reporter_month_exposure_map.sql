@@ -15,7 +15,7 @@ with base_exposure as (
     chokepoint_trade_exposure_ratio,
     stress_index_weighted,
     active_event_count
-  from `capfractal`.`analytics_marts`.`mart_reporter_month_chokepoint_exposure`
+  from `chokepoint-capfractal`.`analytics_marts`.`mart_reporter_month_chokepoint_exposure`
 ),
 high_medium_exposure as (
   select
@@ -24,7 +24,7 @@ high_medium_exposure as (
     year_month,
     sum(chokepoint_trade_value_usd) as high_medium_chokepoint_exposed_trade_value_usd,
     sum(chokepoint_trade_exposure_ratio) as high_medium_chokepoint_exposed_trade_share
-  from `capfractal`.`analytics_marts`.`mart_trade_exposure`
+  from `chokepoint-capfractal`.`analytics_marts`.`mart_trade_exposure`
   where route_confidence_score in ('HIGH', 'MEDIUM')
   group by 1, 2, 3
 ),
@@ -128,6 +128,6 @@ left join top_chokepoint as tc
   on ac.reporter_iso3 = tc.reporter_iso3
  and ac.period = tc.period
  and ac.year_month = tc.year_month
-left join `capfractal`.`analytics_marts`.`dim_country` as dc
+left join `chokepoint-capfractal`.`analytics_marts`.`dim_country` as dc
   on ac.reporter_iso3 = dc.iso3
 cross join global_bounds as g

@@ -10,7 +10,7 @@ with routed_trade as (
     main_chokepoint,
     route_confidence_score,
     trade_value_usd
-  from `capfractal`.`analytics_marts`.`fct_reporter_partner_commodity_route_month`
+  from `chokepoint-capfractal`.`analytics_marts`.`fct_reporter_partner_commodity_route_month`
   where main_chokepoint is not null
     and coalesce(is_maritime_routed, false)
 ),
@@ -20,7 +20,7 @@ reporter_month_totals as (
     period,
     year_month,
     sum(trade_value_usd) as reporter_month_trade_value_usd
-  from `capfractal`.`analytics_marts`.`fct_reporter_partner_commodity_month`
+  from `chokepoint-capfractal`.`analytics_marts`.`fct_reporter_partner_commodity_month`
   group by 1, 2, 3
 ),
 reporter_chokepoint_confidence as (
@@ -59,5 +59,5 @@ left join reporter_month_totals as rmt
   on rcc.reporter_iso3 = rmt.reporter_iso3
  and rcc.period = rmt.period
  and rcc.year_month = rmt.year_month
-left join `capfractal`.`analytics_marts`.`dim_country` as c
+left join `chokepoint-capfractal`.`analytics_marts`.`dim_country` as c
   on rcc.reporter_iso3 = c.iso3

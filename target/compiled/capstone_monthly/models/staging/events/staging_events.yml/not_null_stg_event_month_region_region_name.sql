@@ -5,7 +5,7 @@
 
 
 select region_name
-from `capfractal`.`analytics_analytics_staging`.`stg_event_month_region`
+from `chokepoint-capfractal`.`analytics_analytics_staging`.`stg_event_month_region`
 where region_name is null
 
 

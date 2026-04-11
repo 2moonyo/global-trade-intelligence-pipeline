@@ -10,7 +10,7 @@ with route_fact as (
     main_chokepoint as chokepoint_name,
     route_applicability_status,
     is_maritime_routed
-  from `capfractal`.`analytics_marts`.`fct_reporter_partner_commodity_route_month`
+  from `chokepoint-capfractal`.`analytics_marts`.`fct_reporter_partner_commodity_route_month`
 ),
 reporter_month_total as (
   select
@@ -18,7 +18,7 @@ reporter_month_total as (
     period,
     year_month,
     sum(trade_value_usd) as reporter_month_trade_value_usd
-  from `capfractal`.`analytics_marts`.`fct_reporter_partner_commodity_month`
+  from `chokepoint-capfractal`.`analytics_marts`.`fct_reporter_partner_commodity_month`
   group by 1, 2, 3
 ),
 reporter_month_chokepoint as (
@@ -41,7 +41,7 @@ active_events as (
     count(distinct case when is_event_active then event_id end) as active_event_count,
     max(case when is_event_active then severity_weight end) as max_active_event_severity,
     avg(case when is_event_active then severity_weight end) as avg_active_event_severity
-  from `capfractal`.`analytics_staging`.`stg_chokepoint_bridge`
+  from `chokepoint-capfractal`.`analytics_staging`.`stg_chokepoint_bridge`
   group by 1, 2
 ),
 portwatch as (
@@ -54,7 +54,7 @@ portwatch as (
     stress_index_weighted_rolling_6m,
     avg_n_total,
     avg_capacity
-  from `capfractal`.`analytics_staging`.`stg_portwatch_stress_metrics`
+  from `chokepoint-capfractal`.`analytics_staging`.`stg_portwatch_stress_metrics`
 )
 
 select
@@ -86,11 +86,11 @@ inner join reporter_month_total as rmt
   on rmc.reporter_iso3 = rmt.reporter_iso3
  and rmc.period = rmt.period
  and rmc.year_month = rmt.year_month
-left join `capfractal`.`analytics_marts`.`dim_country` as c
+left join `chokepoint-capfractal`.`analytics_marts`.`dim_country` as c
   on rmc.reporter_iso3 = c.iso3
-left join `capfractal`.`analytics_marts`.`dim_time` as t
+left join `chokepoint-capfractal`.`analytics_marts`.`dim_time` as t
   on rmc.period = t.period
-left join `capfractal`.`analytics_marts`.`dim_chokepoint` as dc
+left join `chokepoint-capfractal`.`analytics_marts`.`dim_chokepoint` as dc
   on rmc.chokepoint_name = dc.chokepoint_name
 left join portwatch as p
   on rmc.year_month = p.year_month

@@ -2,7 +2,7 @@
   
     
 
-    create or replace table `capfractal`.`analytics_marts`.`mart_chokepoint_monthly_stress_detail`
+    create or replace table `chokepoint-capfractal`.`analytics_marts`.`mart_chokepoint_monthly_stress_detail`
       
     
     
@@ -31,7 +31,7 @@ with base as (
     latest_month_flag,
     event_active_flag,
     active_event_count
-  from `capfractal`.`analytics_marts`.`mart_chokepoint_monthly_stress`
+  from `chokepoint-capfractal`.`analytics_marts`.`mart_chokepoint_monthly_stress`
 ),
 with_previous_z_score as (
   select

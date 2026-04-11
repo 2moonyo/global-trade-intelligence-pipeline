@@ -14,7 +14,7 @@ select
   count(*) as row_count,
   min(expected_reporter_count) as min_expected_reporter_count,
   max(expected_reporter_count) as max_expected_reporter_count
-from `capfractal`.`analytics_marts`.`mart_dashboard_global_trade_overview`
+from `chokepoint-capfractal`.`analytics_marts`.`mart_dashboard_global_trade_overview`
 group by 1
 having count(*) <> min(expected_reporter_count)
    or min(expected_reporter_count) <> max(expected_reporter_count)

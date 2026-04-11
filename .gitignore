@@ -38,3 +38,16 @@ override.tf.json
 /infra/terraform/.terraform/
 /infra/terraform/terraform.tfvars.json
 /infra/terraform/*.tfplan
+
+/.secrets
+/.uv-cache
+/app
+
+# Handover and dashboard state docs
+/INFRA_INVENTORY.md
+/DASHBOARD_STATUS.md
+/DASHBOARD_FIELD_MAP.md
+/CODEX_HANDOVER_PROMPT.md
+/ARCHITECTURE.md
+/PROJECT_STATE.md
+/Run_Instruction.MD

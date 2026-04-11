@@ -15,7 +15,7 @@ with duplicate_grain as (
     base_currency_code,
     fx_currency_code,
     count(*) as row_count
-  from `capfractal`.`analytics_staging`.`stg_fx_monthly`
+  from `chokepoint-capfractal`.`analytics_staging`.`stg_fx_monthly`
   group by 1, 2, 3, 4
   having count(*) > 1
 )

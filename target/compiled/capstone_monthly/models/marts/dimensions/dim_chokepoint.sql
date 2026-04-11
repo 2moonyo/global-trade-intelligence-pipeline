@@ -4,7 +4,7 @@ with route_chokepoints as (
     to_hex(md5(cast(lower(trim(main_chokepoint)) as string)))
    as chokepoint_id,
     main_chokepoint as chokepoint_name
-  from `capfractal`.`analytics_marts`.`fct_reporter_partner_commodity_route_month`
+  from `chokepoint-capfractal`.`analytics_marts`.`fct_reporter_partner_commodity_route_month`
   where main_chokepoint is not null
 ),
 raw_chokepoints as (
@@ -19,7 +19,7 @@ raw_chokepoints as (
     zone_of_influence_wkb,
     chokepoint_point_geog,
     zone_of_influence_geog
-  from `capfractal`.`analytics_staging`.`stg_dim_chokepoint`
+  from `chokepoint-capfractal`.`analytics_staging`.`stg_dim_chokepoint`
 ),
 event_chokepoints as (
   select distinct
@@ -27,7 +27,7 @@ event_chokepoints as (
     to_hex(md5(cast(lower(trim(chokepoint_name)) as string)))
    as chokepoint_id,
     chokepoint_name
-  from `capfractal`.`analytics_staging`.`stg_chokepoint_bridge`
+  from `chokepoint-capfractal`.`analytics_staging`.`stg_chokepoint_bridge`
   where chokepoint_name is not null
 ),
 portwatch_chokepoints as (
@@ -38,7 +38,7 @@ portwatch_chokepoints as (
     tanker_share,
     container_share,
     dry_bulk_share
-  from `capfractal`.`analytics_staging`.`stg_portwatch_stress_metrics`
+  from `chokepoint-capfractal`.`analytics_staging`.`stg_portwatch_stress_metrics`
   where chokepoint_name is not null
 ),
 base as (

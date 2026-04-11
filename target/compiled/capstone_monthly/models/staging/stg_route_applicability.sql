@@ -10,4 +10,4 @@ select
   cast(has_non_marine as boolean) as has_non_marine,
   mot_codes_seen,
   route_applicability_status
-from `capfractal`.`raw`.`route_applicability`
+from `chokepoint-capfractal`.`raw`.`route_applicability`

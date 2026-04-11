@@ -37,4 +37,4 @@ select
   
     ST_GEOGFROMWKB(route_path_wkb)
    as route_path_geog
-from `capfractal`.`raw`.`dim_trade_routes`
+from `chokepoint-capfractal`.`raw`.`dim_trade_routes`

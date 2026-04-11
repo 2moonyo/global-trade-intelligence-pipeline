@@ -23,3 +23,8 @@ sources:
       - name: brent_monthly
       - name: ecb_fx_eu_monthly
       - name: energy_vulnerability
+      - name: ops_pipeline_run
+      - name: ops_task_run
+      - name: ops_task_artifact
+      - name: ops_partition_checkpoint
+      - name: ops_retry_registry

@@ -2,7 +2,7 @@
   
     
 
-    create or replace table `capfractal`.`analytics_marts`.`dim_commodity`
+    create or replace table `chokepoint-capfractal`.`analytics_marts`.`dim_commodity`
       
     
     
@@ -21,7 +21,7 @@
     food_flag,
     energy_flag,
     industrial_flag
-  from `capfractal`.`analytics_staging`.`stg_dim_commodity`
+  from `chokepoint-capfractal`.`analytics_staging`.`stg_dim_commodity`
 )
 
 select

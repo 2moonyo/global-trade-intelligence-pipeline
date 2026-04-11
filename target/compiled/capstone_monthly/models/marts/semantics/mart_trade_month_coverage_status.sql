@@ -15,7 +15,7 @@ with overview as (
     complete_month_flag,
     latest_complete_month_flag,
     latest_month_flag
-  from `capfractal`.`analytics_marts`.`mart_dashboard_global_trade_overview`
+  from `chokepoint-capfractal`.`analytics_marts`.`mart_dashboard_global_trade_overview`
 ),
 month_rollup as (
   -- The source mart already repeats month-level coverage fields on every reporter row.
@@ -54,7 +54,7 @@ select
   mr.missing_reporter_count,
   case
     when mr.expected_reporter_count is null or mr.expected_reporter_count = 0 then null
-    else mr.missing_reporter_count / mr.expected_reporter_count
+    else (mr.missing_reporter_count) / (mr.expected_reporter_count)
   end as missing_reporter_pct,
   mr.reporting_completeness_pct,
   case

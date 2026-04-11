@@ -17,7 +17,7 @@ with all_values as (
         event_scope_type as value_field,
         count(*) as n_records
 
-    from `capfractal`.`analytics_analytics_marts`.`dim_event`
+    from `chokepoint-capfractal`.`analytics_analytics_marts`.`dim_event`
     group by event_scope_type
 
 )

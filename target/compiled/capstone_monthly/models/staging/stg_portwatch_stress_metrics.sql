@@ -21,7 +21,7 @@ with raw_portwatch as (
     cast(tanker_share as FLOAT64) as tanker_share,
     cast(container_share as FLOAT64) as container_share,
     cast(dry_bulk_share as FLOAT64) as dry_bulk_share
-  from `capfractal`.`raw`.`portwatch_monthly`
+  from `chokepoint-capfractal`.`raw`.`portwatch_monthly`
   where year_month is not null
     and chokepoint_name is not null
 ),

@@ -2,7 +2,7 @@
   
     
 
-    create or replace table `capfractal`.`analytics_marts`.`dim_trade_flow`
+    create or replace table `chokepoint-capfractal`.`analytics_marts`.`dim_trade_flow`
       
     
     
@@ -15,7 +15,7 @@
     flow_code,
     flow_desc,
     flow_group
-  from `capfractal`.`analytics_staging`.`stg_dim_trade_flow`
+  from `chokepoint-capfractal`.`analytics_staging`.`stg_dim_trade_flow`
 )
 
 select

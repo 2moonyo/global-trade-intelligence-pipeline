@@ -2,7 +2,7 @@
   
     
 
-    create or replace table `capfractal`.`analytics_analytics_marts`.`dim_event`
+    create or replace table `chokepoint-capfractal`.`analytics_analytics_marts`.`dim_event`
       
     
     
@@ -15,7 +15,7 @@
 with base as (
 
     select *
-    from `capfractal`.`analytics_analytics_staging`.`stg_event_raw`
+    from `chokepoint-capfractal`.`analytics_analytics_staging`.`stg_event_raw`
 
 ),
 
@@ -25,7 +25,7 @@ chokepoint_coverage as (
         event_id,
         count(distinct location_name) as chokepoint_count,
         max(case when is_global_event then 1 else 0 end) as has_global_flag
-    from `capfractal`.`analytics_analytics_staging`.`stg_event_location`
+    from `chokepoint-capfractal`.`analytics_analytics_staging`.`stg_event_location`
     where location_type = 'chokepoint'
     group by 1
 
@@ -36,7 +36,7 @@ noncore_location_coverage as (
     select
         event_id,
         count(distinct location_name) as noncore_location_count
-    from `capfractal`.`analytics_analytics_staging`.`stg_event_location`
+    from `chokepoint-capfractal`.`analytics_analytics_staging`.`stg_event_location`
     where location_type <> 'chokepoint'
     group by 1
 

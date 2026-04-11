@@ -17,7 +17,7 @@ with all_values as (
         has_brent_price_data_flag as value_field,
         count(*) as n_records
 
-    from `capfractal`.`analytics_marts`.`mart_global_daily_market_signal`
+    from `chokepoint-capfractal`.`analytics_marts`.`mart_global_daily_market_signal`
     group by has_brent_price_data_flag
 
 )

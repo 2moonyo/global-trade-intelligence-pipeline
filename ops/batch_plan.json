@@ -1,0 +1,1290 @@
+{
+  "batches": [
+    {
+      "batch_id": "comtrade_bootstrap_phase_1",
+      "dataset_name": "comtrade",
+      "description": "Bootstrap the recent core Comtrade history for the prioritized reporter and commodity cohort from January 2020 through December 2025.",
+      "schedule_lane": "bootstrap_phase_1",
+      "phase": "bootstrap_1",
+      "run_order": 10,
+      "max_attempts": 3,
+      "retry_backoff_seconds": 300,
+      "planned_partition_count": 72,
+      "planned_reporter_count": 16,
+      "planned_cmd_code_count": 6,
+      "planned_window_start": "2020-01",
+      "planned_window_end": "2025-12",
+      "batch_metadata": {
+        "reporters": "97,100,156,251,528,642,724,842,643,699,710,818,792,360,076,591",
+        "commodities": "1001,1005,1006,1201,2709,2710",
+        "flows": "M,X"
+      },
+      "steps": [
+        {
+          "task_name": "extract",
+          "command": [
+            "python",
+            "ingest/comtrade/comtrade_cli_annual_monthly_gap_chunked_by_reporter.py",
+            "run-monthly-history",
+            "--years",
+            "2020,2021,2022,2023,2024,2025",
+            "--reporters",
+            "97,100,156,251,528,642,724,842,643,699,710,818,792,360,076,591",
+            "--commodities",
+            "1001,1005,1006,1201,2709,2710",
+            "--flows",
+            "M,X"
+          ],
+          "log_path": "logs/comtrade/comtrade_history_batch_phase_1.log"
+        },
+        {
+          "task_name": "silver",
+          "command": [
+            "python",
+            "ingest/comtrade/comtrade_silver.py",
+            "--since-period",
+            "202001",
+            "--until-period",
+            "202512",
+            "--cmd-codes",
+            "1001,1005,1006,1201,2709,2710",
+            "--flow-codes",
+            "M,X"
+          ],
+          "manifest_path": "logs/comtrade/comtrade_silver_manifest.jsonl"
+        },
+        {
+          "task_name": "routing",
+          "command": [
+            "python",
+            "-m",
+            "ingest.comtrade.routing"
+          ],
+          "log_path": "logs/comtrade/comtrade_routing_phase_1.log"
+        },
+        {
+          "task_name": "publish_gcs",
+          "command": [
+            "python",
+            "warehouse/publish_comtrade_to_gcs.py",
+            "--since-year-month",
+            "2020-01",
+            "--until-year-month",
+            "2025-12"
+          ],
+          "manifest_path": "logs/comtrade/publish_comtrade_to_gcs_manifest.jsonl"
+        },
+        {
+          "task_name": "load_bigquery",
+          "command": [
+            "python",
+            "warehouse/load_comtrade_to_bigquery.py",
+            "--since-year-month",
+            "2020-01",
+            "--until-year-month",
+            "2025-12"
+          ],
+          "manifest_path": "logs/comtrade/load_comtrade_to_bigquery_manifest.jsonl"
+        },
+        {
+          "task_name": "dbt_build",
+          "command": [
+            "scripts/run_dbt.sh",
+            "build"
+          ],
+          "log_path": "logs/comtrade/dbt_build_phase_1.log"
+        }
+      ]
+    },
+    {
+      "batch_id": "portwatch_bootstrap_phase_1",
+      "dataset_name": "portwatch",
+      "description": "Bootstrap PortWatch history from January 2020 through December 2022.",
+      "schedule_lane": "bootstrap_phase_1",
+      "phase": "bootstrap_1",
+      "run_order": 20,
+      "max_attempts": 3,
+      "retry_backoff_seconds": 180,
+      "planned_partition_count": 36,
+      "planned_window_start": "2020-01",
+      "planned_window_end": "2022-12",
+      "steps": [
+        {
+          "task_name": "extract",
+          "command": [
+            "python",
+            "ingest/portwatch/portwatch_extract.py",
+            "--start-date",
+            "2020-01-01",
+            "--end-date",
+            "2022-12-31"
+          ],
+          "log_path": "logs/portwatch/portwatch_extract_phase_1.log"
+        },
+        {
+          "task_name": "silver",
+          "command": [
+            "python",
+            "ingest/portwatch/portwatch_silver.py",
+            "--start-date",
+            "2020-01-01",
+            "--end-date",
+            "2022-12-31",
+            "--respect-requested-window"
+          ],
+          "manifest_path": "logs/portwatch/portwatch_silver_manifest.jsonl"
+        },
+        {
+          "task_name": "publish_gcs",
+          "command": [
+            "python",
+            "warehouse/publish_portwatch_to_gcs.py",
+            "--include-auxiliary",
+            "--since-year-month",
+            "2020-01",
+            "--until-year-month",
+            "2022-12"
+          ],
+          "manifest_path": "logs/portwatch/publish_portwatch_to_gcs_manifest.jsonl"
+        },
+        {
+          "task_name": "load_bigquery",
+          "command": [
+            "python",
+            "warehouse/load_portwatch_to_bigquery.py",
+            "--since-year-month",
+            "2020-01",
+            "--until-year-month",
+            "2022-12"
+          ],
+          "manifest_path": "logs/portwatch/load_portwatch_to_bigquery_manifest.jsonl"
+        },
+        {
+          "task_name": "dbt_build",
+          "command": [
+            "scripts/run_dbt.sh",
+            "build"
+          ],
+          "log_path": "logs/portwatch/dbt_build_phase_1.log"
+        }
+      ]
+    },
+    {
+      "batch_id": "brent_bootstrap_phase_1",
+      "dataset_name": "brent",
+      "description": "Bootstrap Brent daily and monthly history from January 2020 through December 2022.",
+      "schedule_lane": "bootstrap_phase_1",
+      "phase": "bootstrap_1",
+      "run_order": 30,
+      "max_attempts": 3,
+      "retry_backoff_seconds": 120,
+      "planned_partition_count": 36,
+      "planned_window_start": "2020-01",
+      "planned_window_end": "2022-12",
+      "steps": [
+        {
+          "task_name": "extract",
+          "command": [
+            "python",
+            "ingest/fred/brent_crude.py",
+            "--start",
+            "2020-01-01",
+            "--end",
+            "2022-12-31"
+          ],
+          "manifest_path": "logs/brent/brent_extract_manifest.jsonl"
+        },
+        {
+          "task_name": "silver",
+          "command": [
+            "python",
+            "ingest/fred/brent_silver.py"
+          ],
+          "manifest_path": "logs/brent/brent_silver_manifest.jsonl"
+        },
+        {
+          "task_name": "publish_gcs",
+          "command": [
+            "python",
+            "warehouse/publish_brent_to_gcs.py",
+            "--since-year-month",
+            "2020-01",
+            "--until-year-month",
+            "2022-12"
+          ],
+          "manifest_path": "logs/brent/publish_brent_to_gcs_manifest.jsonl"
+        },
+        {
+          "task_name": "load_bigquery",
+          "command": [
+            "python",
+            "warehouse/load_brent_to_bigquery.py",
+            "--since-year-month",
+            "2020-01",
+            "--until-year-month",
+            "2022-12"
+          ],
+          "manifest_path": "logs/brent/load_brent_to_bigquery_manifest.jsonl"
+        },
+        {
+          "task_name": "dbt_build",
+          "command": [
+            "scripts/run_dbt.sh",
+            "build"
+          ],
+          "log_path": "logs/brent/dbt_build_phase_1.log"
+        }
+      ]
+    },
+    {
+      "batch_id": "fx_bootstrap_phase_1",
+      "dataset_name": "fx",
+      "description": "Bootstrap ECB FX monthly history from January 2020 through December 2022.",
+      "schedule_lane": "bootstrap_phase_1",
+      "phase": "bootstrap_1",
+      "run_order": 40,
+      "max_attempts": 3,
+      "retry_backoff_seconds": 120,
+      "planned_partition_count": 36,
+      "planned_window_start": "2020-01",
+      "planned_window_end": "2022-12",
+      "steps": [
+        {
+          "task_name": "extract",
+          "command": [
+            "python",
+            "ingest/fred/fx_rates.py",
+            "--start",
+            "2020-01-01",
+            "--end",
+            "2022-12-31"
+          ],
+          "manifest_path": "logs/fx/fx_extract_manifest.jsonl"
+        },
+        {
+          "task_name": "silver",
+          "command": [
+            "python",
+            "ingest/fred/fx_silver.py",
+            "--since-year-month",
+            "2020-01",
+            "--until-year-month",
+            "2022-12"
+          ],
+          "manifest_path": "logs/fx/fx_silver_manifest.jsonl"
+        },
+        {
+          "task_name": "publish_gcs",
+          "command": [
+            "python",
+            "warehouse/publish_fx_to_gcs.py",
+            "--since-year-month",
+            "2020-01",
+            "--until-year-month",
+            "2022-12"
+          ],
+          "manifest_path": "logs/fx/publish_fx_to_gcs_manifest.jsonl"
+        },
+        {
+          "task_name": "load_bigquery",
+          "command": [
+            "python",
+            "warehouse/load_fx_to_bigquery.py",
+            "--since-year-month",
+            "2020-01",
+            "--until-year-month",
+            "2022-12"
+          ],
+          "manifest_path": "logs/fx/load_fx_to_bigquery_manifest.jsonl"
+        },
+        {
+          "task_name": "dbt_build",
+          "command": [
+            "scripts/run_dbt.sh",
+            "build"
+          ],
+          "log_path": "logs/fx/dbt_build_phase_1.log"
+        }
+      ]
+    },
+    {
+      "batch_id": "events_bootstrap_phase_1",
+      "dataset_name": "events",
+      "description": "Bootstrap event bridge history from January 2020 through December 2022.",
+      "schedule_lane": "bootstrap_phase_1",
+      "phase": "bootstrap_1",
+      "run_order": 50,
+      "max_attempts": 3,
+      "retry_backoff_seconds": 60,
+      "planned_partition_count": 36,
+      "planned_window_start": "2020-01",
+      "planned_window_end": "2022-12",
+      "steps": [
+        {
+          "task_name": "silver",
+          "command": [
+            "python",
+            "ingest/events/events_silver.py"
+          ],
+          "manifest_path": "logs/events/events_silver_manifest.jsonl"
+        },
+        {
+          "task_name": "publish_gcs",
+          "command": [
+            "python",
+            "warehouse/publish_events_to_gcs.py",
+            "--since-year-month",
+            "2020-01",
+            "--until-year-month",
+            "2022-12"
+          ],
+          "manifest_path": "logs/events/publish_events_to_gcs_manifest.jsonl"
+        },
+        {
+          "task_name": "load_bigquery",
+          "command": [
+            "python",
+            "warehouse/load_events_to_bigquery.py",
+            "--since-year-month",
+            "2020-01",
+            "--until-year-month",
+            "2022-12"
+          ],
+          "manifest_path": "logs/events/load_events_to_bigquery_manifest.jsonl"
+        },
+        {
+          "task_name": "dbt_build",
+          "command": [
+            "scripts/run_dbt.sh",
+            "build"
+          ],
+          "log_path": "logs/events/dbt_build_phase_1.log"
+        }
+      ]
+    },
+    {
+      "batch_id": "worldbank_energy_bootstrap_phase_1",
+      "dataset_name": "worldbank_energy",
+      "description": "Bootstrap World Bank energy vulnerability history from 2015 through 2020.",
+      "schedule_lane": "bootstrap_phase_1",
+      "phase": "bootstrap_1",
+      "run_order": 60,
+      "max_attempts": 3,
+      "retry_backoff_seconds": 120,
+      "planned_partition_count": 6,
+      "planned_window_start": "2015",
+      "planned_window_end": "2020",
+      "steps": [
+        {
+          "task_name": "extract",
+          "command": [
+            "python",
+            "ingest/world_bank/worldbank_energy.py",
+            "extract",
+            "--selector",
+            "db-countries",
+            "--energy-types",
+            "all",
+            "--start-year",
+            "2015",
+            "--end-year",
+            "2020"
+          ],
+          "manifest_path": "logs/worldbank_energy/worldbank_energy_extract_manifest.jsonl"
+        },
+        {
+          "task_name": "silver",
+          "command": [
+            "python",
+            "ingest/world_bank/worldbank_energy_silver.py",
+            "--start-year",
+            "2015",
+            "--end-year",
+            "2020"
+          ],
+          "manifest_path": "logs/worldbank_energy/worldbank_energy_silver_manifest.jsonl"
+        },
+        {
+          "task_name": "publish_gcs",
+          "command": [
+            "python",
+            "warehouse/publish_worldbank_energy_to_gcs.py",
+            "--since-year",
+            "2015",
+            "--until-year",
+            "2020"
+          ],
+          "manifest_path": "logs/worldbank_energy/publish_worldbank_energy_to_gcs_manifest.jsonl"
+        },
+        {
+          "task_name": "load_bigquery",
+          "command": [
+            "python",
+            "warehouse/load_worldbank_energy_to_bigquery.py",
+            "--since-year",
+            "2015",
+            "--until-year",
+            "2020"
+          ],
+          "manifest_path": "logs/worldbank_energy/load_worldbank_energy_to_bigquery_manifest.jsonl"
+        },
+        {
+          "task_name": "dbt_build",
+          "command": [
+            "scripts/run_dbt.sh",
+            "build"
+          ],
+          "log_path": "logs/worldbank_energy/dbt_build_phase_1.log"
+        }
+      ]
+    },
+    {
+      "batch_id": "comtrade_bootstrap_phase_2",
+      "dataset_name": "comtrade",
+      "description": "Bootstrap the older core Comtrade history for the prioritized reporter and commodity cohort from January 2015 through December 2019.",
+      "schedule_lane": "bootstrap_phase_2",
+      "phase": "bootstrap_2",
+      "run_order": 10,
+      "max_attempts": 3,
+      "retry_backoff_seconds": 300,
+      "planned_partition_count": 60,
+      "planned_reporter_count": 16,
+      "planned_cmd_code_count": 6,
+      "planned_window_start": "2015-01",
+      "planned_window_end": "2019-12",
+      "batch_metadata": {
+        "reporters": "97,100,156,251,528,642,724,842,643,699,710,818,792,360,076,591",
+        "commodities": "1001,1005,1006,1201,2709,2710",
+        "flows": "M,X"
+      },
+      "steps": [
+        {
+          "task_name": "extract",
+          "command": [
+            "python",
+            "ingest/comtrade/comtrade_cli_annual_monthly_gap_chunked_by_reporter.py",
+            "run-monthly-history",
+            "--years",
+            "2015,2016,2017,2018,2019",
+            "--reporters",
+            "97,100,156,251,528,642,724,842,643,699,710,818,792,360,076,591",
+            "--commodities",
+            "1001,1005,1006,1201,2709,2710",
+            "--flows",
+            "M,X"
+          ],
+          "log_path": "logs/comtrade/comtrade_history_batch_phase_2.log"
+        },
+        {
+          "task_name": "silver",
+          "command": [
+            "python",
+            "ingest/comtrade/comtrade_silver.py",
+            "--since-period",
+            "201501",
+            "--until-period",
+            "201912",
+            "--cmd-codes",
+            "1001,1005,1006,1201,2709,2710",
+            "--flow-codes",
+            "M,X"
+          ],
+          "manifest_path": "logs/comtrade/comtrade_silver_manifest.jsonl"
+        },
+        {
+          "task_name": "routing",
+          "command": [
+            "python",
+            "-m",
+            "ingest.comtrade.routing"
+          ],
+          "log_path": "logs/comtrade/comtrade_routing_phase_2.log"
+        },
+        {
+          "task_name": "publish_gcs",
+          "command": [
+            "python",
+            "warehouse/publish_comtrade_to_gcs.py",
+            "--since-year-month",
+            "2015-01",
+            "--until-year-month",
+            "2019-12"
+          ],
+          "manifest_path": "logs/comtrade/publish_comtrade_to_gcs_manifest.jsonl"
+        },
+        {
+          "task_name": "load_bigquery",
+          "command": [
+            "python",
+            "warehouse/load_comtrade_to_bigquery.py",
+            "--since-year-month",
+            "2015-01",
+            "--until-year-month",
+            "2019-12"
+          ],
+          "manifest_path": "logs/comtrade/load_comtrade_to_bigquery_manifest.jsonl"
+        },
+        {
+          "task_name": "dbt_build",
+          "command": [
+            "scripts/run_dbt.sh",
+            "build"
+          ],
+          "log_path": "logs/comtrade/dbt_build_phase_2.log"
+        }
+      ]
+    },
+    {
+      "batch_id": "portwatch_bootstrap_phase_2",
+      "dataset_name": "portwatch",
+      "description": "Bootstrap PortWatch history from January 2023 through December 2024.",
+      "schedule_lane": "bootstrap_phase_2",
+      "phase": "bootstrap_2",
+      "run_order": 20,
+      "max_attempts": 3,
+      "retry_backoff_seconds": 180,
+      "planned_partition_count": 24,
+      "planned_window_start": "2023-01",
+      "planned_window_end": "2024-12",
+      "steps": [
+        {
+          "task_name": "extract",
+          "command": [
+            "python",
+            "ingest/portwatch/portwatch_extract.py",
+            "--start-date",
+            "2023-01-01",
+            "--end-date",
+            "2024-12-31"
+          ],
+          "log_path": "logs/portwatch/portwatch_extract_phase_2.log"
+        },
+        {
+          "task_name": "silver",
+          "command": [
+            "python",
+            "ingest/portwatch/portwatch_silver.py",
+            "--start-date",
+            "2023-01-01",
+            "--end-date",
+            "2024-12-31",
+            "--respect-requested-window"
+          ],
+          "manifest_path": "logs/portwatch/portwatch_silver_manifest.jsonl"
+        },
+        {
+          "task_name": "publish_gcs",
+          "command": [
+            "python",
+            "warehouse/publish_portwatch_to_gcs.py",
+            "--include-auxiliary",
+            "--since-year-month",
+            "2023-01",
+            "--until-year-month",
+            "2024-12"
+          ],
+          "manifest_path": "logs/portwatch/publish_portwatch_to_gcs_manifest.jsonl"
+        },
+        {
+          "task_name": "load_bigquery",
+          "command": [
+            "python",
+            "warehouse/load_portwatch_to_bigquery.py",
+            "--since-year-month",
+            "2023-01",
+            "--until-year-month",
+            "2024-12"
+          ],
+          "manifest_path": "logs/portwatch/load_portwatch_to_bigquery_manifest.jsonl"
+        },
+        {
+          "task_name": "dbt_build",
+          "command": [
+            "scripts/run_dbt.sh",
+            "build"
+          ],
+          "log_path": "logs/portwatch/dbt_build_phase_2.log"
+        }
+      ]
+    },
+    {
+      "batch_id": "brent_bootstrap_phase_2",
+      "dataset_name": "brent",
+      "description": "Bootstrap Brent daily and monthly history from January 2023 through December 2024.",
+      "schedule_lane": "bootstrap_phase_2",
+      "phase": "bootstrap_2",
+      "run_order": 30,
+      "max_attempts": 3,
+      "retry_backoff_seconds": 120,
+      "planned_partition_count": 24,
+      "planned_window_start": "2023-01",
+      "planned_window_end": "2024-12",
+      "steps": [
+        {
+          "task_name": "extract",
+          "command": [
+            "python",
+            "ingest/fred/brent_crude.py",
+            "--start",
+            "2023-01-01",
+            "--end",
+            "2024-12-31"
+          ],
+          "manifest_path": "logs/brent/brent_extract_manifest.jsonl"
+        },
+        {
+          "task_name": "silver",
+          "command": [
+            "python",
+            "ingest/fred/brent_silver.py"
+          ],
+          "manifest_path": "logs/brent/brent_silver_manifest.jsonl"
+        },
+        {
+          "task_name": "publish_gcs",
+          "command": [
+            "python",
+            "warehouse/publish_brent_to_gcs.py",
+            "--since-year-month",
+            "2023-01",
+            "--until-year-month",
+            "2024-12"
+          ],
+          "manifest_path": "logs/brent/publish_brent_to_gcs_manifest.jsonl"
+        },
+        {
+          "task_name": "load_bigquery",
+          "command": [
+            "python",
+            "warehouse/load_brent_to_bigquery.py",
+            "--since-year-month",
+            "2023-01",
+            "--until-year-month",
+            "2024-12"
+          ],
+          "manifest_path": "logs/brent/load_brent_to_bigquery_manifest.jsonl"
+        },
+        {
+          "task_name": "dbt_build",
+          "command": [
+            "scripts/run_dbt.sh",
+            "build"
+          ],
+          "log_path": "logs/brent/dbt_build_phase_2.log"
+        }
+      ]
+    },
+    {
+      "batch_id": "fx_bootstrap_phase_2",
+      "dataset_name": "fx",
+      "description": "Bootstrap ECB FX monthly history from January 2023 through December 2024.",
+      "schedule_lane": "bootstrap_phase_2",
+      "phase": "bootstrap_2",
+      "run_order": 40,
+      "max_attempts": 3,
+      "retry_backoff_seconds": 120,
+      "planned_partition_count": 24,
+      "planned_window_start": "2023-01",
+      "planned_window_end": "2024-12",
+      "steps": [
+        {
+          "task_name": "extract",
+          "command": [
+            "python",
+            "ingest/fred/fx_rates.py",
+            "--start",
+            "2023-01-01",
+            "--end",
+            "2024-12-31"
+          ],
+          "manifest_path": "logs/fx/fx_extract_manifest.jsonl"
+        },
+        {
+          "task_name": "silver",
+          "command": [
+            "python",
+            "ingest/fred/fx_silver.py",
+            "--since-year-month",
+            "2023-01",
+            "--until-year-month",
+            "2024-12"
+          ],
+          "manifest_path": "logs/fx/fx_silver_manifest.jsonl"
+        },
+        {
+          "task_name": "publish_gcs",
+          "command": [
+            "python",
+            "warehouse/publish_fx_to_gcs.py",
+            "--since-year-month",
+            "2023-01",
+            "--until-year-month",
+            "2024-12"
+          ],
+          "manifest_path": "logs/fx/publish_fx_to_gcs_manifest.jsonl"
+        },
+        {
+          "task_name": "load_bigquery",
+          "command": [
+            "python",
+            "warehouse/load_fx_to_bigquery.py",
+            "--since-year-month",
+            "2023-01",
+            "--until-year-month",
+            "2024-12"
+          ],
+          "manifest_path": "logs/fx/load_fx_to_bigquery_manifest.jsonl"
+        },
+        {
+          "task_name": "dbt_build",
+          "command": [
+            "scripts/run_dbt.sh",
+            "build"
+          ],
+          "log_path": "logs/fx/dbt_build_phase_2.log"
+        }
+      ]
+    },
+    {
+      "batch_id": "events_bootstrap_phase_2",
+      "dataset_name": "events",
+      "description": "Bootstrap event bridge history from January 2023 through December 2024.",
+      "schedule_lane": "bootstrap_phase_2",
+      "phase": "bootstrap_2",
+      "run_order": 50,
+      "max_attempts": 3,
+      "retry_backoff_seconds": 60,
+      "planned_partition_count": 24,
+      "planned_window_start": "2023-01",
+      "planned_window_end": "2024-12",
+      "steps": [
+        {
+          "task_name": "silver",
+          "command": [
+            "python",
+            "ingest/events/events_silver.py"
+          ],
+          "manifest_path": "logs/events/events_silver_manifest.jsonl"
+        },
+        {
+          "task_name": "publish_gcs",
+          "command": [
+            "python",
+            "warehouse/publish_events_to_gcs.py",
+            "--since-year-month",
+            "2023-01",
+            "--until-year-month",
+            "2024-12"
+          ],
+          "manifest_path": "logs/events/publish_events_to_gcs_manifest.jsonl"
+        },
+        {
+          "task_name": "load_bigquery",
+          "command": [
+            "python",
+            "warehouse/load_events_to_bigquery.py",
+            "--since-year-month",
+            "2023-01",
+            "--until-year-month",
+            "2024-12"
+          ],
+          "manifest_path": "logs/events/load_events_to_bigquery_manifest.jsonl"
+        },
+        {
+          "task_name": "dbt_build",
+          "command": [
+            "scripts/run_dbt.sh",
+            "build"
+          ],
+          "log_path": "logs/events/dbt_build_phase_2.log"
+        }
+      ]
+    },
+    {
+      "batch_id": "worldbank_energy_bootstrap_phase_2",
+      "dataset_name": "worldbank_energy",
+      "description": "Bootstrap World Bank energy vulnerability history from 2021 through 2025.",
+      "schedule_lane": "bootstrap_phase_2",
+      "phase": "bootstrap_2",
+      "run_order": 60,
+      "max_attempts": 3,
+      "retry_backoff_seconds": 120,
+      "planned_partition_count": 5,
+      "planned_window_start": "2021",
+      "planned_window_end": "2025",
+      "steps": [
+        {
+          "task_name": "extract",
+          "command": [
+            "python",
+            "ingest/world_bank/worldbank_energy.py",
+            "extract",
+            "--selector",
+            "db-countries",
+            "--energy-types",
+            "all",
+            "--start-year",
+            "2021",
+            "--end-year",
+            "2025"
+          ],
+          "manifest_path": "logs/worldbank_energy/worldbank_energy_extract_manifest.jsonl"
+        },
+        {
+          "task_name": "silver",
+          "command": [
+            "python",
+            "ingest/world_bank/worldbank_energy_silver.py",
+            "--start-year",
+            "2021",
+            "--end-year",
+            "2025"
+          ],
+          "manifest_path": "logs/worldbank_energy/worldbank_energy_silver_manifest.jsonl"
+        },
+        {
+          "task_name": "publish_gcs",
+          "command": [
+            "python",
+            "warehouse/publish_worldbank_energy_to_gcs.py",
+            "--since-year",
+            "2021",
+            "--until-year",
+            "2025"
+          ],
+          "manifest_path": "logs/worldbank_energy/publish_worldbank_energy_to_gcs_manifest.jsonl"
+        },
+        {
+          "task_name": "load_bigquery",
+          "command": [
+            "python",
+            "warehouse/load_worldbank_energy_to_bigquery.py",
+            "--since-year",
+            "2021",
+            "--until-year",
+            "2025"
+          ],
+          "manifest_path": "logs/worldbank_energy/load_worldbank_energy_to_bigquery_manifest.jsonl"
+        },
+        {
+          "task_name": "dbt_build",
+          "command": [
+            "scripts/run_dbt.sh",
+            "build"
+          ],
+          "log_path": "logs/worldbank_energy/dbt_build_phase_2.log"
+        }
+      ]
+    },
+    {
+      "batch_id": "comtrade_incremental_recent",
+      "dataset_name": "comtrade",
+      "description": "Refresh the recent Comtrade history window after both bootstrap phases have validated.",
+      "schedule_lane": "incremental_daily",
+      "phase": "incremental",
+      "run_order": 10,
+      "depends_on_batch_ids": [
+        "comtrade_bootstrap_phase_1",
+        "comtrade_bootstrap_phase_2"
+      ],
+      "max_attempts": 3,
+      "retry_backoff_seconds": 300,
+      "planned_reporter_count": 16,
+      "planned_cmd_code_count": 6,
+      "planned_window_start": "2025-01",
+      "batch_metadata": {
+        "reporters": "97,100,156,251,528,642,724,842,643,699,710,818,792,360,076,591",
+        "commodities": "1001,1005,1006,1201,2709,2710",
+        "flows": "M,X"
+      },
+      "steps": [
+        {
+          "task_name": "extract",
+          "command": [
+            "python",
+            "ingest/comtrade/comtrade_cli_annual_monthly_gap_chunked_by_reporter.py",
+            "run-monthly-history",
+            "--years",
+            "2025,2026",
+            "--reporters",
+            "97,100,156,251,528,642,724,842,643,699,710,818,792,360,076,591",
+            "--commodities",
+            "1001,1005,1006,1201,2709,2710",
+            "--flows",
+            "M,X"
+          ],
+          "log_path": "logs/comtrade/comtrade_history_incremental.log"
+        },
+        {
+          "task_name": "silver",
+          "command": [
+            "python",
+            "ingest/comtrade/comtrade_silver.py",
+            "--since-period",
+            "202501",
+            "--cmd-codes",
+            "1001,1005,1006,1201,2709,2710",
+            "--flow-codes",
+            "M,X"
+          ],
+          "manifest_path": "logs/comtrade/comtrade_silver_manifest.jsonl"
+        },
+        {
+          "task_name": "routing",
+          "command": [
+            "python",
+            "-m",
+            "ingest.comtrade.routing"
+          ],
+          "log_path": "logs/comtrade/comtrade_routing_incremental.log"
+        },
+        {
+          "task_name": "publish_gcs",
+          "command": [
+            "python",
+            "warehouse/publish_comtrade_to_gcs.py",
+            "--since-year-month",
+            "2025-01"
+          ],
+          "manifest_path": "logs/comtrade/publish_comtrade_to_gcs_manifest.jsonl"
+        },
+        {
+          "task_name": "load_bigquery",
+          "command": [
+            "python",
+            "warehouse/load_comtrade_to_bigquery.py",
+            "--since-year-month",
+            "2025-01"
+          ],
+          "manifest_path": "logs/comtrade/load_comtrade_to_bigquery_manifest.jsonl"
+        },
+        {
+          "task_name": "dbt_build",
+          "command": [
+            "scripts/run_dbt.sh",
+            "build"
+          ],
+          "log_path": "logs/comtrade/dbt_build_incremental.log"
+        }
+      ]
+    },
+    {
+      "batch_id": "portwatch_incremental_recent",
+      "dataset_name": "portwatch",
+      "description": "Refresh the recent PortWatch window after both bootstrap phases have validated.",
+      "schedule_lane": "incremental_daily",
+      "phase": "incremental",
+      "run_order": 20,
+      "depends_on_batch_ids": [
+        "portwatch_bootstrap_phase_1",
+        "portwatch_bootstrap_phase_2"
+      ],
+      "max_attempts": 3,
+      "retry_backoff_seconds": 180,
+      "planned_window_start": "2025-01",
+      "steps": [
+        {
+          "task_name": "extract",
+          "command": [
+            "python",
+            "ingest/portwatch/portwatch_extract.py",
+            "--start-date",
+            "2025-01-01"
+          ],
+          "log_path": "logs/portwatch/portwatch_extract_incremental.log"
+        },
+        {
+          "task_name": "silver",
+          "command": [
+            "python",
+            "ingest/portwatch/portwatch_silver.py",
+            "--start-date",
+            "2025-01-01",
+            "--respect-requested-window"
+          ],
+          "manifest_path": "logs/portwatch/portwatch_silver_manifest.jsonl"
+        },
+        {
+          "task_name": "publish_gcs",
+          "command": [
+            "python",
+            "warehouse/publish_portwatch_to_gcs.py",
+            "--include-auxiliary",
+            "--since-year-month",
+            "2025-01"
+          ],
+          "manifest_path": "logs/portwatch/publish_portwatch_to_gcs_manifest.jsonl"
+        },
+        {
+          "task_name": "load_bigquery",
+          "command": [
+            "python",
+            "warehouse/load_portwatch_to_bigquery.py",
+            "--since-year-month",
+            "2025-01"
+          ],
+          "manifest_path": "logs/portwatch/load_portwatch_to_bigquery_manifest.jsonl"
+        },
+        {
+          "task_name": "dbt_build",
+          "command": [
+            "scripts/run_dbt.sh",
+            "build"
+          ],
+          "log_path": "logs/portwatch/dbt_build_incremental.log"
+        }
+      ]
+    },
+    {
+      "batch_id": "brent_incremental_recent",
+      "dataset_name": "brent",
+      "description": "Refresh the recent Brent window after both bootstrap phases have validated.",
+      "schedule_lane": "incremental_daily",
+      "phase": "incremental",
+      "run_order": 30,
+      "depends_on_batch_ids": [
+        "brent_bootstrap_phase_1",
+        "brent_bootstrap_phase_2"
+      ],
+      "max_attempts": 3,
+      "retry_backoff_seconds": 120,
+      "planned_window_start": "2025-01",
+      "steps": [
+        {
+          "task_name": "extract",
+          "command": [
+            "python",
+            "ingest/fred/brent_crude.py",
+            "--start",
+            "2025-01-01"
+          ],
+          "manifest_path": "logs/brent/brent_extract_manifest.jsonl"
+        },
+        {
+          "task_name": "silver",
+          "command": [
+            "python",
+            "ingest/fred/brent_silver.py"
+          ],
+          "manifest_path": "logs/brent/brent_silver_manifest.jsonl"
+        },
+        {
+          "task_name": "publish_gcs",
+          "command": [
+            "python",
+            "warehouse/publish_brent_to_gcs.py",
+            "--since-year-month",
+            "2025-01"
+          ],
+          "manifest_path": "logs/brent/publish_brent_to_gcs_manifest.jsonl"
+        },
+        {
+          "task_name": "load_bigquery",
+          "command": [
+            "python",
+            "warehouse/load_brent_to_bigquery.py",
+            "--since-year-month",
+            "2025-01"
+          ],
+          "manifest_path": "logs/brent/load_brent_to_bigquery_manifest.jsonl"
+        },
+        {
+          "task_name": "dbt_build",
+          "command": [
+            "scripts/run_dbt.sh",
+            "build"
+          ],
+          "log_path": "logs/brent/dbt_build_incremental.log"
+        }
+      ]
+    },
+    {
+      "batch_id": "fx_incremental_recent",
+      "dataset_name": "fx",
+      "description": "Refresh the recent FX window after both bootstrap phases have validated.",
+      "schedule_lane": "incremental_daily",
+      "phase": "incremental",
+      "run_order": 40,
+      "depends_on_batch_ids": [
+        "fx_bootstrap_phase_1",
+        "fx_bootstrap_phase_2"
+      ],
+      "max_attempts": 3,
+      "retry_backoff_seconds": 120,
+      "planned_window_start": "2025-01",
+      "steps": [
+        {
+          "task_name": "extract",
+          "command": [
+            "python",
+            "ingest/fred/fx_rates.py",
+            "--start",
+            "2025-01-01"
+          ],
+          "manifest_path": "logs/fx/fx_extract_manifest.jsonl"
+        },
+        {
+          "task_name": "silver",
+          "command": [
+            "python",
+            "ingest/fred/fx_silver.py",
+            "--since-year-month",
+            "2025-01"
+          ],
+          "manifest_path": "logs/fx/fx_silver_manifest.jsonl"
+        },
+        {
+          "task_name": "publish_gcs",
+          "command": [
+            "python",
+            "warehouse/publish_fx_to_gcs.py",
+            "--since-year-month",
+            "2025-01"
+          ],
+          "manifest_path": "logs/fx/publish_fx_to_gcs_manifest.jsonl"
+        },
+        {
+          "task_name": "load_bigquery",
+          "command": [
+            "python",
+            "warehouse/load_fx_to_bigquery.py",
+            "--since-year-month",
+            "2025-01"
+          ],
+          "manifest_path": "logs/fx/load_fx_to_bigquery_manifest.jsonl"
+        },
+        {
+          "task_name": "dbt_build",
+          "command": [
+            "scripts/run_dbt.sh",
+            "build"
+          ],
+          "log_path": "logs/fx/dbt_build_incremental.log"
+        }
+      ]
+    },
+    {
+      "batch_id": "events_incremental_recent",
+      "dataset_name": "events",
+      "description": "Refresh the recent event bridge window after both bootstrap phases have validated.",
+      "schedule_lane": "incremental_daily",
+      "phase": "incremental",
+      "run_order": 50,
+      "depends_on_batch_ids": [
+        "events_bootstrap_phase_1",
+        "events_bootstrap_phase_2"
+      ],
+      "max_attempts": 3,
+      "retry_backoff_seconds": 60,
+      "planned_window_start": "2025-01",
+      "steps": [
+        {
+          "task_name": "silver",
+          "command": [
+            "python",
+            "ingest/events/events_silver.py"
+          ],
+          "manifest_path": "logs/events/events_silver_manifest.jsonl"
+        },
+        {
+          "task_name": "publish_gcs",
+          "command": [
+            "python",
+            "warehouse/publish_events_to_gcs.py",
+            "--since-year-month",
+            "2025-01"
+          ],
+          "manifest_path": "logs/events/publish_events_to_gcs_manifest.jsonl"
+        },
+        {
+          "task_name": "load_bigquery",
+          "command": [
+            "python",
+            "warehouse/load_events_to_bigquery.py",
+            "--since-year-month",
+            "2025-01"
+          ],
+          "manifest_path": "logs/events/load_events_to_bigquery_manifest.jsonl"
+        },
+        {
+          "task_name": "dbt_build",
+          "command": [
+            "scripts/run_dbt.sh",
+            "build"
+          ],
+          "log_path": "logs/events/dbt_build_incremental.log"
+        }
+      ]
+    },
+    {
+      "batch_id": "worldbank_energy_incremental_recent",
+      "dataset_name": "worldbank_energy",
+      "description": "Refresh the recent World Bank energy window after both bootstrap phases have validated.",
+      "schedule_lane": "incremental_daily",
+      "phase": "incremental",
+      "run_order": 60,
+      "depends_on_batch_ids": [
+        "worldbank_energy_bootstrap_phase_1",
+        "worldbank_energy_bootstrap_phase_2"
+      ],
+      "max_attempts": 3,
+      "retry_backoff_seconds": 120,
+      "planned_window_start": "2026",
+      "steps": [
+        {
+          "task_name": "extract",
+          "command": [
+            "python",
+            "ingest/world_bank/worldbank_energy.py",
+            "extract",
+            "--selector",
+            "db-countries",
+            "--energy-types",
+            "all",
+            "--start-year",
+            "2026"
+          ],
+          "manifest_path": "logs/worldbank_energy/worldbank_energy_extract_manifest.jsonl"
+        },
+        {
+          "task_name": "silver",
+          "command": [
+            "python",
+            "ingest/world_bank/worldbank_energy_silver.py",
+            "--start-year",
+            "2026"
+          ],
+          "manifest_path": "logs/worldbank_energy/worldbank_energy_silver_manifest.jsonl"
+        },
+        {
+          "task_name": "publish_gcs",
+          "command": [
+            "python",
+            "warehouse/publish_worldbank_energy_to_gcs.py",
+            "--since-year",
+            "2026"
+          ],
+          "manifest_path": "logs/worldbank_energy/publish_worldbank_energy_to_gcs_manifest.jsonl"
+        },
+        {
+          "task_name": "load_bigquery",
+          "command": [
+            "python",
+            "warehouse/load_worldbank_energy_to_bigquery.py",
+            "--since-year",
+            "2026"
+          ],
+          "manifest_path": "logs/worldbank_energy/load_worldbank_energy_to_bigquery_manifest.jsonl"
+        },
+        {
+          "task_name": "dbt_build",
+          "command": [
+            "scripts/run_dbt.sh",
+            "build"
+          ],
+          "log_path": "logs/worldbank_energy/dbt_build_incremental.log"
+        }
+      ]
+    }
+  ]
+}

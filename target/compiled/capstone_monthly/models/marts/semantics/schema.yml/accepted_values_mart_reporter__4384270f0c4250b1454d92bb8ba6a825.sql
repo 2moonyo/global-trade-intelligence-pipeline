@@ -8,7 +8,7 @@ with all_values as (
         event_active_flag as value_field,
         count(*) as n_records
 
-    from `capfractal`.`analytics_marts`.`mart_reporter_partner_commodity_month_enriched`
+    from `chokepoint-capfractal`.`analytics_marts`.`mart_reporter_partner_commodity_month_enriched`
     group by event_active_flag
 
 )

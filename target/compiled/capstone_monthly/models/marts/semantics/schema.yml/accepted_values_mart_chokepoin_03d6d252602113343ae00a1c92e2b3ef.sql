@@ -8,7 +8,7 @@ with all_values as (
         top_5_stressed_chokepoint_flag as value_field,
         count(*) as n_records
 
-    from `capfractal`.`analytics_marts`.`mart_chokepoint_monthly_stress_detail`
+    from `chokepoint-capfractal`.`analytics_marts`.`mart_chokepoint_monthly_stress_detail`
     group by top_5_stressed_chokepoint_flag
 
 )

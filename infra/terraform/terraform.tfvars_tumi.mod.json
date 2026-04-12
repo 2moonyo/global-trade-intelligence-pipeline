@@ -1,0 +1,24 @@
+{
+  "project_id": "chokepoint-capfractal",
+  "gcp_location": "us-central1",
+  "gcs_bucket_name": "raw_buckwheat_011",
+  "gcs_prefix": "cap",
+  "raw_dataset_id": "raw",
+  "analytics_dataset_id": "analytics",
+  "project_job_user_members": [
+    "user:tumi.mod.dev@gmail.com"
+  ],
+  "storage_object_admin_members": [
+    "user:tumi.mod.dev@gmail.com"
+  ],
+  "raw_dataset_editor_members": [
+    "user:tumi.mod.dev@gmail.com"
+  ],
+  "analytics_dataset_editor_members": [
+    "user:tumi.mod.dev@gmail.com"
+  ],
+  "analytics_dataset_viewer_members": [],
+  "labels": {
+    "env": "dev"
+  }
+}

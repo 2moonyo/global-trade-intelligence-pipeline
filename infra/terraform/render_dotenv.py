@@ -24,7 +24,7 @@ def _load_tfvars() -> dict[str, object]:
 def _build_env_map(tfvars: dict[str, object]) -> dict[str, object]:
     return {
         "GCP_PROJECT_ID": tfvars.get("project_id", ""),
-        "GCP_LOCATION": tfvars.get("gcp_location", "EU"),
+        "GCP_LOCATION": tfvars.get("gcp_location", "us-central1"),
         "GCS_BUCKET": tfvars.get("gcs_bucket_name", ""),
         "GCS_PREFIX": tfvars.get("gcs_prefix", ""),
         "GCP_BIGQUERY_RAW_DATASET": tfvars.get("raw_dataset_id", "raw"),

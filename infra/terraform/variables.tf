@@ -6,7 +6,19 @@ variable "project_id" {
 variable "gcp_location" {
   description = "Multi-region or region shared by the bucket and BigQuery datasets."
   type        = string
-  default     = "EU"
+  default     = "us-central1"
+}
+
+variable "gcp_region" {
+  description = "Primary region for regional resources such as the VM schedule policy."
+  type        = string
+  default     = "us-central1"
+}
+
+variable "gcp_zone" {
+  description = "Primary zone for zonal resources such as the free-tier VM and attached disk."
+  type        = string
+  default     = "us-central1-a"
 }
 
 variable "gcs_bucket_name" {
@@ -96,4 +108,124 @@ variable "allow_force_destroy" {
   description = "When true, allow terraform destroy to remove non-empty buckets and datasets with contents."
   type        = bool
   default     = false
+}
+
+variable "create_compute_vm" {
+  description = "Whether Terraform should create the free-tier-friendly Compute Engine VM and attached data disk."
+  type        = bool
+  default     = false
+}
+
+variable "vm_name" {
+  description = "Name of the Compute Engine VM instance."
+  type        = string
+  default     = "free-tier-vm"
+}
+
+variable "vm_machine_type" {
+  description = "Machine type for the Compute Engine VM."
+  type        = string
+  default     = "e2-micro"
+}
+
+variable "vm_boot_image" {
+  description = "Boot image family or image reference for the VM boot disk."
+  type        = string
+  default     = "debian-cloud/debian-11"
+}
+
+variable "vm_boot_disk_size_gb" {
+  description = "Boot disk size in GB."
+  type        = number
+  default     = 10
+}
+
+variable "vm_boot_disk_type" {
+  description = "Boot disk type for the VM."
+  type        = string
+  default     = "pd-standard"
+}
+
+variable "vm_data_disk_name" {
+  description = "Name of the additional persistent data disk."
+  type        = string
+  default     = "secondary-data-disk"
+}
+
+variable "vm_data_disk_device_name" {
+  description = "Device name used when attaching the additional data disk to the VM."
+  type        = string
+  default     = "data-disk"
+}
+
+variable "vm_data_disk_size_gb" {
+  description = "Size in GB for the additional persistent data disk."
+  type        = number
+  default     = 20
+}
+
+variable "vm_data_disk_type" {
+  description = "Disk type for the additional persistent data disk."
+  type        = string
+  default     = "pd-standard"
+}
+
+variable "vm_network" {
+  description = "VPC network name to use for the VM."
+  type        = string
+  default     = "default"
+}
+
+variable "vm_subnetwork" {
+  description = "Optional subnetwork self-link or name for the VM. Leave null to use the network default."
+  type        = string
+  default     = null
+}
+
+variable "vm_assign_public_ip" {
+  description = "Whether to assign an ephemeral public IPv4 address to the VM."
+  type        = bool
+  default     = true
+}
+
+variable "vm_data_mount_point" {
+  description = "Mount point for the attached persistent data disk."
+  type        = string
+  default     = "/mnt/disks/capstone-data"
+}
+
+variable "vm_service_account_email" {
+  description = "Optional service account email to attach to the VM. Leave null to use the Terraform-created pipeline service account when available."
+  type        = string
+  default     = null
+}
+
+variable "enable_vm_instance_schedule" {
+  description = "Whether to create and attach a Compute Engine instance schedule resource policy to the VM."
+  type        = bool
+  default     = false
+}
+
+variable "vm_schedule_name" {
+  description = "Name of the Compute Engine instance schedule resource policy."
+  type        = string
+  default     = "capstone-vm-schedule"
+}
+
+variable "vm_schedule_timezone" {
+  description = "IANA time zone used by the VM start/stop schedule."
+  type        = string
+  default     = "UTC"
+}
+
+variable "vm_start_schedule" {
+  description = "Cron schedule for starting the VM. Per Google guidance, set this at least 15 minutes before the first in-VM job."
+  type        = string
+  default     = "45 5 * * *"
+}
+
+variable "vm_stop_schedule" {
+  description = "Cron schedule for stopping the VM. Keep it at least 15 minutes after the latest expected job or retry window."
+  type        = string
+  default     = "45 10 * * *"
 }

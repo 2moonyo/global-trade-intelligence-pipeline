@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+set -euxo pipefail
+
+DEVICE_PATH="/dev/disk/by-id/google-${data_disk_device_name}"
+MOUNT_POINT="${data_mount_point}"
+
+if [[ ! -b "$${DEVICE_PATH}" ]]; then
+  echo "Data disk device $${DEVICE_PATH} is not present yet."
+  exit 0
+fi
+
+if ! blkid "$${DEVICE_PATH}" >/dev/null 2>&1; then
+  mkfs.ext4 -F -m 0 "$${DEVICE_PATH}"
+fi
+
+mkdir -p "$${MOUNT_POINT}"
+
+UUID="$(blkid -s UUID -o value "$${DEVICE_PATH}")"
+if ! grep -q "$${UUID}" /etc/fstab; then
+  echo "UUID=$${UUID} $${MOUNT_POINT} ext4 defaults,nofail 0 2" >> /etc/fstab
+fi
+
+if ! mountpoint -q "$${MOUNT_POINT}"; then
+  mount "$${MOUNT_POINT}"
+fi

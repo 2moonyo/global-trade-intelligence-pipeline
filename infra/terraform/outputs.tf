@@ -36,12 +36,57 @@ output "pipeline_service_account_email" {
 output "runtime_env" {
   description = "Environment values expected by the Python cloud scripts and dbt BigQuery target."
   value = {
-    GCP_PROJECT_ID                = var.project_id
-    GCP_LOCATION                  = var.gcp_location
-    GCS_BUCKET                    = google_storage_bucket.lake.name
-    GCS_PREFIX                    = var.gcs_prefix
-    GCP_BIGQUERY_RAW_DATASET      = google_bigquery_dataset.raw.dataset_id
+    GCP_PROJECT_ID                 = var.project_id
+    GCP_LOCATION                   = var.gcp_location
+    GCS_BUCKET                     = google_storage_bucket.lake.name
+    GCS_PREFIX                     = var.gcs_prefix
+    GCP_BIGQUERY_RAW_DATASET       = google_bigquery_dataset.raw.dataset_id
     GCP_BIGQUERY_ANALYTICS_DATASET = google_bigquery_dataset.analytics.dataset_id
-    DBT_BIGQUERY_DATASET          = google_bigquery_dataset.analytics.dataset_id
+    DBT_BIGQUERY_DATASET           = google_bigquery_dataset.analytics.dataset_id
   }
+}
+
+output "gcp_region" {
+  value       = var.gcp_region
+  description = "Primary region for VM-adjacent resources."
+}
+
+output "gcp_zone" {
+  value       = var.gcp_zone
+  description = "Primary zone for the free-tier VM and attached data disk."
+}
+
+output "vm_name" {
+  value       = var.create_compute_vm ? google_compute_instance.free_vm[0].name : null
+  description = "Compute Engine VM name when VM provisioning is enabled."
+}
+
+output "vm_zone" {
+  value       = var.create_compute_vm ? google_compute_instance.free_vm[0].zone : null
+  description = "Compute Engine VM zone when VM provisioning is enabled."
+}
+
+output "vm_external_ip" {
+  value       = var.create_compute_vm && var.vm_assign_public_ip ? google_compute_instance.free_vm[0].network_interface[0].access_config[0].nat_ip : null
+  description = "Ephemeral external IPv4 address for the VM when one is assigned."
+}
+
+output "vm_data_disk_name" {
+  value       = var.create_compute_vm ? google_compute_disk.data_disk[0].name : null
+  description = "Attached persistent data disk name when VM provisioning is enabled."
+}
+
+output "vm_data_mount_point" {
+  value       = var.create_compute_vm ? var.vm_data_mount_point : null
+  description = "Mount point configured by the VM startup script for the additional persistent data disk."
+}
+
+output "vm_schedule_name" {
+  value       = var.create_compute_vm && var.enable_vm_instance_schedule ? google_compute_resource_policy.vm_schedule[0].name : null
+  description = "Attached instance schedule resource policy name when schedule provisioning is enabled."
+}
+
+output "vm_runtime_service_account_email" {
+  value       = var.create_compute_vm ? local.vm_runtime_service_account_email : null
+  description = "Service account attached to the VM for metadata-based ADC, when configured."
 }

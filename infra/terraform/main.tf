@@ -11,10 +11,10 @@ locals {
     "serviceAccount:${google_service_account.pipeline[0].email}"
   ] : []
 
-  storage_object_admin_members   = distinct(concat(var.storage_object_admin_members, local.pipeline_sa_member))
-  raw_dataset_editor_members     = distinct(concat(var.raw_dataset_editor_members, local.pipeline_sa_member))
+  storage_object_admin_members     = distinct(concat(var.storage_object_admin_members, local.pipeline_sa_member))
+  raw_dataset_editor_members       = distinct(concat(var.raw_dataset_editor_members, local.pipeline_sa_member))
   analytics_dataset_editor_members = distinct(concat(var.analytics_dataset_editor_members, local.pipeline_sa_member))
-  project_job_user_members       = distinct(concat(var.project_job_user_members, local.pipeline_sa_member))
+  project_job_user_members         = distinct(concat(var.project_job_user_members, local.pipeline_sa_member))
 }
 
 resource "google_storage_bucket" "lake" {

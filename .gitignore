@@ -23,6 +23,17 @@ deep*.md
 /warehouse/end-*.md
 *.zip
 
+# Ignore markdown docs except README files
+*.md
+!README.md
+!**/README.md
+
+# Secrets and backups
+.env.bak
+*.env.bak
+secrets
+/secrets/
+
 
 .bruin.yml
 /logs/portwatch/
@@ -42,6 +53,7 @@ override.tf.json
 /.secrets
 /.uv-cache
 /app
+/runtime
 
 # Handover and dashboard state docs
 /INFRA_INVENTORY.md

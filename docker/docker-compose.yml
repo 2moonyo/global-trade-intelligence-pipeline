@@ -10,7 +10,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-capstone}
       POSTGRES_DB: ${POSTGRES_DB:-capstone}
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - ../runtime/postgres:/var/lib/postgresql/data
     healthcheck:
       test:
         - CMD-SHELL
@@ -30,7 +30,7 @@ services:
     container_name: capstone-pipeline
     restart: unless-stopped
     env_file:
-      - ../.env
+      - ${CAPSTONE_CONTAINER_ENV_FILE:-../.env}
     environment:
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
@@ -38,6 +38,9 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-capstone}
       POSTGRES_DB: ${POSTGRES_DB:-capstone}
       UV_CACHE_DIR: /workspace/.uv-cache
+      GCE_METADATA_HOST: 169.254.169.254
+      NO_PROXY: ${NO_PROXY:-169.254.169.254,metadata.google.internal}
+      no_proxy: ${no_proxy:-169.254.169.254,metadata.google.internal}
     command: ["tail", "-f", "/dev/null"]
     volumes:
       - ../data:/workspace/data
@@ -46,6 +49,8 @@ services:
       - ../dbt_packages:/workspace/dbt_packages
       - ../.uv-cache:/workspace/.uv-cache
       - ../.secrets/gcp:/var/secrets/google:ro
+    extra_hosts:
+      - "metadata.google.internal:169.254.169.254"
     healthcheck:
       test:
         - CMD-SHELL
@@ -65,7 +70,7 @@ services:
     container_name: capstone-dbt
     restart: unless-stopped
     env_file:
-      - ../.env
+      - ${CAPSTONE_CONTAINER_ENV_FILE:-../.env}
     environment:
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
@@ -73,6 +78,9 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-capstone}
       POSTGRES_DB: ${POSTGRES_DB:-capstone}
       UV_CACHE_DIR: /workspace/.uv-cache
+      GCE_METADATA_HOST: 169.254.169.254
+      NO_PROXY: ${NO_PROXY:-169.254.169.254,metadata.google.internal}
+      no_proxy: ${no_proxy:-169.254.169.254,metadata.google.internal}
     command: ["tail", "-f", "/dev/null"]
     volumes:
       - ../data:/workspace/data
@@ -81,6 +89,8 @@ services:
       - ../dbt_packages:/workspace/dbt_packages
       - ../.uv-cache:/workspace/.uv-cache
       - ../.secrets/gcp:/var/secrets/google:ro
+    extra_hosts:
+      - "metadata.google.internal:169.254.169.254"
     healthcheck:
       test:
         - CMD-SHELL
@@ -99,11 +109,13 @@ services:
     build:
       context: ..
       dockerfile: docker/orchestrator/Dockerfile
+      args:
+        BASE_IMAGE: capstone-pipeline:local
     image: capstone-orchestrator:local
     container_name: capstone-orchestrator
     restart: unless-stopped
     env_file:
-      - ../.env
+      - ${CAPSTONE_CONTAINER_ENV_FILE:-../.env}
     environment:
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
@@ -111,6 +123,9 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-capstone}
       POSTGRES_DB: ${POSTGRES_DB:-capstone}
       UV_CACHE_DIR: /workspace/.uv-cache
+      GCE_METADATA_HOST: 169.254.169.254
+      NO_PROXY: ${NO_PROXY:-169.254.169.254,metadata.google.internal}
+      no_proxy: ${no_proxy:-169.254.169.254,metadata.google.internal}
     command: ["tail", "-f", "/dev/null"]
     volumes:
       - ../data:/workspace/data
@@ -119,6 +134,8 @@ services:
       - ../dbt_packages:/workspace/dbt_packages
       - ../.uv-cache:/workspace/.uv-cache
       - ../.secrets/gcp:/var/secrets/google:ro
+    extra_hosts:
+      - "metadata.google.internal:169.254.169.254"
     healthcheck:
       test:
         - CMD-SHELL
@@ -136,9 +153,6 @@ services:
         condition: service_healthy
     networks:
       - capstone_internal
-
-volumes:
-  postgres_data:
 
 networks:
   capstone_internal:

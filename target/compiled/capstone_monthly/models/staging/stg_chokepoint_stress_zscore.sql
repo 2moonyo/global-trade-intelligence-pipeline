@@ -14,4 +14,4 @@ select
   z_score_count,
   vessel_size_index,
   z_score_vessel_size
-from `chokepoint-capfractal`.`analytics_staging`.`stg_portwatch_stress_metrics`
+from `fullcap-10111`.`analytics_staging`.`stg_portwatch_stress_metrics`

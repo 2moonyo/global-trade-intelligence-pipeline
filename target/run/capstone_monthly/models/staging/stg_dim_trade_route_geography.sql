@@ -1,6 +1,6 @@
 
 
-  create or replace view `chokepoint-capfractal`.`analytics_staging`.`stg_dim_trade_route_geography`
+  create or replace view `fullcap-10111`.`analytics_staging`.`stg_dim_trade_route_geography`
   OPTIONS()
   as select
   
@@ -41,5 +41,5 @@
   
     ST_GEOGFROMWKB(route_path_wkb)
    as route_path_geog
-from `chokepoint-capfractal`.`raw`.`dim_trade_routes`;
+from `fullcap-10111`.`raw`.`dim_trade_routes`;
 

@@ -1,6 +1,6 @@
 
 
-  create or replace view `chokepoint-capfractal`.`analytics_staging`.`stg_comtrade_trade_base`
+  create or replace view `fullcap-10111`.`analytics_staging`.`stg_comtrade_trade_base`
   OPTIONS()
   as with raw_source as (
   select
@@ -19,7 +19,7 @@
     cast(qty as FLOAT64) as qty,
     cast(motCode as integer) as mot_code,
     cast(partner2Code as integer) as partner2_code
-  from `chokepoint-capfractal`.`raw`.`comtrade_fact`
+  from `fullcap-10111`.`raw`.`comtrade_fact`
 ),
 source_data as (
   select

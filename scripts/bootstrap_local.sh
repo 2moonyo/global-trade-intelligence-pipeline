@@ -10,6 +10,7 @@ mkdir -p \
   .uv-cache \
   data \
   dbt_packages \
+  runtime/postgres \
   logs/ops \
   logs/brent \
   logs/comtrade \
@@ -76,10 +77,32 @@ upsert_env_var "POSTGRES_SCHEMA" "ops"
 upsert_env_var "BATCH_PLAN_PATH" "ops/batch_plan.json"
 upsert_env_var "ENABLE_BIGQUERY_OPS_MIRROR" "true"
 upsert_env_var "OPS_STRICT_BIGQUERY_MIRROR" "false"
+upsert_env_var "CAPSTONE_CONTAINER_ENV_FILE" "../.env"
+upsert_env_var "GOOGLE_AUTH_MODE" "auto"
+
+AUTH_MODE="$(awk -F= '/^GOOGLE_AUTH_MODE=/{print tolower($2); exit}' .env 2>/dev/null || true)"
+case "${AUTH_MODE}" in
+  ""|auto)
+    AUTH_MODE="auto"
+    ;;
+  local|local_adc|adc)
+    AUTH_MODE="local_adc"
+    ;;
+  vm|metadata|vm_metadata)
+    AUTH_MODE="vm_metadata"
+    ;;
+  *)
+    echo "Unsupported GOOGLE_AUTH_MODE='${AUTH_MODE}' in .env. Use auto, local_adc, or vm_metadata." >&2
+    exit 1
+    ;;
+esac
 
 HOST_ADC_PATH="${HOME}/.config/gcloud/application_default_credentials.json"
 
-if [[ ! -f .secrets/gcp/credentials.json && -f "${HOST_ADC_PATH}" ]]; then
+if [[ "${AUTH_MODE}" == "vm_metadata" ]]; then
+  upsert_env_var "GOOGLE_APPLICATION_CREDENTIALS" ""
+  echo "GOOGLE_AUTH_MODE=vm_metadata; leaving key-file auth disabled and relying on VM metadata auth."
+elif [[ ! -f .secrets/gcp/credentials.json && -f "${HOST_ADC_PATH}" ]]; then
   cp "${HOST_ADC_PATH}" .secrets/gcp/credentials.json
   echo "Copied local ADC credentials into .secrets/gcp/credentials.json."
 elif [[ ! -f .secrets/gcp/credentials.json ]]; then
@@ -87,7 +110,7 @@ elif [[ ! -f .secrets/gcp/credentials.json ]]; then
   echo "For a GCP VM with an attached service account, you can leave this file absent."
 fi
 
-if [[ -f .secrets/gcp/credentials.json ]]; then
+if [[ "${AUTH_MODE}" != "vm_metadata" && -f .secrets/gcp/credentials.json ]]; then
   upsert_env_var "GOOGLE_APPLICATION_CREDENTIALS" "/var/secrets/google/credentials.json"
   echo "Configured .env to use the mounted Google credentials path for local Docker runs."
 fi

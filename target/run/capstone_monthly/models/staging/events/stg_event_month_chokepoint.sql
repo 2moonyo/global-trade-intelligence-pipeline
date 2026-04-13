@@ -1,6 +1,6 @@
 
 
-  create or replace view `chokepoint-capfractal`.`analytics_analytics_staging`.`stg_event_month_chokepoint`
+  create or replace view `fullcap-10111`.`analytics_analytics_staging`.`stg_event_month_chokepoint`
   OPTIONS()
   as 
 

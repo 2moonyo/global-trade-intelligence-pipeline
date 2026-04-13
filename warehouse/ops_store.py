@@ -197,8 +197,8 @@ POSTGRES_DDL = (
       log_path TEXT,
       gcs_log_uri TEXT,
       error_summary TEXT,
-      run_args_json JSONB NOT NULL DEFAULT '{}'::jsonb,
-      metrics_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+      run_args_json JSONB NOT NULL DEFAULT '{{}}'::jsonb,
+      metrics_json JSONB NOT NULL DEFAULT '{{}}'::jsonb,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
@@ -221,7 +221,7 @@ POSTGRES_DDL = (
       log_path TEXT,
       error_summary TEXT,
       command_json JSONB NOT NULL DEFAULT '[]'::jsonb,
-      metrics_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+      metrics_json JSONB NOT NULL DEFAULT '{{}}'::jsonb,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       UNIQUE (pipeline_run_id, task_name, attempt_number)
@@ -243,7 +243,7 @@ POSTGRES_DDL = (
       partition_key TEXT,
       checksum TEXT,
       record_count BIGINT,
-      payload_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+      payload_json JSONB NOT NULL DEFAULT '{{}}'::jsonb,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
     """,
@@ -260,7 +260,7 @@ POSTGRES_DDL = (
       checkpoint_value TEXT,
       retryable BOOLEAN,
       error_summary TEXT,
-      metrics_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+      metrics_json JSONB NOT NULL DEFAULT '{{}}'::jsonb,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       UNIQUE (dataset_name, batch_id, partition_type, partition_key)
@@ -283,7 +283,7 @@ POSTGRES_DDL = (
       next_retry_at TIMESTAMPTZ,
       resolved_at TIMESTAMPTZ,
       error_summary TEXT,
-      payload_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+      payload_json JSONB NOT NULL DEFAULT '{{}}'::jsonb,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );

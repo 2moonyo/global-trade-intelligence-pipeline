@@ -26,6 +26,7 @@ COPY dbt_project.yml profiles.yml .bruin.yml Makefile ./
 COPY ingest ./ingest
 COPY macros ./macros
 COPY models ./models
+COPY ops ./ops
 COPY tests ./tests
 COPY warehouse ./warehouse
 COPY scripts ./scripts

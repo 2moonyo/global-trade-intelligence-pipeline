@@ -8,7 +8,7 @@
       
     
   select *
-from `chokepoint-capfractal`.`analytics_staging`.`stg_portwatch_daily`
+from `fullcap-10111`.`analytics_staging`.`stg_portwatch_daily`
 where (
     tanker_share is not null
     and (

@@ -1,6 +1,6 @@
 
 
-  create or replace view `chokepoint-capfractal`.`analytics_staging`.`stg_dim_country`
+  create or replace view `fullcap-10111`.`analytics_staging`.`stg_dim_country`
   OPTIONS()
   as select
   cast(country_code as integer) as country_code,
@@ -11,5 +11,5 @@
   continent,
   cast(is_eu as boolean) as is_eu,
   cast(is_oecd as boolean) as is_oecd
-from `chokepoint-capfractal`.`raw`.`dim_country`;
+from `fullcap-10111`.`raw`.`dim_country`;
 

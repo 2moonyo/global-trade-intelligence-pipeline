@@ -4,7 +4,7 @@ with duplicate_grain as (
     date_day,
     chokepoint_id,
     count(*) as row_count
-  from `chokepoint-capfractal`.`analytics_staging`.`stg_portwatch_daily`
+  from `fullcap-10111`.`analytics_staging`.`stg_portwatch_daily`
   group by 1, 2
   having count(*) > 1
 )

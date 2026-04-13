@@ -8,4 +8,4 @@ select
   cast(food_flag as boolean) as food_flag,
   cast(energy_flag as boolean) as energy_flag,
   cast(industrial_flag as boolean) as industrial_flag
-from `chokepoint-capfractal`.`raw`.`dim_commodity`
+from `fullcap-10111`.`raw`.`dim_commodity`

@@ -1,6 +1,6 @@
 
 
-  create or replace view `chokepoint-capfractal`.`analytics_staging`.`stg_fx_monthly`
+  create or replace view `fullcap-10111`.`analytics_staging`.`stg_fx_monthly`
   OPTIONS()
   as -- Grain: one row per year_month + currency_view + fx_currency_code.
 -- Builds EUR-base canonical rates from the ECB-native monthly pair table plus USD-base derived crosses via EUR/USD.
@@ -14,7 +14,7 @@ with raw_fx as (
     upper(trim(base_currency_code)) as base_currency_code,
     upper(trim(quote_currency_code)) as quote_currency_code,
     cast(fx_rate as FLOAT64) as fx_rate
-  from `chokepoint-capfractal`.`raw`.`ecb_fx_eu_monthly`
+  from `fullcap-10111`.`raw`.`ecb_fx_eu_monthly`
   where year_month is not null
     and 
     regexp_contains(cast(year_month as string), r'^\d{4}-\d{2}$')

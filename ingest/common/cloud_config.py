@@ -105,7 +105,7 @@ class GcpCloudConfig:
             gcp_location=_get_setting(
                 env_name="GCP_LOCATION",
                 terraform_keys=("gcp_location",),
-                default="EU",
+                default="us-central1",
             ),
             gcs_bucket=_clean_bucket_name(
                 _get_setting(

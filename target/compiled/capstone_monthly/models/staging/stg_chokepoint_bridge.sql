@@ -15,4 +15,4 @@ select
   event_type,
   event_scope,
   link_role
-from `chokepoint-capfractal`.`raw`.`bridge_event_month_chokepoint_core`
+from `fullcap-10111`.`raw`.`bridge_event_month_chokepoint_core`

@@ -51,7 +51,7 @@ variable "analytics_dataset_id" {
 }
 
 variable "create_pipeline_service_account" {
-  description = "Whether Terraform should create a runtime service account for scheduled pipeline runs."
+  description = "Whether Terraform should create the user-managed service account attached to the VM runtime."
   type        = bool
   default     = true
 }
@@ -63,7 +63,7 @@ variable "pipeline_service_account_id" {
 }
 
 variable "pipeline_service_account_display_name" {
-  description = "Display name for the runtime service account."
+  description = "Display name for the VM runtime service account."
   type        = string
   default     = "Capstone Pipeline Runtime"
 }
@@ -137,7 +137,7 @@ variable "vm_boot_image" {
 variable "vm_boot_disk_size_gb" {
   description = "Boot disk size in GB."
   type        = number
-  default     = 10
+  default     = 18
 }
 
 variable "vm_boot_disk_type" {
@@ -161,7 +161,7 @@ variable "vm_data_disk_device_name" {
 variable "vm_data_disk_size_gb" {
   description = "Size in GB for the additional persistent data disk."
   type        = number
-  default     = 20
+  default     = 12
 }
 
 variable "vm_data_disk_type" {
@@ -189,13 +189,36 @@ variable "vm_assign_public_ip" {
 }
 
 variable "vm_data_mount_point" {
-  description = "Mount point for the attached persistent data disk."
+  description = "Mount point for the attached persistent data disk that stores repo state, logs, dbt artifacts, and Postgres data."
   type        = string
-  default     = "/mnt/disks/capstone-data"
+  default     = "/var/lib/pipeline"
+}
+
+variable "vm_repo_root" {
+  description = "Absolute path on the mounted persistent disk where operators copy the repository for VM runs."
+  type        = string
+  default     = "/var/lib/pipeline/capstone"
+}
+
+variable "vm_env_file_path" {
+  description = "Root-owned env file path consumed by systemd and docker compose on the VM."
+  type        = string
+  default     = "/etc/capstone/pipeline.env"
+}
+
+variable "vm_schedule_lane_timers" {
+  description = "Map of schedule lane name to systemd OnCalendar expression. Terraform writes unit files for each entry, and operators enable only the timers they want."
+  type        = map(string)
+  default = {
+    incremental_daily = "*-*-* 06:00:00 UTC"
+    weekly_refresh    = "Mon *-*-* 06:15:00 UTC"
+    monthly_refresh   = "*-*-01 06:30:00 UTC"
+    yearly_refresh    = "*-01-01 06:45:00 UTC"
+  }
 }
 
 variable "vm_service_account_email" {
-  description = "Optional service account email to attach to the VM. Leave null to use the Terraform-created pipeline service account when available."
+  description = "Optional service account email to attach to the VM for metadata-based ADC. Leave null to use the Terraform-created pipeline service account when available."
   type        = string
   default     = null
 }

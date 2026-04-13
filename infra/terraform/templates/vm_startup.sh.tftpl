@@ -3,23 +3,155 @@ set -euxo pipefail
 
 DEVICE_PATH="/dev/disk/by-id/google-${data_disk_device_name}"
 MOUNT_POINT="${data_mount_point}"
+REPO_ROOT="${repo_root}"
+ENV_FILE_PATH="${env_file_path}"
 
-if [[ ! -b "$${DEVICE_PATH}" ]]; then
+wait_for_data_disk() {
+  for _attempt in $(seq 1 30); do
+    if [[ -b "$${DEVICE_PATH}" ]]; then
+      return 0
+    fi
+    sleep 2
+  done
+
   echo "Data disk device $${DEVICE_PATH} is not present yet."
   exit 0
-fi
+}
 
-if ! blkid "$${DEVICE_PATH}" >/dev/null 2>&1; then
-  mkfs.ext4 -F -m 0 "$${DEVICE_PATH}"
-fi
+mount_data_disk() {
+  if ! blkid "$${DEVICE_PATH}" >/dev/null 2>&1; then
+    mkfs.ext4 -F -m 0 "$${DEVICE_PATH}"
+  fi
 
-mkdir -p "$${MOUNT_POINT}"
+  install -d -m 0755 "$${MOUNT_POINT}"
 
-UUID="$(blkid -s UUID -o value "$${DEVICE_PATH}")"
-if ! grep -q "$${UUID}" /etc/fstab; then
-  echo "UUID=$${UUID} $${MOUNT_POINT} ext4 defaults,nofail 0 2" >> /etc/fstab
-fi
+  UUID="$(blkid -s UUID -o value "$${DEVICE_PATH}")"
+  if ! grep -q "$${UUID}" /etc/fstab; then
+    echo "UUID=$${UUID} $${MOUNT_POINT} ext4 defaults,nofail 0 2" >> /etc/fstab
+  fi
 
-if ! mountpoint -q "$${MOUNT_POINT}"; then
-  mount "$${MOUNT_POINT}"
-fi
+  if ! mountpoint -q "$${MOUNT_POINT}"; then
+    mount "$${MOUNT_POINT}"
+  fi
+}
+
+install_base_packages() {
+  export DEBIAN_FRONTEND=noninteractive
+  apt-get update
+  apt-get install -y --no-install-recommends ca-certificates curl git gnupg python3 python3-pip
+}
+
+install_docker() {
+  if command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then
+    systemctl enable --now docker.service
+    return 0
+  fi
+
+  install -m 0755 -d /etc/apt/keyrings
+  if [[ ! -f /etc/apt/keyrings/docker.gpg ]]; then
+    curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+    chmod a+r /etc/apt/keyrings/docker.gpg
+  fi
+
+  . /etc/os-release
+  echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian $${VERSION_CODENAME} stable" > /etc/apt/sources.list.d/docker.list
+
+  apt-get update
+  apt-get install -y --no-install-recommends docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+  systemctl enable --now docker.service
+}
+
+write_capstone_stack_unit() {
+  cat > /etc/systemd/system/capstone-stack.service <<'EOF'
+[Unit]
+Description=Capstone Docker Compose stack
+Wants=network-online.target docker.service
+After=network-online.target docker.service
+ConditionPathExists=${env_file_path}
+ConditionPathExists=${repo_root}/docker/docker-compose.yml
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=${repo_root}
+EnvironmentFile=${env_file_path}
+# Do not set GOOGLE_APPLICATION_CREDENTIALS on the VM. The attached service account
+# is discovered automatically through the Compute Engine metadata server, which is
+# how Google client libraries resolve Application Default Credentials on GCE.
+ExecStartPre=/usr/bin/install -d -m 0755 ${repo_root}/.secrets/gcp ${repo_root}/.uv-cache ${repo_root}/data ${repo_root}/dbt_packages ${repo_root}/logs ${repo_root}/runtime/postgres ${repo_root}/target
+ExecStart=/usr/bin/docker compose --env-file ${env_file_path} -f docker/docker-compose.yml up -d
+ExecStop=/usr/bin/docker compose --env-file ${env_file_path} -f docker/docker-compose.yml down
+TimeoutStartSec=0
+
+[Install]
+WantedBy=multi-user.target
+EOF
+}
+
+write_capstone_schedule_lane_service() {
+  cat > /etc/systemd/system/capstone-schedule-lane@.service <<'EOF'
+[Unit]
+Description=Run Capstone schedule lane %i via the orchestrator container
+Wants=network-online.target docker.service capstone-stack.service
+After=network-online.target docker.service capstone-stack.service
+ConditionPathExists=${env_file_path}
+ConditionPathExists=${repo_root}/docker/docker-compose.yml
+
+[Service]
+Type=oneshot
+WorkingDirectory=${repo_root}
+EnvironmentFile=${env_file_path}
+# The env file holds app configuration and third-party API keys only. GCP auth stays
+# keyless because the orchestrator container uses GOOGLE_AUTH_MODE=vm_metadata and
+# resolves short-lived ADC credentials from the metadata server.
+ExecStartPre=/usr/bin/systemctl start capstone-stack.service
+ExecStartPre=/bin/sh -c 'for i in $(seq 1 30); do /usr/bin/docker compose --env-file ${env_file_path} -f docker/docker-compose.yml exec -T orchestrator true >/dev/null 2>&1 && exit 0; sleep 5; done; exit 1'
+ExecStart=/usr/bin/docker compose --env-file ${env_file_path} -f docker/docker-compose.yml exec -T -e SCHEDULE_LANE=%i orchestrator python bruin/pipelines/schedule_lane_queue/assets/run_schedule_lane_queue.py
+TimeoutStartSec=0
+
+[Install]
+WantedBy=multi-user.target
+EOF
+}
+
+write_capstone_timer_units() {
+%{ for lane, on_calendar in schedule_lane_timers ~}
+  cat > /etc/systemd/system/capstone-schedule-lane-${lane}.timer <<'EOF'
+[Unit]
+Description=Timer for Capstone schedule lane ${lane}
+
+[Timer]
+Unit=capstone-schedule-lane@${lane}.service
+OnCalendar=${on_calendar}
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF
+%{ endfor ~}
+}
+
+main() {
+  wait_for_data_disk
+  mount_data_disk
+  install -d -m 0750 /etc/capstone
+  install -d -m 0755 "$${MOUNT_POINT}" "$(dirname "$${REPO_ROOT}")" "$${REPO_ROOT}"
+
+  install_base_packages
+  install_docker
+  write_capstone_stack_unit
+  write_capstone_schedule_lane_service
+  write_capstone_timer_units
+
+  systemctl daemon-reload
+  systemctl enable docker.service
+  systemctl enable capstone-stack.service
+
+  if [[ -f "$${ENV_FILE_PATH}" && -f "$${REPO_ROOT}/docker/docker-compose.yml" ]]; then
+    systemctl start capstone-stack.service
+  else
+    echo "Capstone repo or env file not present yet; skipping automatic stack start."
+  fi
+}
+
+main "$@"

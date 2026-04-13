@@ -30,7 +30,7 @@ output "analytics_dataset_id" {
 
 output "pipeline_service_account_email" {
   value       = var.create_pipeline_service_account ? google_service_account.pipeline[0].email : null
-  description = "Runtime service account for scheduled pipeline runs."
+  description = "Runtime service account attached to the VM for metadata-based ADC."
 }
 
 output "runtime_env" {
@@ -79,6 +79,21 @@ output "vm_data_disk_name" {
 output "vm_data_mount_point" {
   value       = var.create_compute_vm ? var.vm_data_mount_point : null
   description = "Mount point configured by the VM startup script for the additional persistent data disk."
+}
+
+output "vm_repo_root" {
+  value       = var.create_compute_vm ? var.vm_repo_root : null
+  description = "Path on the mounted persistent disk where operators should copy the repository on the VM."
+}
+
+output "vm_env_file_path" {
+  value       = var.create_compute_vm ? var.vm_env_file_path : null
+  description = "Root-owned env file path consumed by systemd services and docker compose on the VM."
+}
+
+output "vm_schedule_lane_timer_units" {
+  value       = var.create_compute_vm ? [for lane in sort(keys(var.vm_schedule_lane_timers)) : "capstone-schedule-lane-${lane}.timer"] : []
+  description = "Systemd timer unit names written by the VM startup script for schedule lane execution."
 }
 
 output "vm_schedule_name" {

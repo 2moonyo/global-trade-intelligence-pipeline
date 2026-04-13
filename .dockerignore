@@ -17,6 +17,7 @@ logs
 target
 dbt_packages
 .secrets
+runtime
 
 Documentation
 notebooks

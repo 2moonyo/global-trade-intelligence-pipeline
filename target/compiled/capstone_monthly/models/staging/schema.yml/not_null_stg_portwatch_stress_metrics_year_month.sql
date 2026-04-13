@@ -5,7 +5,7 @@
 
 
 select year_month
-from `chokepoint-capfractal`.`analytics_staging`.`stg_portwatch_stress_metrics`
+from `fullcap-10111`.`analytics_staging`.`stg_portwatch_stress_metrics`
 where year_month is null
 
 

@@ -1,3 +1,7 @@
+# The VM uses a user-managed service account attached directly to the instance.
+# On Compute Engine, Google client libraries and dbt's BigQuery adapter can resolve
+# ADC without a JSON key because the metadata server mints short-lived credentials.
+
 locals {
   vm_runtime_service_account_email = var.vm_service_account_email != null ? var.vm_service_account_email : try(google_service_account.pipeline[0].email, null)
 }
@@ -84,6 +88,9 @@ resource "google_compute_instance" "free_vm" {
     {
       data_disk_device_name = var.vm_data_disk_device_name
       data_mount_point      = var.vm_data_mount_point
+      repo_root             = var.vm_repo_root
+      env_file_path         = var.vm_env_file_path
+      schedule_lane_timers  = var.vm_schedule_lane_timers
     },
   )
 
@@ -92,6 +99,13 @@ resource "google_compute_instance" "free_vm" {
     content {
       email  = service_account.value
       scopes = ["cloud-platform"]
+    }
+  }
+
+  lifecycle {
+    precondition {
+      condition     = local.vm_runtime_service_account_email != null
+      error_message = "Compute VM creation requires a service account so the runtime can use keyless ADC through the metadata server."
     }
   }
 

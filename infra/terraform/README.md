@@ -1,33 +1,36 @@
 # Terraform Scaffold
 
-This directory provisions the first cloud slice resources for the project:
+This directory provisions the shared cloud resources and the optional VM runtime:
 
 - one GCS bucket for bronze and silver assets
 - one BigQuery `raw` dataset
 - one BigQuery `analytics` dataset
-- one optional runtime service account for scheduled pipeline runs
+- one user-managed VM runtime service account
 - one optional free-tier-friendly Compute Engine VM with a secondary persistent disk
 - one optional Compute Engine instance schedule policy for VM start and stop windows
-- IAM grants for storage object admin, BigQuery dataset editors/viewers, and project-level `bigquery.jobUser`
+- IAM grants for bucket object admin, dataset editors/viewers, and project-level `bigquery.jobUser`
 
-## Auth
+## Local Terraform auth
 
-For local Terraform runs, use Application Default Credentials:
-
-```bash
-gcloud auth application-default login
-```
-
-The provider config does not use a service-account key file.
-
-If you want to switch to a new Google account, update both the gcloud CLI login and Application Default Credentials:
+Run Terraform from your laptop with Application Default Credentials:
 
 ```bash
 gcloud auth login
+gcloud config set project YOUR_PROJECT_ID
 gcloud auth application-default login
 gcloud auth application-default set-quota-project YOUR_PROJECT_ID
-gcloud config set project YOUR_PROJECT_ID
 ```
+
+The Terraform provider does not use a service-account key file.
+
+## Why the VM runtime is keyless
+
+- Terraform creates a user-managed service account and attaches it directly to the VM.
+- The VM uses `cloud-platform` scope so Google client libraries can ask the metadata server for short-lived access tokens at runtime.
+- The startup script deliberately does not set `GOOGLE_APPLICATION_CREDENTIALS`.
+- `GOOGLE_AUTH_MODE=vm_metadata` tells the containers to ignore mounted key files and rely on metadata-based ADC instead.
+
+This keeps GCP auth aligned with org policies that disallow JSON keys while staying easy to explain in an interview: the VM identity is the service account, and the metadata server brokers credentials on demand.
 
 ## First run
 
@@ -37,30 +40,20 @@ gcloud config set project YOUR_PROJECT_ID
 cp infra/terraform/terraform.tfvars.json.example infra/terraform/terraform.tfvars.json
 ```
 
-2. Fill in your project id, bucket name, location, and any IAM members.
-
-   If you also want the VM, set the following values in `infra/terraform/terraform.tfvars.json`:
+2. Fill in your project id, bucket name, location, and IAM members. For the VM path, the important defaults are already set:
 
 ```json
 {
-  "gcp_region": "us-central1",
-  "gcp_zone": "us-central1-a",
   "create_compute_vm": true,
   "vm_name": "free-tier-vm",
   "vm_machine_type": "e2-micro",
-  "vm_boot_image": "debian-cloud/debian-11",
-  "vm_boot_disk_size_gb": 10,
-  "vm_data_disk_name": "secondary-data-disk",
-  "vm_data_disk_device_name": "data-disk",
-  "vm_data_disk_size_gb": 20,
-  "enable_vm_instance_schedule": true,
-  "vm_schedule_timezone": "UTC",
-  "vm_start_schedule": "45 5 * * *",
-  "vm_stop_schedule": "45 10 * * *"
+  "vm_boot_disk_size_gb": 18,
+  "vm_data_disk_size_gb": 12,
+  "vm_data_mount_point": "/var/lib/pipeline",
+  "vm_repo_root": "/var/lib/pipeline/capstone",
+  "vm_env_file_path": "/etc/capstone/pipeline.env"
 }
 ```
-
-   The example start schedule above wakes the VM 15 minutes before a 06:00 in-VM cron or systemd timer. Google documents that scheduled start and stop operations can take up to 15 minutes to begin, so keep the VM start schedule at least 15 minutes earlier than the first job you need to run, and keep start and stop operations at least 15 minutes apart.
 
 3. Apply Terraform:
 
@@ -71,20 +64,38 @@ terraform plan
 terraform apply
 ```
 
-Or from the project root with the new `Makefile`:
+After apply, Terraform outputs the VM name, zone, external IP, mount point, repo root, env file path, and attached service account.
+
+## VM operator flow
+
+The startup script prepares the VM, installs Docker, mounts the persistent disk at `/var/lib/pipeline`, writes systemd units, and enables `capstone-stack.service`.
+
+After the first SSH:
+
+1. Copy the repository bundle to `/var/lib/pipeline/capstone`.
+2. Create the root-owned env file from `ops/vm/pipeline.env.example`.
+3. Start the stack:
 
 ```bash
-make tfvars-init
-make cloud-bootstrap
+sudo systemctl start capstone-stack
 ```
 
-After apply, Terraform outputs the VM name, zone, external IP, mount point, and attached service account.
+4. Enable the schedule lane timers you want:
 
-## VM notes
+```bash
+sudo systemctl enable --now capstone-schedule-lane-incremental_daily.timer
+sudo systemctl enable --now capstone-schedule-lane-weekly_refresh.timer
+sudo systemctl enable --now capstone-schedule-lane-monthly_refresh.timer
+sudo systemctl enable --now capstone-schedule-lane-yearly_refresh.timer
+```
 
-- The VM is attached to the Terraform-created pipeline service account by default when `create_pipeline_service_account = true`.
-- The VM startup script formats and mounts the secondary persistent disk at `/mnt/disks/capstone-data` on first boot.
-- The instance schedule only starts and stops the VM. Your in-VM cron or systemd timers still control when `docker compose` or Bruin commands actually run.
+The timers call the existing `schedule_lane_queue` wrapper inside the orchestrator container, so the VM path reuses the same batch plan, retry, checkpoint, and Postgres ops ledger logic as local runs.
+
+## Instance schedule vs. in-VM timers
+
+- The optional Compute Engine instance schedule only starts and stops the VM.
+- The systemd timers on the VM decide when Bruin schedule lanes run.
+- Keep the VM start schedule at least 15 minutes earlier than the first timer you enable, and keep start and stop operations at least 15 minutes apart.
 
 ## Destroy
 
@@ -102,25 +113,4 @@ in `infra/terraform/terraform.tfvars.json`, then run:
 make infra-destroy
 ```
 
-This will delete the Terraform-managed bucket contents and BigQuery dataset contents. Only enable it when you truly want a full teardown.
-
-## Runtime config
-
-The Python cloud scripts can read `infra/terraform/terraform.tfvars.json` directly, so `.env` is optional for them.
-
-If you also want dbt's BigQuery target to pick up the same values, render a dotenv file from Terraform inputs:
-
-```bash
-python infra/terraform/render_dotenv.py > .env
-```
-
-That keeps Terraform as the source of truth while still satisfying tools like dbt that expect environment variables.
-
-If you use the root `Makefile`, dbt can also be run without manually creating `.env`:
-
-```bash
-make dbt-bigquery-debug
-make dbt-bigquery-build
-```
-
-The Makefile evaluates Terraform-derived environment variables in the same shell as the `dbt` command.
+Only enable this when you truly want a full teardown.

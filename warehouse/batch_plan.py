@@ -9,6 +9,37 @@ from typing import Any
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_BATCH_PLAN_PATH = PROJECT_ROOT / "ops" / "batch_plan.json"
+DEFAULT_CLEANUP_PATHS_BY_DATASET: dict[str, tuple[str, ...]] = {
+    "brent": (
+        "data/bronze/brent",
+        "data/silver/brent",
+        "data/metadata/brent",
+    ),
+    "comtrade": (
+        "data/bronze/comtrade",
+        "data/metadata/comtrade",
+        "data/silver/comtrade/comtrade_fact",
+        "data/silver/comtrade/dim_trade_routes.parquet",
+    ),
+    "events": (
+        "data/bronze/events.csv",
+        "data/silver/events",
+    ),
+    "fx": (
+        "data/bronze/ecb_fx_eu",
+        "data/silver/fx",
+    ),
+    "portwatch": (
+        "data/bronze/portwatch",
+        "data/silver/portwatch",
+        "data/metadata/portwatch",
+    ),
+    "worldbank_energy": (
+        "data/bronze/worldbank_energy",
+        "data/silver/worldbank_energy",
+        "data/metadata/worldbank_energy",
+    ),
+}
 
 
 def _as_list(value: Any) -> list[Any]:
@@ -79,6 +110,14 @@ def load_batch_plan(path: str | None = None) -> dict[str, BatchDefinition]:
 
     definitions: dict[str, BatchDefinition] = {}
     for raw_batch in raw_batches:
+        dataset_name = str(raw_batch["dataset_name"])
+        cleanup_paths = tuple(
+            str(path)
+            for path in (
+                _as_list(raw_batch.get("cleanup_paths"))
+                or DEFAULT_CLEANUP_PATHS_BY_DATASET.get(dataset_name, ())
+            )
+        )
         steps = tuple(
             BatchStep(
                 task_name=str(step["task_name"]),
@@ -91,7 +130,7 @@ def load_batch_plan(path: str | None = None) -> dict[str, BatchDefinition]:
         )
         batch = BatchDefinition(
             batch_id=str(raw_batch["batch_id"]),
-            dataset_name=str(raw_batch["dataset_name"]),
+            dataset_name=dataset_name,
             description=str(raw_batch.get("description") or raw_batch["batch_id"]),
             schedule_lane=str(raw_batch["schedule_lane"]),
             phase=str(raw_batch.get("phase", "unspecified")),
@@ -99,8 +138,10 @@ def load_batch_plan(path: str | None = None) -> dict[str, BatchDefinition]:
             enabled=bool(raw_batch.get("enabled", True)),
             max_attempts=int(raw_batch.get("max_attempts", 3)),
             retry_backoff_seconds=int(raw_batch.get("retry_backoff_seconds", 60)),
-            cleanup_local_on_success=bool(raw_batch.get("cleanup_local_on_success", False)),
-            cleanup_paths=tuple(str(path) for path in _as_list(raw_batch.get("cleanup_paths"))),
+            cleanup_local_on_success=bool(
+                raw_batch.get("cleanup_local_on_success", bool(cleanup_paths))
+            ),
+            cleanup_paths=cleanup_paths,
             depends_on_batch_ids=tuple(str(batch_id) for batch_id in _as_list(raw_batch.get("depends_on_batch_ids"))),
             dbt_selector=raw_batch.get("dbt_selector"),
             planned_partition_count=raw_batch.get("planned_partition_count"),

@@ -1,6 +1,6 @@
 
 
-  create or replace view `chokepoint-capfractal`.`analytics_staging`.`stg_dim_country_ports`
+  create or replace view `fullcap-10111`.`analytics_staging`.`stg_dim_country_ports`
   OPTIONS()
   as select
   
@@ -26,5 +26,5 @@
   
     ST_GEOGFROMWKB(port_point_wkb)
    as port_point_geog
-from `chokepoint-capfractal`.`raw`.`dim_country_ports`;
+from `fullcap-10111`.`raw`.`dim_country_ports`;
 

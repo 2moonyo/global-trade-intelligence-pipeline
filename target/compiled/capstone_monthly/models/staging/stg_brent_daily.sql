@@ -23,7 +23,7 @@ with raw_brent as (
     safe_cast(price_usd_per_bbl as FLOAT64)
    as price_usd_per_bbl,
     cast(load_ts as timestamp) as load_ts
-  from `chokepoint-capfractal`.`raw`.`brent_daily`
+  from `fullcap-10111`.`raw`.`brent_daily`
   where trade_date is not null
     and benchmark_code is not null
 ),

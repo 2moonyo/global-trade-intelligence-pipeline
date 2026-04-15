@@ -68,6 +68,15 @@ batch_queue() {
   run_python warehouse/run_batch_queue.py "$@"
 }
 
+bootstrap_non_comtrade() {
+  batch_queue bootstrap_phase_1
+  batch_queue bootstrap_phase_2
+}
+
+country_trade_and_energy() {
+  batch_queue country_trade_and_energy
+}
+
 portwatch_extract() {
   run_python ingest/portwatch/portwatch_extract.py
 }
@@ -235,6 +244,8 @@ Commands:
   ops-init-postgres
   ops-init-bigquery
   ops-init-all
+  bootstrap-non-comtrade
+  country-trade-and-energy
   portwatch-extract
   portwatch-silver
   portwatch-cloud
@@ -281,6 +292,8 @@ case "${COMMAND}" in
   ops-init-postgres) ops_init_postgres ;;
   ops-init-bigquery) ops_init_bigquery ;;
   ops-init-all) ops_init_all ;;
+  bootstrap-non-comtrade) bootstrap_non_comtrade ;;
+  country-trade-and-energy) country_trade_and_energy ;;
   portwatch-extract) portwatch_extract ;;
   portwatch-silver) portwatch_silver ;;
   portwatch-cloud) portwatch_cloud ;;

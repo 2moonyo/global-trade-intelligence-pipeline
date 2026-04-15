@@ -95,6 +95,52 @@ class QuotaHit(Exception):
         self.http_status = http_status
 
 
+def resolve_api_key_aliases(
+    *,
+    primary_alias: str,
+    wildcard_enabled: bool,
+    wildcard_prefix: str,
+) -> List[str]:
+    """
+    Resolve ordered API key env aliases.
+
+    Ordering rules:
+      1) primary alias first (if set)
+      2) wildcard matches sorted lexicographically (excluding primary alias)
+
+    Only aliases with non-empty values are returned.
+    """
+    aliases: List[str] = []
+    seen = set()
+
+    def _add(alias: str) -> None:
+        if alias in seen:
+            return
+        value = os.getenv(alias)
+        if value and value.strip():
+            aliases.append(alias)
+            seen.add(alias)
+
+    _add(primary_alias)
+
+    if wildcard_enabled:
+        for alias in sorted(os.environ.keys()):
+            if not alias.startswith(wildcard_prefix):
+                continue
+            if alias == primary_alias:
+                continue
+            _add(alias)
+
+    if not aliases:
+        raise click.ClickException(
+            "No valid Comtrade API keys found. "
+            f"Checked primary alias '{primary_alias}'"
+            + (f" and wildcard prefix '{wildcard_prefix}*'." if wildcard_enabled else ".")
+        )
+
+    return aliases
+
+
 # ---------------- Registry ----------------
 class ExtractionRegistry:
     """
@@ -375,11 +421,18 @@ def update_coverage_tally(chk: Checkpoint, reporter_code: int, year: str, commod
 class ComtradeDataExtractor:
     BASE_URL = "https://comtradeapi.un.org/data/v1/get"
 
-    def __init__(self, api_key: str, bronze_dir: str):
-        self.api_key = api_key
-        self.headers = {"Ocp-Apim-Subscription-Key": api_key}
+    def __init__(self, api_key: str, bronze_dir: str, key_alias: Optional[str] = None):
+        self.api_key = ""
+        self.key_alias = key_alias
+        self.headers: Dict[str, str] = {}
         self.bronze_dir = Path(bronze_dir)
         self.bronze_dir.mkdir(parents=True, exist_ok=True)
+        self.set_api_key(api_key, key_alias=key_alias)
+
+    def set_api_key(self, api_key: str, *, key_alias: Optional[str] = None) -> None:
+        self.api_key = api_key
+        self.key_alias = key_alias
+        self.headers = {"Ocp-Apim-Subscription-Key": api_key}
 
     def build_url(self, shape: QueryShape) -> str:
         return f"{self.BASE_URL}/{shape.type_code}/{shape.freq_code}/{shape.cl_code}"
@@ -1247,6 +1300,18 @@ def run_event_batch(api_key_env, event_date, commodities, reporters):
 
 @cli.command("run-monthly-history")
 @click.option("--api-key-env", default="COMTRADE_API_KEY_DATA", show_default=True)
+@click.option(
+    "--api-key-wildcard/--no-api-key-wildcard",
+    default=True,
+    show_default=True,
+    help="When enabled, auto-discover additional API keys by prefix and rotate on quota errors.",
+)
+@click.option(
+    "--api-key-wildcard-prefix",
+    default="COMTRADE_API_KEY_DATA_",
+    show_default=True,
+    help="Prefix used when discovering additional API key env vars, for example COMTRADE_API_KEY_DATA_*."
+)
 @click.option("--bronze-dir", default="data/bronze/comtrade/monthly_history", show_default=True)
 @click.option("--registry-path", default="logs/comtrade/extraction_registry.jsonl", show_default=True)
 @click.option("--checkpoint-path", default="logs/comtrade/comtrade_checkpoint.json", show_default=True)
@@ -1256,7 +1321,20 @@ def run_event_batch(api_key_env, event_date, commodities, reporters):
 @click.option("--flows", default="M,X", show_default=True)
 @click.option("--rate-delay", default=10.0, show_default=True, type=float)
 @click.option("--exit-on-quota/--sleep-on-quota", default=True, show_default=True)
-def run_monthly_history(api_key_env, bronze_dir, registry_path, checkpoint_path, reporters, years, commodities, flows, rate_delay, exit_on_quota):
+def run_monthly_history(
+    api_key_env,
+    api_key_wildcard,
+    api_key_wildcard_prefix,
+    bronze_dir,
+    registry_path,
+    checkpoint_path,
+    reporters,
+    years,
+    commodities,
+    flows,
+    rate_delay,
+    exit_on_quota,
+):
     """
     Robust bulk extraction of historical monthly data. 
     Batches reporters (max 5) and periods (max 5) to minimize API calls.
@@ -1267,19 +1345,32 @@ def run_monthly_history(api_key_env, bronze_dir, registry_path, checkpoint_path,
         bronze_dir=bronze_dir,
         registry_path=registry_path,
         checkpoint_path=checkpoint_path,
-        extra={"api_key_env": api_key_env},
+        extra={
+            "api_key_env": api_key_env,
+            "api_key_wildcard": api_key_wildcard,
+            "api_key_wildcard_prefix": api_key_wildcard_prefix,
+        },
     )
     completed_jobs = 0
     skipped_jobs = 0
     failed_jobs = 0
     try:
-        api_key = os.getenv(api_key_env)
-        if not api_key:
-            raise click.ClickException(f"Missing env var {api_key_env}")
+        key_aliases = resolve_api_key_aliases(
+            primary_alias=api_key_env,
+            wildcard_enabled=api_key_wildcard,
+            wildcard_prefix=api_key_wildcard_prefix,
+        )
+        key_index = 0
+        keys_used = set()
 
         reg = ExtractionRegistry(registry_path)
         chk = Checkpoint(checkpoint_path)
-        ex = ComtradeDataExtractor(api_key, bronze_dir)
+        active_alias = key_aliases[key_index]
+        active_key = os.getenv(active_alias)
+        if not active_key:
+            raise click.ClickException(f"Missing env var {active_alias}")
+
+        ex = ComtradeDataExtractor(active_key, bronze_dir, key_alias=active_alias)
         shape = QueryShape(freq_code="M")
 
         years_list = parse_years(years)
@@ -1303,7 +1394,12 @@ def run_monthly_history(api_key_env, bronze_dir, registry_path, checkpoint_path,
                     plan.append((job_key, rb, pb, flow))
 
         total = len(plan)
-        logger.info(f"Planned monthly history batches: {total} (api={api_key_env})")
+        logger.info(
+            "Planned monthly history batches: %s (primary=%s, aliases=%s)",
+            total,
+            api_key_env,
+            key_aliases,
+        )
 
         for idx, (job_key, rb, pb, flow) in enumerate(plan, start=1):
             meta = {
@@ -1311,7 +1407,7 @@ def run_monthly_history(api_key_env, bronze_dir, registry_path, checkpoint_path,
                 "periods": pb,
                 "commodities": commodities,
                 "flow": flow,
-                "api_key_env": api_key_env
+                "api_key_env": ex.key_alias,
             }
             chk.write({"position": {"index": idx, "total": total}, "last_attempted": meta})
 
@@ -1322,47 +1418,83 @@ def run_monthly_history(api_key_env, bronze_dir, registry_path, checkpoint_path,
 
             logger.info(f"[{idx}/{total}] Extracting | Reps: {rb} | Periods: {pb} | Flow: {flow}")
 
-            try:
-                data = ex.extract_one(rb, pb, commodities, flow, shape)
-                p_start, p_end = pb.split(",")[0], pb.split(",")[-1]
-                batch_start_year = p_start[:4]
-                ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-                safe_cmd = commodities.replace(",", "-")
-                fn = f"hist_batch_reps_{rb.replace(',','-')}_cmd_{safe_cmd}_periods_{p_start}_to_{p_end}_flow_{flow}_{ts}.json"
+            while True:
+                keys_used.add(ex.key_alias or "unknown")
+                try:
+                    data = ex.extract_one(rb, pb, commodities, flow, shape)
+                    p_start, p_end = pb.split(",")[0], pb.split(",")[-1]
+                    batch_start_year = p_start[:4]
+                    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    safe_cmd = commodities.replace(",", "-")
+                    fn = f"hist_batch_reps_{rb.replace(',','-')}_cmd_{safe_cmd}_periods_{p_start}_to_{p_end}_flow_{flow}_{ts}.json"
 
-                save_path = Path(bronze_dir) / f"year={batch_start_year}" / fn
-                save_path.parent.mkdir(parents=True, exist_ok=True)
-                save_path.write_text(json.dumps(data, indent=2))
+                    save_path = Path(bronze_dir) / f"year={batch_start_year}" / fn
+                    save_path.parent.mkdir(parents=True, exist_ok=True)
+                    save_path.write_text(json.dumps(data, indent=2))
 
-                reg.record_completed(job_key=job_key, payload=data, filepath=save_path, meta=meta)
-                completed_jobs += 1
-                logger.info(f"  -> Saved {data['_metadata']['record_count']} records to {fn}")
-                time.sleep(rate_delay)
+                    meta["api_key_env"] = ex.key_alias
+                    reg.record_completed(job_key=job_key, payload=data, filepath=save_path, meta=meta)
+                    completed_jobs += 1
+                    logger.info("  -> Saved %s records to %s (api=%s)", data["_metadata"]["record_count"], fn, ex.key_alias)
+                    time.sleep(rate_delay)
+                    break
 
-            except QuotaHit as q:
-                failed_jobs += 1
-                reg.record_failed(job_key=job_key, error_type="quota_or_throttle", http_status=q.http_status, message=q.message, meta=meta)
-                if q.http_status == 429:
-                    logger.warning(f"429 Throttle. Sleeping {q.wait_seconds}s...")
+                except QuotaHit as q:
+                    failed_jobs += 1
+                    meta["api_key_env"] = ex.key_alias
+                    reg.record_failed(job_key=job_key, error_type="quota_or_throttle", http_status=q.http_status, message=q.message, meta=meta)
+
+                    if q.http_status == 429:
+                        logger.warning("429 Throttle on %s. Sleeping %ss...", ex.key_alias, q.wait_seconds)
+                        time.sleep(q.wait_seconds)
+                        continue
+
+                    if q.http_status in (403, 409):
+                        logger.warning("Quota hit on %s. Suggested wait: %ss. %s", ex.key_alias, q.wait_seconds, q.message)
+                        if key_index + 1 < len(key_aliases):
+                            key_index += 1
+                            next_alias = key_aliases[key_index]
+                            next_key = os.getenv(next_alias)
+                            if not next_key:
+                                raise click.ClickException(f"Missing env var {next_alias}")
+                            ex.set_api_key(next_key, key_alias=next_alias)
+                            logger.warning("Switching Comtrade API key to %s and retrying same batch unit.", next_alias)
+                            continue
+
+                        logger.error("All configured Comtrade API keys exhausted: %s", key_aliases)
+                        if exit_on_quota:
+                            raise SystemExit(2)
+                        # Match historical behavior when exit_on_quota is disabled:
+                        # record failure, pause briefly, then move to the next job unit.
+                        time.sleep(q.wait_seconds)
+                        break
+
+                    logger.warning("Quota/throttle event without handled status (%s). Sleeping %ss.", q.http_status, q.wait_seconds)
+                    if exit_on_quota:
+                        raise SystemExit(2)
                     time.sleep(q.wait_seconds)
                     continue
 
-                logger.warning(f"Quota Hit! Suggested wait: {q.wait_seconds}s. Message: {q.message}")
-                if exit_on_quota:
-                    raise SystemExit(2)
-                time.sleep(q.wait_seconds)
-
-            except Exception as e:
-                failed_jobs += 1
-                logger.error(f"  -> Batch failed: {str(e)}")
-                reg.record_failed(job_key=job_key, error_type="exception", http_status=None, message=str(e), meta=meta)
-                time.sleep(rate_delay)
+                except Exception as e:
+                    failed_jobs += 1
+                    meta["api_key_env"] = ex.key_alias
+                    logger.error(f"  -> Batch failed: {str(e)}")
+                    reg.record_failed(job_key=job_key, error_type="exception", http_status=None, message=str(e), meta=meta)
+                    time.sleep(rate_delay)
+                    break
 
         finish_extract_run(
             manifest_entry,
             started_at,
             status="completed",
-            extra={"planned_jobs": total, "completed_jobs": completed_jobs, "skipped_jobs": skipped_jobs, "failed_jobs": failed_jobs},
+            extra={
+                "planned_jobs": total,
+                "completed_jobs": completed_jobs,
+                "skipped_jobs": skipped_jobs,
+                "failed_jobs": failed_jobs,
+                "api_key_aliases": key_aliases,
+                "keys_used": sorted(keys_used),
+            },
         )
     except Exception as exc:
         finish_extract_run(

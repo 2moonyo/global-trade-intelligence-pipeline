@@ -7,7 +7,7 @@ TFVARS_EXAMPLE := $(TF_DIR)/terraform.tfvars.json.example
 
 .DEFAULT_GOAL := help
 
-.PHONY: help tfvars-init check-tfvars deps-sync gcp-auth infra-init infra-plan infra-apply infra-destroy env-file env-print cloud-bootstrap portwatch-extract portwatch-silver portwatch-cloud-dry-run portwatch-cloud portwatch-cloud-dry-run-with-bronze portwatch-cloud-with-bronze portwatch-refresh-cloud comtrade-silver comtrade-routing comtrade-cloud-dry-run comtrade-cloud comtrade-cloud-dry-run-with-bronze comtrade-cloud-with-bronze comtrade-refresh-cloud brent-extract brent-silver brent-cloud-dry-run brent-cloud brent-cloud-dry-run-with-bronze brent-cloud-with-bronze brent-refresh-cloud fx-extract fx-silver fx-cloud-dry-run fx-cloud fx-cloud-dry-run-with-bronze fx-cloud-with-bronze fx-refresh-cloud events-silver events-cloud-dry-run events-cloud events-refresh-cloud dbt-bigquery-debug dbt-bigquery-build dbt-bigquery-docs-generate dbt-bigquery-docs-serve dbt-bigquery-docs-static
+.PHONY: help tfvars-init check-tfvars deps-sync gcp-auth infra-init infra-plan infra-apply infra-destroy infra-destroy-vm vm-status vm-start vm-stop vm-delete-gcloud vm-delete-disk-gcloud vm-destroy-gcloud env-file env-print cloud-bootstrap portwatch-extract portwatch-silver portwatch-cloud-dry-run portwatch-cloud portwatch-cloud-dry-run-with-bronze portwatch-cloud-with-bronze portwatch-refresh-cloud comtrade-silver comtrade-routing comtrade-cloud-dry-run comtrade-cloud comtrade-cloud-dry-run-with-bronze comtrade-cloud-with-bronze comtrade-refresh-cloud brent-extract brent-silver brent-cloud-dry-run brent-cloud brent-cloud-dry-run-with-bronze brent-cloud-with-bronze brent-refresh-cloud fx-extract fx-silver fx-cloud-dry-run fx-cloud fx-cloud-dry-run-with-bronze fx-cloud-with-bronze fx-refresh-cloud events-silver events-cloud-dry-run events-cloud events-refresh-cloud dbt-bigquery-debug dbt-bigquery-build dbt-bigquery-docs-generate dbt-bigquery-docs-serve dbt-bigquery-docs-static
 .PHONY: portwatch-gcs-dry-run portwatch-gcs portwatch-gcs-dry-run-with-bronze portwatch-gcs-with-bronze
 .PHONY: comtrade-gcs-dry-run comtrade-gcs comtrade-gcs-dry-run-with-bronze comtrade-gcs-with-bronze
 .PHONY: brent-gcs-dry-run brent-gcs brent-gcs-dry-run-with-bronze brent-gcs-with-bronze
@@ -19,6 +19,13 @@ help:
 	@printf "%s\n" \
 		"make tfvars-init             Copy the Terraform vars example if needed." \
 		"make cloud-bootstrap         ADC auth if needed, terraform init/apply, and render .env." \
+		"make vm-status               Show the configured VM instance and persistent disk." \
+		"make vm-start                Start the paid VM runtime with gcloud." \
+		"make vm-stop                 Stop the paid VM runtime with gcloud." \
+		"make infra-destroy-vm        Terraform-destroy only the VM, disk, and optional schedule policy." \
+		"make vm-delete-gcloud        Delete only the VM instance with gcloud." \
+		"make vm-delete-disk-gcloud   Delete only the persistent data disk with gcloud." \
+		"make vm-destroy-gcloud       Delete the VM first, then delete its persistent data disk." \
 		"make infra-destroy           Destroy Terraform-managed cloud resources after confirmation." \
 		"make portwatch-extract       Run the PortWatch bronze extract with per-run logs and manifest output." \
 		"make portwatch-gcs-dry-run   Preview the PortWatch disk-to-GCS publish for silver-only assets." \
@@ -122,6 +129,27 @@ infra-apply: check-tfvars infra-init
 infra-destroy: check-tfvars infra-init
 	@python -c 'import json, pathlib, sys; payload = json.loads(pathlib.Path("infra/terraform/terraform.tfvars.json").read_text(encoding="utf-8")); sys.exit(0 if payload.get("allow_force_destroy", False) else "Refusing to destroy because allow_force_destroy is not true in infra/terraform/terraform.tfvars.json.\nSet it to true only when you intentionally want Terraform to delete non-empty buckets and BigQuery datasets.")'
 	terraform -chdir=$(TF_DIR) destroy
+
+infra-destroy-vm: check-tfvars
+	scripts/vm_runtime_ctl.sh destroy-compute-terraform
+
+vm-status: check-tfvars
+	scripts/vm_runtime_ctl.sh status
+
+vm-start: check-tfvars
+	scripts/vm_runtime_ctl.sh start
+
+vm-stop: check-tfvars
+	scripts/vm_runtime_ctl.sh stop
+
+vm-delete-gcloud: check-tfvars
+	scripts/vm_runtime_ctl.sh delete-instance-gcloud
+
+vm-delete-disk-gcloud: check-tfvars
+	scripts/vm_runtime_ctl.sh delete-disk-gcloud
+
+vm-destroy-gcloud: check-tfvars
+	scripts/vm_runtime_ctl.sh destroy-compute-gcloud
 
 env-file: check-tfvars
 	python $(TF_DIR)/render_dotenv.py > .env

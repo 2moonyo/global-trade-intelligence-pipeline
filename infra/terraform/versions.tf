@@ -15,12 +15,12 @@ terraform {
 
 provider "google" {
   project = var.project_id
-  region  = var.gcp_region
-  zone    = var.gcp_zone
+  region  = var.primary_region
+  zone    = var.primary_zone
 }
 
 provider "google-beta" {
   project = var.project_id
-  region  = var.gcp_region
-  zone    = var.gcp_zone
+  region  = var.primary_region
+  zone    = var.primary_zone
 }

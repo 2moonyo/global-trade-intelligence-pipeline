@@ -5,6 +5,9 @@ DEVICE_PATH="/dev/disk/by-id/google-${data_disk_device_name}"
 MOUNT_POINT="${data_mount_point}"
 REPO_ROOT="${repo_root}"
 ENV_FILE_PATH="${env_file_path}"
+SWAP_ENABLED="${swap_enabled}"
+SWAP_SIZE_GB="${swap_size_gb}"
+SWAP_FILE_PATH="${swap_file_path}"
 
 wait_for_data_disk() {
   for _attempt in $(seq 1 30); do
@@ -35,10 +38,73 @@ mount_data_disk() {
   fi
 }
 
+wait_for_apt_processes() {
+  local attempt
+
+  for attempt in $(seq 1 60); do
+    if ! pgrep -x apt >/dev/null 2>&1 \
+      && ! pgrep -x apt-get >/dev/null 2>&1 \
+      && ! pgrep -x dpkg >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 5
+  done
+
+  echo "Proceeding after waiting for apt/dpkg processes even though they did not clear inside the retry window."
+  return 0
+}
+
+run_apt() {
+  local attempt
+
+  for attempt in $(seq 1 20); do
+    wait_for_apt_processes
+
+    if apt-get "$@"; then
+      return 0
+    fi
+
+    echo "apt-get $* failed on attempt $${attempt}; retrying after apt/dpkg lock wait."
+    sleep 10
+  done
+
+  echo "apt-get $* failed after repeated retries."
+  return 1
+}
+
+ensure_swap() {
+  local swap_dir
+
+  if [[ "$${SWAP_ENABLED}" != "true" ]]; then
+    return 0
+  fi
+
+  swap_dir="$(dirname "$${SWAP_FILE_PATH}")"
+  install -d -m 0755 "$${swap_dir}"
+
+  if [[ ! -f "$${SWAP_FILE_PATH}" ]]; then
+    if ! fallocate -l "$${SWAP_SIZE_GB}G" "$${SWAP_FILE_PATH}"; then
+      dd if=/dev/zero of="$${SWAP_FILE_PATH}" bs=1M count="$$(($${SWAP_SIZE_GB} * 1024))" status=none
+    fi
+    chmod 600 "$${SWAP_FILE_PATH}"
+    mkswap "$${SWAP_FILE_PATH}"
+  else
+    chmod 600 "$${SWAP_FILE_PATH}"
+  fi
+
+  if ! grep -q "^$${SWAP_FILE_PATH} " /etc/fstab; then
+    echo "$${SWAP_FILE_PATH} none swap sw 0 0" >> /etc/fstab
+  fi
+
+  if ! /sbin/swapon --show=NAME --noheadings 2>/dev/null | tr -d ' ' | grep -qx "$${SWAP_FILE_PATH}"; then
+    /sbin/swapon "$${SWAP_FILE_PATH}"
+  fi
+}
+
 install_base_packages() {
   export DEBIAN_FRONTEND=noninteractive
-  apt-get update
-  apt-get install -y --no-install-recommends ca-certificates curl git gnupg python3 python3-pip
+  run_apt update
+  run_apt install -y --no-install-recommends ca-certificates curl git gnupg python3 python3-pip
 }
 
 install_docker() {
@@ -56,8 +122,8 @@ install_docker() {
   . /etc/os-release
   echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian $${VERSION_CODENAME} stable" > /etc/apt/sources.list.d/docker.list
 
-  apt-get update
-  apt-get install -y --no-install-recommends docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+  run_apt update
+  run_apt install -y --no-install-recommends docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
   systemctl enable --now docker.service
 }
 
@@ -79,6 +145,8 @@ EnvironmentFile=${env_file_path}
 # is discovered automatically through the Compute Engine metadata server, which is
 # how Google client libraries resolve Application Default Credentials on GCE.
 ExecStartPre=/usr/bin/install -d -m 0755 ${repo_root}/.secrets/gcp ${repo_root}/.uv-cache ${repo_root}/data ${repo_root}/dbt_packages ${repo_root}/logs ${repo_root}/runtime/postgres ${repo_root}/target
+ExecStartPre=/usr/bin/docker compose --env-file ${env_file_path} -f docker/docker-compose.yml build pipeline
+ExecStartPre=/usr/bin/docker compose --env-file ${env_file_path} -f docker/docker-compose.yml build orchestrator
 ExecStart=/usr/bin/docker compose --env-file ${env_file_path} -f docker/docker-compose.yml up -d
 ExecStop=/usr/bin/docker compose --env-file ${env_file_path} -f docker/docker-compose.yml down
 TimeoutStartSec=0
@@ -134,6 +202,7 @@ EOF
 main() {
   wait_for_data_disk
   mount_data_disk
+  ensure_swap
   install -d -m 0750 /etc/capstone
   install -d -m 0755 "$${MOUNT_POINT}" "$(dirname "$${REPO_ROOT}")" "$${REPO_ROOT}"
 

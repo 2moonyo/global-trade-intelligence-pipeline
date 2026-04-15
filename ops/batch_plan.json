@@ -13,7 +13,7 @@
       "planned_reporter_count": 16,
       "planned_cmd_code_count": 6,
       "planned_window_start": "2020-01",
-      "planned_window_end": "2026-12",
+      "planned_window_end": "2025-12",
       "batch_metadata": {
         "reporters": "97,100,156,251,528,642,724,842,643,699,710,818,792,360,076,591",
         "commodities": "1001,1005,1006,1201,2709,2710",
@@ -27,7 +27,7 @@
             "ingest/comtrade/comtrade_cli_annual_monthly_gap_chunked_by_reporter.py",
             "run-monthly-history",
             "--years",
-            "2020,2021,2022,2023,2024,2025,2026",
+            "2020,2021,2022,2023,2024,2025",
             "--reporters",
             "97,100,156,251,528,642,724,842,643,699,710,818,792,360,076,591",
             "--commodities",
@@ -70,7 +70,7 @@
             "--since-year-month",
             "2020-01",
             "--until-year-month",
-            "2026-12"
+            "2025-12"
           ],
           "manifest_path": "logs/comtrade/publish_comtrade_to_gcs_manifest.jsonl"
         },
@@ -82,7 +82,7 @@
             "--since-year-month",
             "2020-01",
             "--until-year-month",
-            "2026-12"
+            "2025-12"
           ],
           "manifest_path": "logs/comtrade/load_comtrade_to_bigquery_manifest.jsonl"
         },
@@ -198,7 +198,7 @@
     {
       "batch_id": "comtrade_bootstrap_day_3",
       "dataset_name": "comtrade",
-      "description": "Bootstrap Comtrade day 3 for the new 16 reporters, core commodities, and the 2020-2026 window.",
+      "description": "Bootstrap Comtrade day 3 for the new 16 reporters, core commodities, and the 2020-2025 window.",
       "schedule_lane": "comtrade_bootstrap_day_3",
       "phase": "bootstrap_day_3",
       "run_order": 10,
@@ -211,7 +211,7 @@
       "planned_reporter_count": 16,
       "planned_cmd_code_count": 6,
       "planned_window_start": "2020-01",
-      "planned_window_end": "2026-12",
+      "planned_window_end": "2025-12",
       "batch_metadata": {
         "reporters": "36,124,392,410,458,484,504,579,608,634,682,702,764,784,826,704",
         "commodities": "1001,1005,1006,1201,2709,2710",
@@ -225,7 +225,7 @@
             "ingest/comtrade/comtrade_cli_annual_monthly_gap_chunked_by_reporter.py",
             "run-monthly-history",
             "--years",
-            "2020,2021,2022,2023,2024,2025,2026",
+            "2020,2021,2022,2023,2024,2025",
             "--reporters",
             "36,124,392,410,458,484,504,579,608,634,682,702,764,784,826,704",
             "--commodities",
@@ -839,9 +839,12 @@
       "batch_id": "worldbank_energy_bootstrap_full",
       "dataset_name": "worldbank_energy",
       "description": "Bootstrap World Bank energy vulnerability history from 2015 through current.",
-      "schedule_lane": "bootstrap_phase_1",
+      "schedule_lane": "country_trade_and_energy",
       "phase": "bootstrap_full",
       "run_order": 60,
+      "depends_on_batch_ids": [
+        "comtrade_bootstrap_day_6"
+      ],
       "max_attempts": 3,
       "retry_backoff_seconds": 120,
       "planned_partition_count": 12,

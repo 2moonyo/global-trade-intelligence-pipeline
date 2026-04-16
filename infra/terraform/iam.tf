@@ -8,6 +8,10 @@ locals {
     "serviceAccount:${google_service_account.pipeline[0].email}"
   ] : []
 
+  vm_runtime_sa_member = var.vm_service_account_email != null ? "serviceAccount:${var.vm_service_account_email}" : (
+    var.create_pipeline_service_account ? "serviceAccount:${google_service_account.pipeline[0].email}" : null
+  )
+
   storage_object_admin_members     = distinct(concat(var.storage_object_admin_members, local.pipeline_sa_member))
   raw_dataset_editor_members       = distinct(concat(var.raw_dataset_editor_members, local.pipeline_sa_member))
   analytics_dataset_editor_members = distinct(concat(var.analytics_dataset_editor_members, local.pipeline_sa_member))
@@ -61,4 +65,13 @@ resource "google_project_iam_member" "bigquery_user" {
   project  = var.project_id
   role     = "roles/bigquery.user"
   member   = each.value
+}
+
+resource "google_secret_manager_secret_iam_member" "vm_runtime_secret_accessor" {
+  for_each = local.vm_runtime_sa_member == null ? {} : google_secret_manager_secret.vm_runtime_env
+
+  project   = var.project_id
+  secret_id = each.value.secret_id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = local.vm_runtime_sa_member
 }

@@ -5,6 +5,8 @@ DEVICE_PATH="/dev/disk/by-id/google-${data_disk_device_name}"
 MOUNT_POINT="${data_mount_point}"
 REPO_ROOT="${repo_root}"
 ENV_FILE_PATH="${env_file_path}"
+PROJECT_ID="${project_id}"
+VM_SECRET_SYNC_ENABLED="${vm_secret_sync_enabled}"
 SWAP_ENABLED="${swap_enabled}"
 SWAP_SIZE_GB="${swap_size_gb}"
 SWAP_FILE_PATH="${swap_file_path}"
@@ -99,6 +101,88 @@ ensure_swap() {
   if ! /sbin/swapon --show=NAME --noheadings 2>/dev/null | tr -d ' ' | grep -qx "$${SWAP_FILE_PATH}"; then
     /sbin/swapon "$${SWAP_FILE_PATH}"
   fi
+}
+
+ensure_env_file() {
+  install -d -m 0750 "$(dirname "$${ENV_FILE_PATH}")"
+  if [[ ! -f "$${ENV_FILE_PATH}" ]]; then
+    install -m 0600 /dev/null "$${ENV_FILE_PATH}"
+  else
+    chmod 0600 "$${ENV_FILE_PATH}"
+  fi
+}
+
+upsert_env_var() {
+  local file_path="$1"
+  local key="$2"
+  local value="$3"
+
+  python3 - "$${file_path}" "$${key}" "$${value}" <<'PY'
+import pathlib
+import sys
+
+path = pathlib.Path(sys.argv[1])
+key = sys.argv[2]
+value = sys.argv[3]
+
+if path.exists():
+    lines = path.read_text(encoding="utf-8").splitlines()
+else:
+    lines = []
+
+updated = False
+prefix = f"{key}="
+new_lines = []
+for line in lines:
+    if line.startswith(prefix):
+        new_lines.append(f"{key}={value}")
+        updated = True
+    else:
+        new_lines.append(line)
+
+if not updated:
+    new_lines.append(f"{key}={value}")
+
+path.write_text("\n".join(new_lines) + "\n", encoding="utf-8")
+PY
+}
+
+_metadata_access_token() {
+  curl -fsS -H "Metadata-Flavor: Google" \
+    "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token" \
+    | python3 -c 'import json,sys; print(json.load(sys.stdin)["access_token"])'
+}
+
+fetch_secret_latest() {
+  local secret_id="$1"
+  local token
+  local response
+
+  token="$(_metadata_access_token)"
+  response="$(curl -fsS -H "Authorization: Bearer $${token}" \
+    "https://secretmanager.googleapis.com/v1/projects/$${PROJECT_ID}/secrets/$${secret_id}/versions/latest:access")"
+
+  python3 -c 'import base64,json,sys; print(base64.b64decode(json.load(sys.stdin)["payload"]["data"]).decode("utf-8"))' <<<"$${response}"
+}
+
+sync_vm_secrets_to_env() {
+  if [[ "$${VM_SECRET_SYNC_ENABLED}" != "true" ]]; then
+    return 0
+  fi
+
+  ensure_env_file
+
+  # Avoid leaking secret values through shell xtrace output.
+  set +x
+%{ for env_key, secret_id in vm_secret_env_to_secret_id ~}
+  if secret_value="$(fetch_secret_latest "${secret_id}" 2>/dev/null)" && [[ -n "$${secret_value}" ]]; then
+    upsert_env_var "$${ENV_FILE_PATH}" "${env_key}" "$${secret_value}"
+  else
+    echo "Secret ${secret_id} not found or empty; leaving ${env_key} unchanged in $${ENV_FILE_PATH}."
+  fi
+
+%{ endfor ~}
+  set -x
 }
 
 install_base_packages() {
@@ -208,6 +292,7 @@ main() {
 
   install_base_packages
   install_docker
+  sync_vm_secrets_to_env
   write_capstone_stack_unit
   write_capstone_schedule_lane_service
   write_capstone_timer_units

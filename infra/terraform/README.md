@@ -132,6 +132,54 @@ sudo systemctl enable --now capstone-schedule-lane-yearly_refresh.timer
 
 The timers call the existing `schedule_lane_queue` wrapper inside the orchestrator container, so the VM path reuses the same batch plan, retry, checkpoint, and Postgres ops ledger logic as local runs.
 
+## Secret Manager-backed runtime env sync
+
+The Terraform module can create Secret Manager entries for selected runtime env keys and let the VM startup script pull those values via metadata-server ADC into `/etc/capstone/pipeline.env`.
+
+By default this sync includes only API and Postgres keys:
+
+- `FRED_API_KEY`
+- `COMTRADE_API_KEY`
+- `COMTRADE_API_KEY_DATA`
+- `COMTRADE_API_KEY_DATA_A`
+- `COMTRADE_API_KEY_DATA_B`
+- `POSTGRES_USER`
+- `POSTGRES_PASSWORD`
+- `POSTGRES_DB`
+- `POSTGRES_SCHEMA`
+
+All other variables can stay in your local `.env` and are not pushed to Secret Manager by the helper script.
+
+### One-time local secret sync
+
+Use the helper script to push only the approved keys from `.env`:
+
+```bash
+scripts/sync_env_secrets_to_secret_manager.sh --env-file .env --project YOUR_PROJECT_ID
+```
+
+### Terraform apply
+
+Apply Terraform as usual (it creates secret resources + IAM access for the VM runtime service account):
+
+```bash
+cd infra/terraform
+terraform init
+terraform plan
+terraform apply
+```
+
+### First boot behavior
+
+On startup, the VM script:
+
+1. Uses metadata-server ADC from the attached VM service account.
+2. Fetches the configured secrets from Secret Manager.
+3. Upserts only those keys into `/etc/capstone/pipeline.env`.
+4. Leaves all other env entries untouched.
+
+This keeps secret material out of Terraform variables/state while still making first boot deterministic.
+
 ## First manual pipeline run
 
 For the first VM smoke test, initialize the ops stores and start with the non-Comtrade bootstrap batches only:

@@ -91,6 +91,21 @@ output "vm_env_file_path" {
   description = "Root-owned env file path consumed by systemd services and docker compose on the VM."
 }
 
+output "vm_secret_sync_enabled" {
+  value       = var.vm_secret_sync_enabled
+  description = "Whether VM startup syncs selected runtime env keys from Secret Manager."
+}
+
+output "vm_secret_env_to_secret_id" {
+  value       = var.vm_secret_env_to_secret_id
+  description = "Configured mapping of runtime env variable names to Secret Manager secret IDs."
+}
+
+output "vm_secret_ids" {
+  value       = [for secret in values(google_secret_manager_secret.vm_runtime_env) : secret.secret_id]
+  description = "Secret Manager secret IDs created for VM runtime env sync."
+}
+
 output "vm_swap_enabled" {
   value       = var.vm_swap_enabled
   description = "Whether the VM startup script provisions swap space on the attached persistent disk."

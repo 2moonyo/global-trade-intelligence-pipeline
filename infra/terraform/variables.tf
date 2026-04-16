@@ -212,6 +212,28 @@ variable "vm_env_file_path" {
   default     = "/etc/capstone/pipeline.env"
 }
 
+variable "vm_secret_sync_enabled" {
+  description = "Whether the VM startup script should fetch selected env values from Secret Manager and upsert them into vm_env_file_path."
+  type        = bool
+  default     = true
+}
+
+variable "vm_secret_env_to_secret_id" {
+  description = "Map of env var names to Secret Manager secret IDs. Only these keys are synced into the VM runtime env file."
+  type        = map(string)
+  default = {
+    FRED_API_KEY      = "capstone-fred-api-key"
+    COMTRADE_API_KEY  = "capstone-comtrade-api-key"
+    COMTRADE_API_KEY_DATA    = "capstone-comtrade-api-key-data"
+    COMTRADE_API_KEY_DATA_A  = "capstone-comtrade-api-key-data-a"
+    COMTRADE_API_KEY_DATA_B  = "capstone-comtrade-api-key-data-b"
+    POSTGRES_USER     = "capstone-postgres-user"
+    POSTGRES_PASSWORD = "capstone-postgres-password"
+    POSTGRES_DB       = "capstone-postgres-db"
+    POSTGRES_SCHEMA   = "capstone-postgres-schema"
+  }
+}
+
 variable "vm_swap_enabled" {
   description = "Whether the VM startup script should provision swap space on the attached persistent disk."
   type        = bool

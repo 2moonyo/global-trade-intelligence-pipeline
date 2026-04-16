@@ -34,7 +34,7 @@ deep*.md
 secrets
 /secrets/
 
-
+/logs
 /logs/portwatch/
 /.terraform/
 *.tfstate

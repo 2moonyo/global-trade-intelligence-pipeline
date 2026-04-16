@@ -14,7 +14,17 @@ configure_google_auth --quiet
 mkdir -p "${PROJECT_ROOT}/.uv-cache" "${PROJECT_ROOT}/data" "${PROJECT_ROOT}/logs" "${PROJECT_ROOT}/target"
 
 run_python() {
-  python "$@"
+  local py_bin
+
+  if [[ -n "${VIRTUAL_ENV:-}" && -x "${VIRTUAL_ENV}/bin/python" ]]; then
+    py_bin="${VIRTUAL_ENV}/bin/python"
+  elif [[ -x "${PROJECT_ROOT}/.venv/bin/python" ]]; then
+    py_bin="${PROJECT_ROOT}/.venv/bin/python"
+  else
+    py_bin="$(command -v python)"
+  fi
+
+  "${py_bin}" "$@"
 }
 
 imports_check() {
@@ -105,7 +115,7 @@ comtrade_silver() {
 }
 
 comtrade_routing() {
-  python -m ingest.comtrade.routing
+  run_python -m ingest.comtrade.routing
 }
 
 comtrade_gcs_with_bronze() {

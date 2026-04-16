@@ -527,6 +527,29 @@ def _run_step_command(
         )
 
 
+def _inject_preferred_python_path(env: dict[str, str]) -> dict[str, str]:
+    candidates: list[Path] = []
+    if env.get("VIRTUAL_ENV"):
+        candidates.append(Path(env["VIRTUAL_ENV"]) / "bin")
+    candidates.append(PROJECT_ROOT / ".venv" / "bin")
+    candidates.append(Path("/workspace/.venv/bin"))
+
+    for candidate in candidates:
+        if not candidate.exists():
+            continue
+
+        current_path = env.get("PATH", "")
+        path_entries = [entry for entry in current_path.split(":") if entry]
+        candidate_str = str(candidate)
+        if candidate_str in path_entries:
+            return env
+
+        env["PATH"] = f"{candidate_str}:{current_path}" if current_path else candidate_str
+        return env
+
+    return env
+
+
 def _cleanup_local_paths(paths: list[Path], logger) -> list[str]:
     cleaned: list[str] = []
     for path in paths:
@@ -660,6 +683,7 @@ def execute_batch(
                     "BATCH_ATTEMPT_NUMBER": str(attempt_number),
                 }
             )
+            env = _inject_preferred_python_path(env)
 
             try:
                 _run_step_command(

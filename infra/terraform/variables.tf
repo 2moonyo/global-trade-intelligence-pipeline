@@ -86,6 +86,12 @@ variable "project_job_user_members" {
   default     = []
 }
 
+variable "project_bigquery_user_members" {
+  description = "Members granted bigquery.user at project level (includes datasets.create)."
+  type        = list(string)
+  default     = []
+}
+
 variable "labels" {
   description = "Optional labels applied to created resources."
   type        = map(string)

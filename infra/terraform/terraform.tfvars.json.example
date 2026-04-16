@@ -82,6 +82,9 @@
   "project_job_user_members": [
     "user:your.name@example.com"
   ],
+  "project_bigquery_user_members": [
+    "user:your.name@example.com"
+  ],
   "storage_object_admin_members": [
     "user:your.name@example.com"
   ],

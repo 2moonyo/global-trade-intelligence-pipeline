@@ -12,6 +12,7 @@ locals {
   raw_dataset_editor_members       = distinct(concat(var.raw_dataset_editor_members, local.pipeline_sa_member))
   analytics_dataset_editor_members = distinct(concat(var.analytics_dataset_editor_members, local.pipeline_sa_member))
   project_job_user_members         = distinct(concat(var.project_job_user_members, local.pipeline_sa_member))
+  project_bigquery_user_members    = distinct(concat(var.project_bigquery_user_members, local.pipeline_sa_member))
 }
 
 resource "google_service_account" "pipeline" {
@@ -52,5 +53,12 @@ resource "google_project_iam_member" "job_user" {
   for_each = toset(local.project_job_user_members)
   project  = var.project_id
   role     = "roles/bigquery.jobUser"
+  member   = each.value
+}
+
+resource "google_project_iam_member" "bigquery_user" {
+  for_each = toset(local.project_bigquery_user_members)
+  project  = var.project_id
+  role     = "roles/bigquery.user"
   member   = each.value
 }

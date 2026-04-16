@@ -36,6 +36,7 @@ secrets
 
 /logs
 /logs/portwatch/
+/target/
 /.terraform/
 *.tfstate
 *.tfstate.*

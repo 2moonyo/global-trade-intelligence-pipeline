@@ -34,7 +34,11 @@
             "1001,1005,1006,1201,2709,2710",
             "--flows",
             "M,X",
-            "--sleep-on-quota"
+            "--sleep-on-quota",
+            "--registry-path",
+            "data/metadata/comtrade/state/extraction_registry.jsonl",
+            "--checkpoint-path",
+            "data/metadata/comtrade/state/comtrade_checkpoint.json"
           ],
           "log_path": "logs/comtrade/comtrade_history_day_1.log"
         },
@@ -142,7 +146,11 @@
             "1001,1005,1006,1201,2709,2710",
             "--flows",
             "M,X",
-            "--sleep-on-quota"
+            "--sleep-on-quota",
+            "--registry-path",
+            "data/metadata/comtrade/state/extraction_registry.jsonl",
+            "--checkpoint-path",
+            "data/metadata/comtrade/state/comtrade_checkpoint.json"
           ],
           "log_path": "logs/comtrade/comtrade_history_day_2.log"
         },
@@ -242,7 +250,11 @@
             "1001,1005,1006,1201,2709,2710",
             "--flows",
             "M,X",
-            "--sleep-on-quota"
+            "--sleep-on-quota",
+            "--registry-path",
+            "data/metadata/comtrade/state/extraction_registry.jsonl",
+            "--checkpoint-path",
+            "data/metadata/comtrade/state/comtrade_checkpoint.json"
           ],
           "log_path": "logs/comtrade/comtrade_history_day_3.log"
         },
@@ -342,7 +354,11 @@
             "1001,1005,1006,1201,2709,2710",
             "--flows",
             "M,X",
-            "--sleep-on-quota"
+            "--sleep-on-quota",
+            "--registry-path",
+            "data/metadata/comtrade/state/extraction_registry.jsonl",
+            "--checkpoint-path",
+            "data/metadata/comtrade/state/comtrade_checkpoint.json"
           ],
           "log_path": "logs/comtrade/comtrade_history_day_4.log"
         },
@@ -442,7 +458,11 @@
             "2711,3102,3105",
             "--flows",
             "M,X",
-            "--sleep-on-quota"
+            "--sleep-on-quota",
+            "--registry-path",
+            "data/metadata/comtrade/state/extraction_registry.jsonl",
+            "--checkpoint-path",
+            "data/metadata/comtrade/state/comtrade_checkpoint.json"
           ],
           "log_path": "logs/comtrade/comtrade_history_day_5.log"
         },
@@ -542,7 +562,11 @@
             "2711,3102,3105",
             "--flows",
             "M,X",
-            "--sleep-on-quota"
+            "--sleep-on-quota",
+            "--registry-path",
+            "data/metadata/comtrade/state/extraction_registry.jsonl",
+            "--checkpoint-path",
+            "data/metadata/comtrade/state/comtrade_checkpoint.json"
           ],
           "log_path": "logs/comtrade/comtrade_history_day_6.log"
         },
@@ -1244,7 +1268,11 @@
             "1001,1005,1006,1201,2709,2710,2711,3102,3105",
             "--flows",
             "M,X",
-            "--sleep-on-quota"
+            "--sleep-on-quota",
+            "--registry-path",
+            "data/metadata/comtrade/state/extraction_registry.jsonl",
+            "--checkpoint-path",
+            "data/metadata/comtrade/state/comtrade_checkpoint.json"
           ],
           "log_path": "logs/comtrade/comtrade_history_monthly_refresh.log"
         },

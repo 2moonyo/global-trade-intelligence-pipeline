@@ -20,6 +20,11 @@ LOGGER_NAME = "comtrade"
 LOG_DIR = Path("logs/comtrade")
 LOG_PATH = LOG_DIR / "comtrade_extract.log"
 MANIFEST_PATH = LOG_DIR / "comtrade_extract_manifest.jsonl"
+LEGACY_REGISTRY_PATH = LOG_DIR / "extraction_registry.jsonl"
+LEGACY_CHECKPOINT_PATH = LOG_DIR / "comtrade_checkpoint.json"
+METADATA_STATE_DIR = Path("data/metadata/comtrade/state")
+METADATA_REGISTRY_PATH = METADATA_STATE_DIR / "extraction_registry.jsonl"
+METADATA_CHECKPOINT_PATH = METADATA_STATE_DIR / "comtrade_checkpoint.json"
 logger = logging.getLogger(LOGGER_NAME)
 
 def _append_jsonl(path: Path, entry: Dict) -> None:
@@ -151,27 +156,53 @@ class ExtractionRegistry:
       - coverage_gap:  status=gap (job_key keyed, will NOT be treated as completed)
     """
 
-    def __init__(self, registry_path: str):
+    def __init__(self, registry_path: str, mirror_path: Optional[str] = None):
         self.registry_path = Path(registry_path)
         self.registry_path.parent.mkdir(parents=True, exist_ok=True)
+        self.mirror_path = Path(mirror_path) if mirror_path else None
+        if self.mirror_path:
+            self.mirror_path.parent.mkdir(parents=True, exist_ok=True)
         self.registry: Dict[str, Dict] = {}
         self._load()
 
-    def _load(self) -> None:
-        if not self.registry_path.exists():
-            logger.info("No existing registry found. Starting fresh.")
-            return
-        for line in self.registry_path.read_text().splitlines():
+    @staticmethod
+    def _read_entries(path: Path) -> List[Dict]:
+        if not path.exists():
+            return []
+        entries: List[Dict] = []
+        for line in path.read_text().splitlines():
             if not line.strip():
                 continue
-            entry = json.loads(line)
+            try:
+                entries.append(json.loads(line))
+            except Exception:
+                continue
+        return entries
+
+    def _load(self) -> None:
+        primary_entries = self._read_entries(self.registry_path)
+        mirror_entries = self._read_entries(self.mirror_path) if self.mirror_path else []
+
+        if not primary_entries and not mirror_entries:
+            logger.info("No existing registry found. Starting fresh.")
+            return
+
+        # Prefer primary entries when the same job_key appears in both files.
+        for entry in mirror_entries + primary_entries:
             jk = entry.get("job_key")
             if jk:
                 self.registry[jk] = entry
-        logger.info("Loaded %s registry entries", len(self.registry))
+        logger.info(
+            "Loaded %s registry entries (primary=%s, mirror=%s)",
+            len(self.registry),
+            len(primary_entries),
+            len(mirror_entries),
+        )
 
     def append_entry(self, entry: Dict) -> None:
         append_manifest(self.registry_path, entry)
+        if self.mirror_path:
+            append_manifest(self.mirror_path, entry)
         jk = entry.get("job_key")
         if jk:
             self.registry[jk] = entry
@@ -257,22 +288,74 @@ class ExtractionRegistry:
 
 # ---------------- Checkpoint ----------------
 class Checkpoint:
-    def __init__(self, path: str):
+    def __init__(self, path: str, mirror_path: Optional[str] = None):
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
+        self.mirror_path = Path(mirror_path) if mirror_path else None
+        if self.mirror_path:
+            self.mirror_path.parent.mkdir(parents=True, exist_ok=True)
+
+    @staticmethod
+    def _safe_load_json(path: Path) -> Dict:
+        if not path.exists():
+            return {}
+        try:
+            payload = json.loads(path.read_text())
+            return payload if isinstance(payload, dict) else {}
+        except Exception:
+            return {}
 
     def load(self) -> Dict:
-        if self.path.exists():
-            try:
-                return json.loads(self.path.read_text())
-            except Exception:
-                return {}
+        primary_payload = self._safe_load_json(self.path)
+        if primary_payload:
+            return primary_payload
+
+        if self.mirror_path:
+            mirror_payload = self._safe_load_json(self.mirror_path)
+            if mirror_payload:
+                # Self-heal: restore primary from mirror when primary is missing/corrupt.
+                self.path.write_text(json.dumps(mirror_payload, indent=2))
+                return mirror_payload
         return {}
 
     def write(self, payload: Dict) -> None:
         payload = dict(payload)
         payload["updated_at_utc"] = datetime.now(timezone.utc).isoformat()
-        self.path.write_text(json.dumps(payload, indent=2))
+        text = json.dumps(payload, indent=2)
+        self.path.write_text(text)
+        if self.mirror_path:
+            self.mirror_path.write_text(text)
+
+
+def resolve_state_mirror_paths(registry_path: str, checkpoint_path: str) -> Tuple[Optional[str], Optional[str]]:
+    """
+    Dual-state persistence strategy:
+    - If primary is in logs, mirror to metadata.
+    - If primary is in metadata, mirror to logs.
+    - If primary matches neither canonical path, default mirror to logs.
+    """
+    reg_primary = Path(registry_path)
+    chk_primary = Path(checkpoint_path)
+
+    if reg_primary == LEGACY_REGISTRY_PATH:
+        reg_mirror = str(METADATA_REGISTRY_PATH)
+    elif reg_primary == METADATA_REGISTRY_PATH:
+        reg_mirror = str(LEGACY_REGISTRY_PATH)
+    else:
+        reg_mirror = str(LEGACY_REGISTRY_PATH)
+
+    if chk_primary == LEGACY_CHECKPOINT_PATH:
+        chk_mirror = str(METADATA_CHECKPOINT_PATH)
+    elif chk_primary == METADATA_CHECKPOINT_PATH:
+        chk_mirror = str(LEGACY_CHECKPOINT_PATH)
+    else:
+        chk_mirror = str(LEGACY_CHECKPOINT_PATH)
+
+    if Path(reg_mirror) == reg_primary:
+        reg_mirror = None
+    if Path(chk_mirror) == chk_primary:
+        chk_mirror = None
+    return reg_mirror, chk_mirror
 
 
 # ---------------- Helpers ----------------
@@ -612,8 +695,9 @@ def run_annual(api_key_env, metadata_dir, bronze_dir, registry_path, checkpoint_
         flows_list = [f.strip() for f in flows.split(",") if f.strip()]
 
         shape = QueryShape(partner_code=partner_code, freq_code="A")
-        reg = ExtractionRegistry(registry_path)
-        chk = Checkpoint(checkpoint_path)
+        registry_mirror_path, checkpoint_mirror_path = resolve_state_mirror_paths(registry_path, checkpoint_path)
+        reg = ExtractionRegistry(registry_path, mirror_path=registry_mirror_path)
+        chk = Checkpoint(checkpoint_path, mirror_path=checkpoint_mirror_path)
         ex = ComtradeDataExtractor(api_key or "AUDIT_ONLY_NO_KEY", bronze_dir)
 
         audit_log = Path(audit_log_path)
@@ -913,8 +997,9 @@ def run_monthly_direct(api_key_env, metadata_dir, bronze_dir, registry_path, che
                 raise click.ClickException(f"Invalid period '{p}'. Expected YYYYMM format.")
 
         shape = QueryShape(partner_code=partner_code, freq_code="M")
-        reg = ExtractionRegistry(registry_path)
-        chk = Checkpoint(checkpoint_path)
+        registry_mirror_path, checkpoint_mirror_path = resolve_state_mirror_paths(registry_path, checkpoint_path)
+        reg = ExtractionRegistry(registry_path, mirror_path=registry_mirror_path)
+        chk = Checkpoint(checkpoint_path, mirror_path=checkpoint_mirror_path)
         ex = ComtradeDataExtractor(api_key, bronze_dir)
 
         plan = []
@@ -1065,8 +1150,9 @@ def run_monthly_gaps(
             raise click.ClickException(f"Missing env var {api_key_env}")
 
         load_reporters(metadata_dir)
-        reg = ExtractionRegistry(registry_path)
-        chk = Checkpoint(checkpoint_path)
+        registry_mirror_path, checkpoint_mirror_path = resolve_state_mirror_paths(registry_path, checkpoint_path)
+        reg = ExtractionRegistry(registry_path, mirror_path=registry_mirror_path)
+        chk = Checkpoint(checkpoint_path, mirror_path=checkpoint_mirror_path)
         ex = ComtradeDataExtractor(api_key, bronze_dir)
 
         gaps: List[Tuple[int, str, str, str]] = []
@@ -1223,7 +1309,8 @@ def run_monthly_gaps(
 @cli.command("coverage-report")
 @click.option("--registry-path", default="logs/comtrade/extraction_registry.jsonl", show_default=True)
 def coverage_report(registry_path: str):
-    reg = ExtractionRegistry(registry_path)
+    registry_mirror_path, _ = resolve_state_mirror_paths(registry_path, str(LEGACY_CHECKPOINT_PATH))
+    reg = ExtractionRegistry(registry_path, mirror_path=registry_mirror_path)
     gaps = reg.iter_gaps()
 
     if not gaps:
@@ -1363,8 +1450,9 @@ def run_monthly_history(
         key_index = 0
         keys_used = set()
 
-        reg = ExtractionRegistry(registry_path)
-        chk = Checkpoint(checkpoint_path)
+        registry_mirror_path, checkpoint_mirror_path = resolve_state_mirror_paths(registry_path, checkpoint_path)
+        reg = ExtractionRegistry(registry_path, mirror_path=registry_mirror_path)
+        chk = Checkpoint(checkpoint_path, mirror_path=checkpoint_mirror_path)
         active_alias = key_aliases[key_index]
         active_key = os.getenv(active_alias)
         if not active_key:
@@ -1538,7 +1626,8 @@ def coverage_heatmap(registry_path: str, checkpoint_path: str, source: str, zero
     src = source.lower()
 
     if src == "checkpoint":
-        chk = Checkpoint(checkpoint_path)
+        _, checkpoint_mirror_path = resolve_state_mirror_paths(registry_path, checkpoint_path)
+        chk = Checkpoint(checkpoint_path, mirror_path=checkpoint_mirror_path)
         chk_data = chk.load()
         chk_gaps = chk_data.get("coverage_gaps", {})
         for r, years in (chk_gaps or {}).items():
@@ -1551,7 +1640,8 @@ def coverage_heatmap(registry_path: str, checkpoint_path: str, source: str, zero
                     rows.append((str(r), str(y), str(cmd), str(flow), "0"))
 
     elif src == "registry-gaps":
-        reg = ExtractionRegistry(registry_path)
+        registry_mirror_path, _ = resolve_state_mirror_paths(registry_path, checkpoint_path)
+        reg = ExtractionRegistry(registry_path, mirror_path=registry_mirror_path)
         gaps = reg.iter_gaps()
         for g in gaps:
             meta = g.get("meta", {}) or {}

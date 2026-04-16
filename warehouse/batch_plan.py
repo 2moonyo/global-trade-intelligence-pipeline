@@ -22,7 +22,6 @@ DEFAULT_CLEANUP_PATHS_BY_DATASET: dict[str, tuple[str, ...]] = {
         "data/silver/comtrade/dim_trade_routes.parquet",
     ),
     "events": (
-        "data/bronze/events.csv",
         "data/silver/events",
     ),
     "fx": (

@@ -70,7 +70,7 @@ help:
 		"make fx-cloud-dry-run-with-bronze Preview the FX publish/load steps including bronze." \
 		"make fx-cloud-with-bronze Publish FX bronze and silver assets, then load raw.ecb_fx_eu_monthly." \
 		"make fx-refresh-cloud     Rebuild FX silver, then publish and load it." \
-		"make events-silver         Build curated event silver outputs from data/bronze/events.csv with run logs." \
+		"make events-silver         Build curated event silver outputs from data/seed/events/events_seed.csv (fallback: data/bronze/events.csv)." \
 		"make events-gcs-dry-run    Preview the events disk-to-GCS publish from local silver outputs." \
 		"make events-gcs            Publish events silver assets from local disk to GCS." \
 		"make events-cloud-dry-run Preview the events silver GCS publish and BigQuery load steps." \

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import shutil
 import sys
 from dataclasses import dataclass
@@ -167,10 +168,15 @@ BRIDGE_COLUMNS = [
     "link_role",
 ]
 
+DEFAULT_EVENTS_SEED_PATH = PROJECT_ROOT / "data" / "seed" / "events" / "events_seed.csv"
+LEGACY_EVENTS_BRONZE_PATH = PROJECT_ROOT / "data" / "bronze" / "events.csv"
+
 
 @dataclass(frozen=True)
 class EventsSilverConfig:
-    bronze_path: Path = PROJECT_ROOT / "data" / "bronze" / "events.csv"
+    events_seed_path: Path = DEFAULT_EVENTS_SEED_PATH
+    legacy_bronze_path: Path = LEGACY_EVENTS_BRONZE_PATH
+    source_path_override: Path | None = None
     silver_root: Path = PROJECT_ROOT / "data" / "silver" / "events"
     dim_event_csv_path: Path = PROJECT_ROOT / "data" / "silver" / "events" / "dim_event.csv"
     dim_event_parquet_path: Path = PROJECT_ROOT / "data" / "silver" / "events" / "dim_event.parquet"
@@ -191,6 +197,30 @@ def _last_completed_month_end(reference_date: date) -> date:
 
 def _clean_string(series: pd.Series) -> pd.Series:
     return series.astype("string").str.strip().replace({"": pd.NA, "nan": pd.NA, "None": pd.NA})
+
+
+def resolve_events_source_path(config: EventsSilverConfig, logger) -> Path:
+    env_override = os.getenv("EVENTS_SEED_CSV_PATH")
+    candidates: list[Path] = []
+    if config.source_path_override is not None:
+        candidates.append(config.source_path_override)
+    if env_override:
+        candidates.append(Path(env_override).expanduser())
+    candidates.extend([config.events_seed_path, config.legacy_bronze_path])
+
+    for candidate in candidates:
+        resolved = candidate.resolve()
+        if resolved.exists():
+            logger.info("Using events seed CSV from %s", resolved)
+            return resolved
+
+    candidate_text = "\n".join(f"- {path.resolve()}" for path in candidates)
+    raise FileNotFoundError(
+        "Events source CSV was not found in any supported location:\n"
+        f"{candidate_text}\n"
+        "Provide --events-csv-path, set EVENTS_SEED_CSV_PATH, or place the file at "
+        f"{config.events_seed_path.resolve()}"
+    )
 
 
 def load_bronze_events(bronze_path: Path, logger) -> pd.DataFrame:
@@ -456,20 +486,22 @@ def run(config: EventsSilverConfig | None = None, *, as_of_date: date | None = N
 
     run_id = build_run_id("events_silver")
     started_at = datetime.now(timezone.utc)
+    source_path = resolve_events_source_path(config, logger)
     manifest_entry: dict[str, Any] = {
         "run_id": run_id,
         "asset_name": "events_silver",
         "dataset_name": "events",
         "started_at": started_at,
         "status": "started",
-        "bronze_path": str(config.bronze_path),
+        "source_path": str(source_path),
+        "bronze_path": str(source_path),
         "silver_root": str(config.silver_root),
         "as_of_date": resolved_as_of_date.isoformat(),
         "log_path": str(config.log_path),
     }
 
     try:
-        bronze_df = load_bronze_events(config.bronze_path, logger)
+        bronze_df = load_bronze_events(source_path, logger)
         dim_event_df, dim_summary = prepare_dim_event(bronze_df, as_of_date=resolved_as_of_date, logger=logger)
         core_bridge_df, region_bridge_df, bridge_summary = build_bridge_frames(dim_event_df)
 
@@ -530,6 +562,13 @@ def run(config: EventsSilverConfig | None = None, *, as_of_date: date | None = N
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Build curated events silver outputs from the bronze events list.")
     parser.add_argument(
+        "--events-csv-path",
+        help=(
+            "Optional source events CSV path. If omitted, the loader checks "
+            "EVENTS_SEED_CSV_PATH, then data/seed/events/events_seed.csv, then data/bronze/events.csv."
+        ),
+    )
+    parser.add_argument(
         "--as-of-date",
         help="Override the effective date used for Ongoing events. Defaults to the last completed month end in UTC.",
     )
@@ -541,7 +580,12 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
     as_of_date = date.fromisoformat(args.as_of_date) if args.as_of_date else None
-    config = EventsSilverConfig(log_level=args.log_level, log_to_stdout=not args.no_stdout_log)
+    source_override = Path(args.events_csv_path).expanduser() if args.events_csv_path else None
+    config = EventsSilverConfig(
+        source_path_override=source_override,
+        log_level=args.log_level,
+        log_to_stdout=not args.no_stdout_log,
+    )
     result = run(config, as_of_date=as_of_date)
     print(json.dumps(json_ready(result), indent=2, ensure_ascii=False))
 

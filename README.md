@@ -151,7 +151,14 @@ The canonical trade grain is reporter + partner + commodity + month + flow. The 
 
 The event area materializes alongside the rest of the project under the same dbt-managed staging and marts schemas.
 
-The current event silver contract is now built from `data/bronze/events.csv` by `ingest/events/events_silver.py`, which writes:
+The current event silver contract is built by `ingest/events/events_silver.py` using this source precedence:
+
+- `--events-csv-path` CLI argument (when supplied)
+- `EVENTS_SEED_CSV_PATH` environment variable (when set)
+- `data/seed/events/events_seed.csv` (preferred durable location)
+- `data/bronze/events.csv` (legacy fallback)
+
+It then writes:
 
 - `logs/events/events_silver.log`
 - `logs/events/events_silver_manifest.jsonl`

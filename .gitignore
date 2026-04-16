@@ -1,7 +1,12 @@
 .venv
 .vscode
 __pycache__
-/data
+/data/*
+!/data/seed/
+/data/seed/*
+!/data/seed/events/
+/data/seed/events/*
+!/data/seed/events/events_seed.csv
 /dbt_packages
 .env
 .DS_Store

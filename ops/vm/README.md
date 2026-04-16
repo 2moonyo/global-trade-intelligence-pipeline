@@ -36,6 +36,193 @@ sudo editor /etc/capstone/pipeline.env
 sudo systemctl start capstone-stack
 ```
 
+## Configure VM Git access (public and private repos)
+
+If your VM repository folder does not include `.git`, or if you need to pull updates directly from GitHub on the VM, set up Git access first.
+
+### Public repository
+
+No deploy key is required. Use an HTTPS remote on the VM:
+
+```bash
+cd /var/lib/pipeline/capstone
+git remote set-url origin https://github.com/OWNER/REPO.git
+git fetch --all
+git pull --ff-only
+```
+
+### Private repository (recommended: deploy key)
+
+1. Generate a dedicated keypair on the VM:
+
+```bash
+ssh-keygen -t ed25519 -f ~/.ssh/github_deploy_key -C "vm-deploy-key" -N ""
+cat ~/.ssh/github_deploy_key.pub
+```
+
+2. In GitHub, open the target repo settings and add the public key as a Deploy key (read-only is sufficient).
+
+3. Configure SSH on the VM:
+
+```bash
+cat >> ~/.ssh/config <<'EOF'
+Host github.com
+	HostName github.com
+	User git
+	IdentityFile ~/.ssh/github_deploy_key
+	IdentitiesOnly yes
+EOF
+
+chmod 600 ~/.ssh/config
+ssh-keyscan github.com >> ~/.ssh/known_hosts
+ssh -T git@github.com
+```
+
+4. Set the SSH remote and verify pull:
+
+```bash
+cd /var/lib/pipeline/capstone
+git remote set-url origin git@github.com:OWNER/REPO.git
+git fetch --all
+git pull --ff-only
+```
+
+## Laptop helper scripts
+
+Use these scripts from your laptop to operate a VM runtime consistently.
+
+### 1) Git sync only
+
+`scripts/vm_repo_sync.sh` only manages repository initialization/sync on the VM. It does not modify API keys.
+
+```bash
+scripts/vm_repo_sync.sh \
+	--vm-user chromazone \
+	--vm-host 104.199.42.249 \
+	--ssh-key-path "$HOME/.ssh/google_compute_engine" \
+	--vm-repo-dir /var/lib/pipeline/capstone \
+	--repo-url git@github.com:OWNER/REPO.git \
+	--branch cloud_migration
+```
+
+Pin to a specific commit (optional):
+
+```bash
+scripts/vm_repo_sync.sh \
+	--vm-user chromazone \
+	--vm-host 104.199.42.249 \
+	--ssh-key-path "$HOME/.ssh/google_compute_engine" \
+	--repo-url git@github.com:OWNER/REPO.git \
+	--branch cloud_migration \
+	--commit 0123abcd4567ef89deadbeefcafefeed12345678
+```
+
+If `--commit` is omitted, the script pulls the latest for the selected branch.
+If `--commit` is provided, the script checks out that commit in detached HEAD mode.
+
+### 2) API key insert/update
+
+`scripts/vm_api_insert.sh` updates runtime keys in `/etc/capstone/pipeline.env` when setup changes.
+
+Interactive mode:
+
+```bash
+scripts/vm_api_insert.sh \
+	--vm-user chromazone \
+	--vm-host 104.199.42.249 \
+	--ssh-key-path "$HOME/.ssh/google_compute_engine" \
+	--interactive-comtrade \
+	--interactive-fred \
+	--show-keys
+```
+
+Direct set mode:
+
+```bash
+scripts/vm_api_insert.sh \
+	--vm-user chromazone \
+	--vm-host 104.199.42.249 \
+	--ssh-key-path "$HOME/.ssh/google_compute_engine" \
+	--set COMTRADE_API_KEY_DATA=xxxxx \
+	--set COMTRADE_API_KEY_DATA_A=yyyyy \
+	--set FRED_API_KEY=zzzzz \
+	--show-keys
+```
+
+## How to find VM_HOST, VM_USER, and SSH_KEY_PATH
+
+Use this checklist before running `scripts/vm_repo_sync.sh` or `scripts/vm_api_insert.sh`.
+
+### VM_HOST (from local machine)
+
+Get the VM external IP with `gcloud`:
+
+```bash
+gcloud compute instances describe capstone-vm-eu \
+	--zone europe-west1-b \
+	--format='get(networkInterfaces[0].accessConfigs[0].natIP)'
+```
+
+If your team uses DNS, the hostname can be used instead of the external IP.
+
+### VM_USER (Linux login user)
+
+Preferred method from local machine:
+
+```bash
+gcloud compute ssh capstone-vm-eu --zone europe-west1-b --command 'whoami'
+```
+
+The output is the value to use for `--vm-user`.
+
+From an already-open VM shell, run:
+
+```bash
+whoami
+```
+
+Do not use the VM instance name as the SSH user.
+
+### SSH_KEY_PATH (local private key path)
+
+On your local machine, confirm the Google Compute Engine private key exists:
+
+```bash
+ls -l ~/.ssh/google_compute_engine ~/.ssh/google_compute_engine.pub
+```
+
+Use the private key path for script arguments:
+
+```bash
+--ssh-key-path "$HOME/.ssh/google_compute_engine"
+```
+
+Do not use the `.pub` file for `--ssh-key-path`.
+
+If the key does not exist yet, generate/register it via:
+
+```bash
+gcloud compute ssh capstone-vm-eu --zone europe-west1-b --command 'echo ssh-bootstrap-ok'
+```
+
+### Git context checks (VM and local)
+
+From VM, confirm repo remote and branch state:
+
+```bash
+cd /var/lib/pipeline/capstone
+git remote -v
+git branch --show-current
+```
+
+From local, verify the repo URL you plan to pass to `--repo-url`:
+
+```bash
+git remote get-url origin
+```
+
+For private repos, use SSH remotes and ensure VM deploy key setup is complete.
+
 ## First manual run
 
 Start by proving the non-Comtrade workloads on the VM:

@@ -1,9 +1,10 @@
-import requests
 import json
 import pandas as pd
 from pathlib import Path
 from datetime import datetime
 import logging
+from urllib import request
+from urllib.error import HTTPError, URLError
 
 logging.basicConfig(
     level=logging.INFO,
@@ -76,9 +77,10 @@ class ComtradeMetadataExtractor:
             name: Base name for saved files
         """
         try:
-            response = requests.get(url, headers=self.headers, timeout=60)
-            response.raise_for_status()
-            data = response.json()
+            req = request.Request(url, headers=self.headers)
+            with request.urlopen(req, timeout=60) as response:
+                payload = response.read().decode('utf-8')
+            data = json.loads(payload)
             
             # Save raw JSON
             self._save_json(data, f'{name}_raw.json')
@@ -96,7 +98,7 @@ class ComtradeMetadataExtractor:
             logger.info(f"  Columns: {df.columns.tolist()}")
             return df
                 
-        except Exception as e:
+        except (HTTPError, URLError, json.JSONDecodeError) as e:
             logger.error(f"Failed to fetch {name}: {e}")
             raise
     
@@ -178,14 +180,31 @@ if __name__ == "__main__":
     import os
     from dotenv import load_dotenv
     
-    # Load API key from environment
+    # Load API key from environment.
+    # Prefer the same key aliases used by extraction jobs so metadata bootstrap
+    # works in the same runtime without extra env setup.
     load_dotenv()
-    api_key = os.getenv('COMTRADE_API_KEY')
+    key_aliases = [
+        'COMTRADE_API_KEY_DATA',
+        'COMTRADE_API_KEY_DATA_A',
+        'COMTRADE_API_KEY_DATA_B',
+        'COMTRADE_API_KEY',
+    ]
+
+    api_key = None
+    api_key_alias = None
+    for alias in key_aliases:
+        candidate = os.getenv(alias)
+        if candidate:
+            api_key = candidate
+            api_key_alias = alias
+            break
     
     if not api_key:
-        print("Error: COMTRADE_API_KEY not found in environment")
-        print("Create a .env file with: COMTRADE_API_KEY=your_key_here")
+        print("Error: no Comtrade API key found in environment")
+        print("Set one of: COMTRADE_API_KEY_DATA, COMTRADE_API_KEY_DATA_A, COMTRADE_API_KEY_DATA_B, COMTRADE_API_KEY")
         exit(1)
+    logger.info("Using Comtrade API key from env var: %s", api_key_alias)
     
     # Run metadata extraction
     extractor = ComtradeMetadataExtractor(api_key=api_key)

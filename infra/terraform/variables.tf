@@ -262,7 +262,7 @@ variable "legacy_data_disk_name" {
 variable "legacy_instance_schedule_enabled" {
   description = "Whether to keep the legacy US Compute Engine instance schedule resource policy."
   type        = bool
-  default     = true
+  default     = false
 }
 
 variable "legacy_schedule_name" {

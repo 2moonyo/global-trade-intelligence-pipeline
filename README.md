@@ -43,6 +43,49 @@ If you later want to tear the Terraform-managed cloud resources back down, set `
 make infra-destroy
 ```
 
+## VM operations quick links
+
+For VM runtime setup and operations, see `ops/vm/README.md`.
+
+Connection variable discovery (`VM_HOST`, `VM_USER`, `SSH_KEY_PATH`) is documented in the “How to find VM_HOST, VM_USER, and SSH_KEY_PATH” section in `ops/vm/README.md`.
+
+Two helper scripts are available under `scripts/`:
+
+- `scripts/vm_repo_sync.sh`: repository sync only (initialize/pull/update branch on VM)
+- `scripts/vm_api_insert.sh`: insert or update runtime API keys in `/etc/capstone/pipeline.env`
+
+Typical workflow from laptop:
+
+```bash
+scripts/vm_repo_sync.sh \
+  --vm-user chromazone \
+  --vm-host 104.199.42.249 \
+  --ssh-key-path "$HOME/.ssh/google_compute_engine" \
+  --vm-repo-dir /var/lib/pipeline/capstone \
+  --repo-url git@github.com:OWNER/REPO.git \
+  --branch cloud_migration
+
+scripts/vm_api_insert.sh \
+  --vm-user chromazone \
+  --vm-host 104.199.42.249 \
+  --ssh-key-path "$HOME/.ssh/google_compute_engine" \
+  --interactive-comtrade \
+  --interactive-fred \
+  --show-keys
+```
+
+To pin the VM repo to a specific commit instead of latest branch head:
+
+```bash
+scripts/vm_repo_sync.sh \
+  --vm-user chromazone \
+  --vm-host 104.199.42.249 \
+  --ssh-key-path "$HOME/.ssh/google_compute_engine" \
+  --repo-url git@github.com:OWNER/REPO.git \
+  --branch cloud_migration \
+  --commit 0123abcd4567ef89deadbeefcafefeed12345678
+```
+
 ## Warehouse shape
 
 The live warehouse is organized as:

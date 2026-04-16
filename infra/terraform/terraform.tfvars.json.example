@@ -15,7 +15,7 @@
   "legacy_compute_vm_enabled": false,
   "legacy_vm_name": "capstone-vm",
   "legacy_data_disk_name": "secondary-data-disk",
-  "legacy_instance_schedule_enabled": true,
+  "legacy_instance_schedule_enabled": false,
   "legacy_schedule_name": "capstone-vm-schedule",
   "legacy_schedule_timezone": "UTC",
   "legacy_start_schedule": "45 5 * * *",

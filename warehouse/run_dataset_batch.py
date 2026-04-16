@@ -196,7 +196,7 @@ def _task_artifact_row(
         "partition_key": partition_key,
         "checksum": checksum,
         "record_count": record_count,
-        "payload_json": payload_json or {},
+        "payload_json": json_ready(payload_json or {}),
     }
 
 

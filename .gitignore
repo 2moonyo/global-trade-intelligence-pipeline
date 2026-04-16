@@ -35,7 +35,6 @@ secrets
 /secrets/
 
 
-.bruin.yml
 /logs/portwatch/
 /.terraform/
 *.tfstate

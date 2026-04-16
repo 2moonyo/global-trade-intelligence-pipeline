@@ -84,6 +84,13 @@ def json_ready(value: Any) -> Any:
         return str(value)
     if isinstance(value, (datetime, date)):
         return value.isoformat()
+    if isinstance(value, set):
+        return [json_ready(item) for item in value]
+    if hasattr(value, "tolist") and callable(value.tolist):
+        try:
+            return json_ready(value.tolist())
+        except Exception:
+            pass
     if hasattr(value, "item") and callable(value.item):
         try:
             return json_ready(value.item())

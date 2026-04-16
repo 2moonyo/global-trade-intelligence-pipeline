@@ -39,6 +39,14 @@
           "log_path": "logs/comtrade/comtrade_history_day_1.log"
         },
         {
+          "task_name": "metadata",
+          "command": [
+            "python",
+            "ingest/comtrade/un_comtrade_tools_metadata.py"
+          ],
+          "log_path": "logs/comtrade/comtrade_metadata_day_1.log"
+        },
+        {
           "task_name": "silver",
           "command": [
             "python",
@@ -1239,6 +1247,14 @@
             "--sleep-on-quota"
           ],
           "log_path": "logs/comtrade/comtrade_history_monthly_refresh.log"
+        },
+        {
+          "task_name": "metadata",
+          "command": [
+            "python",
+            "ingest/comtrade/un_comtrade_tools_metadata.py"
+          ],
+          "log_path": "logs/comtrade/comtrade_metadata_monthly_refresh.log"
         },
         {
           "task_name": "silver",

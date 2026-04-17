@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
 import sys
 from dataclasses import dataclass
@@ -110,6 +111,19 @@ SILVER_COLUMNS = [
     "partner2Code",
 ]
 
+REQUIRED_METADATA_FILENAMES = (
+    "reporters.csv",
+    "partners.csv",
+    "flows.csv",
+)
+
+COMTRADE_API_KEY_ALIASES = (
+    "COMTRADE_API_KEY_DATA",
+    "COMTRADE_API_KEY_DATA_A",
+    "COMTRADE_API_KEY_DATA_B",
+    "COMTRADE_API_KEY",
+)
+
 
 @dataclass(frozen=True)
 class ComtradeSilverConfig:
@@ -141,6 +155,76 @@ def _parse_period(value: str) -> str:
     if not re.fullmatch(r"\d{6}", value):
         raise argparse.ArgumentTypeError(f"Expected YYYYMM period, got {value}")
     return value
+
+
+def _resolve_comtrade_api_key() -> tuple[str | None, str | None]:
+    for alias in COMTRADE_API_KEY_ALIASES:
+        candidate = os.getenv(alias)
+        if candidate:
+            return candidate, alias
+    return None, None
+
+
+def _missing_required_metadata_files(metadata_root: Path) -> list[str]:
+    missing: list[str] = []
+    for filename in REQUIRED_METADATA_FILENAMES:
+        candidate = metadata_root / filename
+        if not candidate.exists() or candidate.stat().st_size == 0:
+            missing.append(filename)
+    return missing
+
+
+def _ensure_required_metadata(metadata_root: Path, logger) -> dict[str, Any]:
+    metadata_root.mkdir(parents=True, exist_ok=True)
+    missing_before = _missing_required_metadata_files(metadata_root)
+    if not missing_before:
+        return {
+            "status": "already_present",
+            "missing_before": [],
+            "missing_after": [],
+            "refreshed": False,
+        }
+
+    api_key, api_key_alias = _resolve_comtrade_api_key()
+    if not api_key:
+        raise RuntimeError(
+            "Missing required Comtrade metadata files "
+            f"{missing_before} under {metadata_root} and no API key is configured. "
+            "Set one of: "
+            + ", ".join(COMTRADE_API_KEY_ALIASES)
+        )
+
+    logger.warning(
+        "Missing required Comtrade metadata files under %s: %s. Running metadata bootstrap.",
+        metadata_root,
+        ", ".join(missing_before),
+    )
+
+    from ingest.comtrade.un_comtrade_tools_metadata import ComtradeMetadataExtractor
+
+    summary = ComtradeMetadataExtractor(
+        api_key=api_key,
+        output_dir=str(metadata_root),
+    ).extract_all_metadata()
+
+    missing_after = _missing_required_metadata_files(metadata_root)
+    if missing_after:
+        raise RuntimeError(
+            "Comtrade metadata bootstrap completed but required files are still missing: "
+            + ", ".join(missing_after)
+        )
+
+    extractions = summary.get("extractions") or []
+    success_count = sum(1 for item in extractions if item.get("status") == "success")
+    return {
+        "status": "refreshed",
+        "missing_before": missing_before,
+        "missing_after": [],
+        "refreshed": True,
+        "api_key_alias": api_key_alias,
+        "successful_extractions": int(success_count),
+        "total_extractions": int(len(extractions)),
+    }
 
 
 def _parse_filename_metadata(file_path: Path) -> dict[str, Any]:
@@ -941,6 +1025,7 @@ def run(
         "fact_slices_written": 0,
         "fact_slices_skipped_unchanged": 0,
         "touched_year_months": [],
+        "metadata_precondition": None,
         "dimension_results": {},
         "audit_dir": str(run_audit_dir),
         "error_summary": None,
@@ -982,7 +1067,11 @@ def run(
         )
         manifest_entry["touched_year_months"] = touched_year_months
 
-        logger.info("Step 4/5 Rebuild dimensions from canonical silver store")
+        logger.info("Step 4/6 Ensure required Comtrade metadata files")
+        metadata_precondition = _ensure_required_metadata(config.metadata_root, logger)
+        manifest_entry["metadata_precondition"] = metadata_precondition
+
+        logger.info("Step 5/6 Rebuild dimensions from canonical silver store")
         full_fact_df = load_full_fact_dataset(config.fact_root)
         dim_country = build_dim_country(full_fact_df, config.metadata_root)
         dim_commodity = build_dim_commodity(full_fact_df)
@@ -1013,7 +1102,7 @@ def run(
         }
         manifest_entry["dimension_results"] = dimension_results
 
-        logger.info("Step 5/5 Write audit artifacts to %s", run_audit_dir)
+        logger.info("Step 6/6 Write audit artifacts to %s", run_audit_dir)
         bronze_file_inventory.to_parquet(run_audit_dir / "bronze_file_inventory.parquet", index=False)
         if not duplicate_collisions.empty:
             duplicate_collisions.to_parquet(run_audit_dir / "duplicate_collisions.parquet", index=False)
@@ -1026,6 +1115,7 @@ def run(
         summary_payload = {
             "run_id": run_id,
             "prep_summary": prep_summary,
+            "metadata_precondition": metadata_precondition,
             "touched_year_months": touched_year_months,
             "fact_write_results": fact_write_results,
             "dimension_results": dimension_results,

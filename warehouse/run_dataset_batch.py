@@ -47,6 +47,15 @@ def _strict_bigquery_mirror() -> bool:
     return os.getenv("OPS_STRICT_BIGQUERY_MIRROR", "false").strip().lower() in {"1", "true", "yes"}
 
 
+def _normalize_manifest_task_status(status: str) -> str:
+    normalized = status.strip().lower()
+    if normalized in {"loaded", "planned"}:
+        return "completed"
+    if normalized.startswith("no_op_"):
+        return "completed"
+    return normalized
+
+
 def _safe_cloud_config() -> GcpCloudConfig | None:
     try:
         return GcpCloudConfig.from_env()
@@ -703,9 +712,7 @@ def execute_batch(
             manifest_entries = _read_manifest_entries_since(manifest_path, manifest_size_before)
             manifest_entry = manifest_entries[-1] if manifest_entries else None
             if manifest_entry and task_status == "completed":
-                task_status = str(manifest_entry.get("status", task_status))
-                if task_status in {"loaded", "planned"}:
-                    task_status = "completed"
+                task_status = _normalize_manifest_task_status(str(manifest_entry.get("status", task_status)))
             if manifest_entry and error_summary is None and manifest_entry.get("error_summary"):
                 error_summary = str(manifest_entry["error_summary"])
                 if task_status != "completed":

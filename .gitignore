@@ -2,14 +2,12 @@
 .vscode
 __pycache__
 /data/*
+/data/metadata/
 !/data/seed/
 /data/seed/*
 !/data/seed/events/
 /data/seed/events/*
 !/data/seed/events/events_seed.csv
-/dbt_packages
-.env
-.DS_Store
 .idea
 *.pyc
 *.pyo
@@ -68,3 +66,5 @@ override.tf.json
 /ARCHITECTURE.md
 /PROJECT_STATE.md
 /Run_Instruction.MD
+
+.bruin.yml

@@ -238,6 +238,215 @@ World Bank energy runs in its own post-Comtrade lane because it depends on the C
 sudo docker compose --env-file /etc/capstone/pipeline.env -f /var/lib/pipeline/capstone/docker/docker-compose.yml exec -T pipeline scripts/run_pipeline.sh country-trade-and-energy
 ```
 
+## On-demand batch sets (outside schedule timers)
+
+Use the scripts under `scripts/vm_batches/` to run individual bootstrap sets without crafting ad-hoc docker commands.
+
+These scripts:
+
+- validate VM paths and env file
+- bring the compose stack up
+- optionally refresh selected keys from Secret Manager
+- run `ops-init-all`
+- call `scripts/run_pipeline.sh dataset-batch <dataset> <batch_id>` with consistent flags
+
+### One-command dispatcher
+
+From VM:
+
+```bash
+cd /var/lib/pipeline/capstone
+./scripts/vm_batches/run_set.sh --help
+```
+
+Available sets:
+
+- `comtrade-day-1`
+- `comtrade-day-2`
+- `comtrade-day-3`
+- `comtrade-day-4`
+- `comtrade-day-5`
+- `comtrade-day-6`
+- `comtrade-all`
+- `noncomtrade-phase-1-portwatch`
+- `noncomtrade-phase-1-brent`
+- `noncomtrade-phase-1-fx`
+- `noncomtrade-phase-1-events`
+- `noncomtrade-phase-1-all`
+- `noncomtrade-phase-2-portwatch`
+- `noncomtrade-phase-2-brent`
+- `noncomtrade-phase-2-fx`
+- `noncomtrade-phase-2-events`
+- `noncomtrade-phase-2-all`
+
+### Example: run one set now
+
+```bash
+cd /var/lib/pipeline/capstone
+./scripts/vm_batches/run_set.sh comtrade-day-2
+```
+
+### Example: run one set and force secret refresh first
+
+```bash
+cd /var/lib/pipeline/capstone
+SYNC_SECRETS_BEFORE_RUN=true SECRET_PROJECT_ID=fullcap-10111 \
+./scripts/vm_batches/run_set.sh noncomtrade-phase-2-brent
+```
+
+### Example: run all non-Comtrade phase 1 batches
+
+```bash
+cd /var/lib/pipeline/capstone
+./scripts/vm_batches/run_set.sh noncomtrade-phase-1-all
+```
+
+### Example: run all Comtrade days
+
+```bash
+cd /var/lib/pipeline/capstone
+./scripts/vm_batches/run_set.sh comtrade-all
+```
+
+### Passing extra runner arguments
+
+Anything after the set name is forwarded to `dataset-batch`.
+
+```bash
+cd /var/lib/pipeline/capstone
+./scripts/vm_batches/run_set.sh comtrade-day-3 --plan-path ops/batch_plan.json --trigger-type manual
+```
+
+### Direct script calls (without dispatcher)
+
+From VM:
+
+```bash
+cd /var/lib/pipeline/capstone
+./scripts/vm_batches/run_comtrade_day_1.sh
+./scripts/vm_batches/run_comtrade_day_2.sh
+./scripts/vm_batches/run_comtrade_day_3.sh
+./scripts/vm_batches/run_comtrade_day_4.sh
+./scripts/vm_batches/run_comtrade_day_5.sh
+./scripts/vm_batches/run_comtrade_day_6.sh
+
+./scripts/vm_batches/run_noncomtrade_phase_1_portwatch.sh
+./scripts/vm_batches/run_noncomtrade_phase_1_brent.sh
+./scripts/vm_batches/run_noncomtrade_phase_1_fx.sh
+./scripts/vm_batches/run_noncomtrade_phase_1_events.sh
+
+./scripts/vm_batches/run_noncomtrade_phase_2_portwatch.sh
+./scripts/vm_batches/run_noncomtrade_phase_2_brent.sh
+./scripts/vm_batches/run_noncomtrade_phase_2_fx.sh
+./scripts/vm_batches/run_noncomtrade_phase_2_events.sh
+```
+
+## End-to-end operator workflow: edit, push, pull, rebuild, run
+
+This is the recommended lifecycle when you change code locally and need the VM to run the updated version.
+
+### 1) Local development and validation
+
+From local repo:
+
+```bash
+cd /Users/chromazone/Documents/Python/Data\ Enginering\ Zoomcamp/Capstone_monthly
+git checkout -b chore/vm-batch-ops-docs
+
+# make code/doc changes
+
+# optional local checks
+python3 -m py_compile ingest/portwatch/portwatch_extract.py
+for f in scripts/vm_batches/*.sh; do bash -n "$f"; done
+```
+
+### 2) Commit and push
+
+```bash
+cd /Users/chromazone/Documents/Python/Data\ Enginering\ Zoomcamp/Capstone_monthly
+git add -A
+git commit -m "Add VM batch set runners and operator runbook"
+git push -u origin chore/vm-batch-ops-docs
+```
+
+If you use PR workflow, merge this branch before pulling on the VM.
+
+### 3) Pull updates on VM
+
+SSH to VM, then:
+
+```bash
+cd /var/lib/pipeline/capstone
+git status
+git fetch --all
+git checkout cloud_migration
+git pull --ff-only
+```
+
+If VM has local changes, resolve those first. Prefer a clean working tree before pulling.
+
+### 4) Rebuild docker dependencies/images on VM
+
+Use compose build to pick up Dockerfile and Python dependency changes:
+
+```bash
+cd /var/lib/pipeline/capstone
+sudo docker compose --env-file /etc/capstone/pipeline.env -f /var/lib/pipeline/capstone/docker/docker-compose.yml build --pull pipeline orchestrator
+sudo docker compose --env-file /etc/capstone/pipeline.env -f /var/lib/pipeline/capstone/docker/docker-compose.yml up -d
+```
+
+If dependency state looks stale or corrupted, use a clean recreate:
+
+```bash
+cd /var/lib/pipeline/capstone
+sudo docker compose --env-file /etc/capstone/pipeline.env -f /var/lib/pipeline/capstone/docker/docker-compose.yml down
+sudo docker compose --env-file /etc/capstone/pipeline.env -f /var/lib/pipeline/capstone/docker/docker-compose.yml build --no-cache pipeline orchestrator
+sudo docker compose --env-file /etc/capstone/pipeline.env -f /var/lib/pipeline/capstone/docker/docker-compose.yml up -d
+```
+
+### 5) Refresh selected secrets from Secret Manager (optional but recommended)
+
+```bash
+cd /var/lib/pipeline/capstone
+SYNC_SECRETS_BEFORE_RUN=true SECRET_PROJECT_ID=fullcap-10111 \
+./scripts/vm_batches/run_set.sh comtrade-day-1 --trigger-type manual
+```
+
+This updates only approved runtime keys in `/etc/capstone/pipeline.env` before the set starts.
+
+### 6) Run the target set out of schedule
+
+```bash
+cd /var/lib/pipeline/capstone
+./scripts/vm_batches/run_set.sh noncomtrade-phase-2-all
+```
+
+### 7) Observe progress and failures
+
+Pipeline runs and task runs:
+
+```bash
+cd /var/lib/pipeline/capstone
+sudo docker compose --env-file /etc/capstone/pipeline.env -f /var/lib/pipeline/capstone/docker/docker-compose.yml exec -T postgres \
+	psql -U capstone -d capstone \
+	-c "SELECT pipeline_run_id,dataset_name,batch_id,status,started_at,finished_at,error_summary FROM ops.pipeline_run ORDER BY started_at DESC LIMIT 20;" \
+	-c "SELECT pipeline_run_id,task_name,step_order,status,started_at,finished_at,error_summary FROM ops.task_run ORDER BY started_at DESC LIMIT 80;"
+```
+
+Container health:
+
+```bash
+cd /var/lib/pipeline/capstone
+sudo docker compose --env-file /etc/capstone/pipeline.env -f /var/lib/pipeline/capstone/docker/docker-compose.yml ps
+```
+
+### 8) Keep schedule timers and manual runs separate
+
+- schedule timers are for regular cadence lanes
+- `scripts/vm_batches/run_set.sh` is for operator-triggered out-of-schedule execution
+- you can keep timers enabled while still running these scripts manually when needed
+
+
 ## Enable schedule lanes
 
 The startup script writes one timer unit per configured schedule lane. Enable only the lanes you want:

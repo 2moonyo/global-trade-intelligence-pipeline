@@ -85,7 +85,14 @@ def fetch_daily_for_date(
         raise ValueError("Provide at least one chokepoint id (for example 'chokepoint1').")
 
     quoted = ",".join([f"'{value}'" for value in chokepoint_ids])
-    where = f"portid IN ({quoted})"
+    day_start = datetime(one_day.year, one_day.month, one_day.day, tzinfo=timezone.utc)
+    day_end = day_start + timedelta(days=1)
+    day_start_ms = int(day_start.timestamp() * 1000)
+    day_end_ms = int(day_end.timestamp() * 1000)
+
+    # Apply day-level filtering in the ArcGIS query itself to avoid repeatedly
+    # paging across a mostly recent global record set and missing older history.
+    where = f"portid IN ({quoted}) AND date >= {day_start_ms} AND date < {day_end_ms}"
 
     params_base = {
         "where": where,

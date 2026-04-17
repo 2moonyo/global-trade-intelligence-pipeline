@@ -47,6 +47,10 @@ make infra-destroy
 
 For VM runtime setup and operations, see `ops/vm/README.md`.
 
+For out-of-schedule, on-demand batch set execution on the VM (including per-Comtrade-day scripts and non-Comtrade phase 1/2 scripts), see the "On-demand batch sets (outside schedule timers)" section in `ops/vm/README.md`.
+
+For the full local-edit -> git push -> VM pull -> docker rebuild -> manual run lifecycle, see the "End-to-end operator workflow: edit, push, pull, rebuild, run" section in `ops/vm/README.md`.
+
 Connection variable discovery (`VM_HOST`, `VM_USER`, `SSH_KEY_PATH`) is documented in the “How to find VM_HOST, VM_USER, and SSH_KEY_PATH” section in `ops/vm/README.md`.
 
 Two helper scripts are available under `scripts/`:

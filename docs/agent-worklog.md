@@ -200,6 +200,7 @@
 - 2026-04-17: python YAML parse of .github/workflows/bruin-validate.yml -> passed (workflow name and job keys loaded successfully).
 - 2026-04-17: docs/bruin-refactor-plan.md readback review -> passed.
 - 2026-04-17: git check-ignore -v confirmed docs/agent-worklog.md, docs/bruin-refactor-plan.md, and .github/workflows/bruin-validate.yml are now explicitly unignored and trackable.
+- 2026-04-17: VM runtime test note -> `bruin environments list` succeeded in orchestrator, but `bruin validate` failed with `no git repository found` because `.dockerignore` excludes `.git` from the container image; temporary VM test workaround is `git init` inside `/workspace` or use repo-native batch wrappers.
 
 ## Findings snapshot
 - Bruin currently validates but remains coarse-grained (wrapper-style assets).
@@ -237,6 +238,7 @@
 - The workflow intentionally uses placeholder `GCP_PROJECT_ID` / `GCP_LOCATION` values so Bruin config parsing remains CI-safe without introducing real credentials or deployment behavior.
 - T8 patch implemented: added `docs/bruin-refactor-plan.md` as the concise handoff document for the additive Bruin rollout, current pipeline inventory, remaining migration steps, and exit criteria.
 - Post-T8 repo hygiene fix: `.gitignore` now explicitly unignores the worklog, the Bruin refactor plan, and the Bruin validation workflow so these files can be tracked in Git.
+- VM runtime finding: the orchestrator container currently has Bruin CLI and repo source, but not `.git`, because `.dockerignore` excludes `.git`. This blocks `bruin validate`/`bruin run` inside the VM container until a temporary git root is created or the image strategy is adjusted.
 
 ## Historical log (append-only)
 
@@ -377,6 +379,36 @@
 - Summary: Added narrow `.gitignore` exceptions so `docs/agent-worklog.md`, `docs/bruin-refactor-plan.md`, and `.github/workflows/bruin-validate.yml` are no longer hidden by the repo’s broad markdown and `.github` ignore rules.
 - Files changed: .gitignore, docs/agent-worklog.md
 - Validation: `git check-ignore -v` confirmed all three files are explicitly unignored and `git status --short` now shows them as trackable.
+
+### 2026-04-17 - Entry 024 - VM Bruin runtime validation blocker noted
+- Status: done
+- Summary: While preparing VM proof-run instructions, confirmed that the orchestrator container can parse `.bruin.yml` but Bruin CLI fails on `validate`/`run` with `no git repository found` because `.dockerignore` excludes `.git` from the image build context. Timers were not active on the VM, so there was no scheduler interference during testing.
+- Files changed: docs/agent-worklog.md
+- Validation: user-reported VM command outputs matched the repo’s container build layout and ignore rules.
+
+### 2026-04-17 - Entry 025 - VM operator workaround documented for Bruin git-root requirement
+- Status: done
+- Summary: Added an operator-facing continuity note for VM proof runs: create a temporary git root inside the orchestrator container with `git init` under `/workspace`, then run `bruin validate` or `bruin run` from that directory. This preserves the current VM image strategy and avoids broader container build changes before the new stage-level pipelines are proven.
+- Files changed: docs/agent-worklog.md
+- Validation: workaround is consistent with the observed container filesystem layout and Bruin's git-root requirement.
+
+### 2026-04-17 - Entry 026 - VM Comtrade proof-run failure diagnosed as bronze-window/state drift
+- Status: done
+- Summary: Reviewed the failed `comtrade_bootstrap_day_1_silver` VM logs against the stage asset arguments and the Comtrade silver filter path. The failure is not explained by missing metadata: metadata stage succeeded, while silver failed because it loaded only `2015..2019` monthly-history bronze files and then applied a `202001..202612` filter window, leaving zero rows. The most likely cause is extract/state drift: `run-monthly-history` can skip already-completed registry job keys without re-verifying the expected bronze files exist, so a persisted registry can report day-1 extract success while the bronze directory currently holds only the older day-2 window.
+- Files changed: docs/agent-worklog.md
+- Validation: compared `comtrade_bootstrap_day_1_extract.py`, `comtrade_bootstrap_day_1_silver.py`, `ops/batch_plan.json`, and `ingest/comtrade/comtrade_silver.py` / `ingest/comtrade/comtrade_cli_annual_monthly_gap_chunked_by_reporter.py` control flow against the user-reported VM logs.
+
+### 2026-04-17 - Entry 027 - VM evidence confirmed extract skip-state mismatch
+- Status: done
+- Summary: User VM checks confirmed the mismatch directly. The bronze root currently contains only `year=2015..2019`, while the most recent day-1 extract manifest shows `planned_jobs=576`, `completed_jobs=0`, `skipped_jobs=576`, and `keys_used=[]`, meaning the stage made no API calls and relied entirely on existing registry state. This proves the immediate Comtrade proof-run blocker is stale or mismatched extraction state, not metadata availability.
+- Files changed: docs/agent-worklog.md
+- Validation: correlated VM `find` output for `data/bronze/comtrade/monthly_history/year=*` with `logs/comtrade/comtrade_extract_manifest.jsonl` entries from `2026-04-17T19:49:02Z`.
+
+### 2026-04-17 - Entry 028 - Generic run_pipeline python path parity fix completed
+- Status: done
+- Summary: User's isolated VM proof-run attempt failed in the orchestrator container with `ModuleNotFoundError: click`. Read-only review showed `scripts/run_pipeline.sh` routes named commands through the venv-aware `run_python` helper, but the generic `python ...` branch bypassed that helper and called plain `python`. Applied the smallest safe fix by routing the generic branch through `run_python` as well, preserving current wrapper behavior while making manual and Bruin-triggered generic Python invocations use the same interpreter-selection path.
+- Files changed: scripts/run_pipeline.sh, docs/agent-worklog.md
+- Validation: `bash -n scripts/run_pipeline.sh` passed; diff is limited to the one-line generic `python)` case change from `exec python` to `run_python`.
 
 ## Next safest step
 - Prove the additive PortWatch and Comtrade stage-level Bruin pipelines in real VM runs before changing any default execution path.

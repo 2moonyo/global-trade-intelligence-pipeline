@@ -346,7 +346,7 @@ case "${COMMAND}" in
     ;;
   python)
     shift
-    exec python "$@"
+    run_python "$@"
     ;;
   "" | help | --help | -h)
     usage

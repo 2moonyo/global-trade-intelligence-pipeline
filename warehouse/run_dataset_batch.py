@@ -130,6 +130,39 @@ def _normalize_command(command: tuple[str, ...]) -> list[str]:
     return list(command)
 
 
+def _resolve_start_step_order(
+    batch: BatchDefinition,
+    *,
+    start_at_task_name: str | None = None,
+    start_at_step_order: int | None = None,
+) -> int:
+    if start_at_task_name and start_at_step_order is not None:
+        raise ValueError("Use either --start-at-task or --start-at-step-order, not both")
+
+    if start_at_step_order is not None:
+        if start_at_step_order < 1 or start_at_step_order > len(batch.steps):
+            raise ValueError(
+                f"--start-at-step-order must be between 1 and {len(batch.steps)} for batch {batch.batch_id}"
+            )
+        return start_at_step_order
+
+    if start_at_task_name is None:
+        return 1
+
+    requested_task = start_at_task_name.strip()
+    if not requested_task:
+        raise ValueError("--start-at-task cannot be blank")
+
+    for step_order, step in enumerate(batch.steps, start=1):
+        if step.task_name == requested_task:
+            return step_order
+
+    available_tasks = ", ".join(step.task_name for step in batch.steps)
+    raise ValueError(
+        f"Task {requested_task!r} not found in batch {batch.batch_id}. Available tasks: {available_tasks}"
+    )
+
+
 def _detect_partition_key(value: str | None) -> str | None:
     if not value:
         return None
@@ -584,7 +617,24 @@ def execute_batch(
     trigger_type: str = "manual",
     bruin_pipeline_name: str | None = None,
     attempt_number: int = 1,
+    start_at_task_name: str | None = None,
+    start_at_step_order: int | None = None,
 ) -> dict[str, Any]:
+    resolved_start_step_order = _resolve_start_step_order(
+        batch,
+        start_at_task_name=start_at_task_name,
+        start_at_step_order=start_at_step_order,
+    )
+    selected_steps = batch.steps[resolved_start_step_order - 1 :]
+    restart_context = {
+        "requested_start_at_task_name": start_at_task_name,
+        "requested_start_at_step_order": start_at_step_order,
+        "resolved_start_task_name": batch.steps[resolved_start_step_order - 1].task_name,
+        "resolved_start_step_order": resolved_start_step_order,
+        "executed_step_count": len(selected_steps),
+        "skipped_step_count": resolved_start_step_order - 1,
+    }
+
     store = PostgresOpsStore.from_env()
     store.ensure_schema()
 
@@ -639,10 +689,12 @@ def execute_batch(
             "batch_metadata": batch.batch_metadata,
             "depends_on_batch_ids": list(batch.depends_on_batch_ids),
             "cleanup_local_on_success": batch.cleanup_local_on_success,
+            "restart_context": restart_context,
         },
         "metrics_json": {
             "description": batch.description,
             "step_count": len(batch.steps),
+            "restart_context": restart_context,
         },
     }
     store.insert_pipeline_run(pipeline_run_row)
@@ -660,11 +712,18 @@ def execute_batch(
         attempt_number,
         pipeline_run_id,
     )
+    if resolved_start_step_order > 1:
+        logger.info(
+            "Restart entrypoint active; starting at step %s/%s task=%s",
+            resolved_start_step_order,
+            len(batch.steps),
+            batch.steps[resolved_start_step_order - 1].task_name,
+        )
 
     completed_tasks: list[str] = []
     task_summaries: list[dict[str, Any]] = []
     try:
-        for step_order, step in enumerate(batch.steps, start=1):
+        for step_order, step in enumerate(selected_steps, start=resolved_start_step_order):
             task_run_id = build_run_id("task_run")
             task_started = _utc_now()
             manifest_path = step.resolved_manifest_path()
@@ -845,6 +904,7 @@ def execute_batch(
                     "completed_tasks": completed_tasks,
                     "task_summaries": task_summaries,
                     "cleaned_paths": cleaned_paths,
+                    "restart_context": restart_context,
                 },
             }
         )
@@ -877,6 +937,7 @@ def execute_batch(
                     "completed_tasks": completed_tasks,
                     "failed_task": exc.task_name,
                     "task_summaries": task_summaries,
+                    "restart_context": restart_context,
                 },
             }
         )
@@ -933,6 +994,17 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--trigger-type", default="manual", help="Trigger label stored in ops.pipeline_run.")
     parser.add_argument("--bruin-pipeline-name", default=None, help="Optional Bruin pipeline name for lineage.")
     parser.add_argument("--attempt-number", type=int, default=1, help="Attempt number for retry-aware queue runs.")
+    parser.add_argument(
+        "--start-at-task",
+        default=None,
+        help="Optional task_name within the batch to start from for manual restart.",
+    )
+    parser.add_argument(
+        "--start-at-step-order",
+        type=int,
+        default=None,
+        help="Optional 1-based step order within the batch to start from for manual restart.",
+    )
     return parser
 
 
@@ -952,6 +1024,8 @@ def main() -> None:
         trigger_type=args.trigger_type,
         bruin_pipeline_name=args.bruin_pipeline_name,
         attempt_number=args.attempt_number,
+        start_at_task_name=args.start_at_task,
+        start_at_step_order=args.start_at_step_order,
     )
     print(json.dumps(result, indent=2, ensure_ascii=False))
 

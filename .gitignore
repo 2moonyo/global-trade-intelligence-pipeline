@@ -18,6 +18,9 @@ check_db.py
 .github/*
 /.github
 .gitignore
+!.github/
+!.github/workflows/
+!.github/workflows/bruin-validate.yml
 /.codex/*
 /.codex
 /.vscode/*
@@ -30,6 +33,8 @@ deep*.md
 *.md
 !README.md
 !**/README.md
+!docs/agent-worklog.md
+!docs/bruin-refactor-plan.md
 
 # Secrets and backups
 .env.bak

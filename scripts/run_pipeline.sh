@@ -288,7 +288,7 @@ Commands:
   worldbank-energy-refresh-cloud
   all-cloud-dry-run
   all-refresh-cloud
-  dataset-batch <dataset> <batch_id> [runner arguments...]
+  dataset-batch <dataset> <batch_id> [--start-at-task <task>|--start-at-step-order <n>] [runner arguments...]
   batch-queue <schedule_lane> [runner arguments...]
   python <module-or-script arguments...>
 EOF

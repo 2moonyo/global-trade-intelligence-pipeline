@@ -8,6 +8,9 @@ usage() {
   cat <<'EOF'
 Usage: scripts/vm_batches/run_set.sh <set-name> [run_pipeline dataset-batch extra args...]
 
+Extra args are forwarded to the underlying dataset batch entrypoint.
+Examples: --start-at-task silver   or   --start-at-step-order 2
+
 Available set names:
   comtrade-day-1
   comtrade-day-2

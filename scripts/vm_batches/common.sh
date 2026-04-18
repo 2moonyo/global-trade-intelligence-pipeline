@@ -19,7 +19,9 @@ ensure_vm_repo() {
     echo "Repo directory does not exist: ${VM_REPO_DIR}" >&2
     exit 1
   fi
-  if [[ ! -f "${ENV_FILE}" ]]; then
+  # /etc/capstone is intentionally root-protected because pipeline.env contains
+  # secrets. Check it through sudo, then let sudo docker compose read it.
+  if ! sudo test -f "${ENV_FILE}"; then
     echo "Env file does not exist: ${ENV_FILE}" >&2
     exit 1
   fi

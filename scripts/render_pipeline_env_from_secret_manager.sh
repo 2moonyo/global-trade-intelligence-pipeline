@@ -16,6 +16,8 @@ Defaults:
 Options:
   --output-file PATH      Runtime env file to write
   --base-env-file PATH    Base env file to preserve non-secret settings from
+  --tfvars-file PATH      Render the base env from Terraform tfvars instead of a file
+  --env-profile PROFILE   Env profile for tfvars rendering (default: vm)
   --project PROJECT_ID    GCP project id for Secret Manager lookups
   --strict-secrets        Fail if any approved secret is missing
   --show-keys             Print the approved key names present after render
@@ -25,6 +27,8 @@ EOF
 
 OUTPUT_FILE="/etc/capstone/pipeline.env"
 BASE_ENV_FILE=""
+TFVARS_FILE=""
+ENV_PROFILE="vm"
 PROJECT_ID=""
 STRICT_SECRETS=0
 SHOW_KEYS=0
@@ -37,6 +41,14 @@ while [[ $# -gt 0 ]]; do
       ;;
     --base-env-file)
       BASE_ENV_FILE="$2"
+      shift 2
+      ;;
+    --tfvars-file)
+      TFVARS_FILE="$2"
+      shift 2
+      ;;
+    --env-profile)
+      ENV_PROFILE="$2"
       shift 2
       ;;
     --project)
@@ -63,21 +75,8 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-if [[ -z "${BASE_ENV_FILE}" ]]; then
-  if [[ -f "${OUTPUT_FILE}" ]]; then
-    BASE_ENV_FILE="${OUTPUT_FILE}"
-  else
-    BASE_ENV_FILE="ops/vm/pipeline.env.example"
-  fi
-fi
-
-if [[ ! -f "${BASE_ENV_FILE}" ]]; then
-  echo "Base env file not found: ${BASE_ENV_FILE}" >&2
-  exit 1
-fi
-
-if ! command -v gcloud >/dev/null 2>&1; then
-  echo "gcloud CLI is required but not found in PATH." >&2
+if [[ -n "${BASE_ENV_FILE}" && -n "${TFVARS_FILE}" ]]; then
+  echo "Use either --base-env-file or --tfvars-file, not both." >&2
   exit 1
 fi
 
@@ -119,10 +118,35 @@ cleanup() {
 }
 trap cleanup EXIT
 
-if [[ -r "${BASE_ENV_FILE}" ]]; then
-  cp "${BASE_ENV_FILE}" "${TMP_BASE}"
+BASE_DESCRIPTION=""
+
+if [[ -n "${TFVARS_FILE}" ]]; then
+  if [[ ! -f "${TFVARS_FILE}" ]]; then
+    echo "Terraform tfvars file not found: ${TFVARS_FILE}" >&2
+    exit 1
+  fi
+  python3 infra/terraform/render_dotenv.py --tfvars-file "${TFVARS_FILE}" --profile "${ENV_PROFILE}" > "${TMP_BASE}"
+  BASE_DESCRIPTION="${TFVARS_FILE} (${ENV_PROFILE} profile)"
 else
-  sudo cat "${BASE_ENV_FILE}" > "${TMP_BASE}"
+  if [[ -z "${BASE_ENV_FILE}" ]]; then
+    if [[ -f "${OUTPUT_FILE}" ]]; then
+      BASE_ENV_FILE="${OUTPUT_FILE}"
+    else
+      BASE_ENV_FILE="ops/vm/pipeline.env.example"
+    fi
+  fi
+
+  if [[ ! -f "${BASE_ENV_FILE}" ]] && ! sudo test -f "${BASE_ENV_FILE}" 2>/dev/null; then
+    echo "Base env file not found: ${BASE_ENV_FILE}" >&2
+    exit 1
+  fi
+
+  if [[ -r "${BASE_ENV_FILE}" ]]; then
+    cp "${BASE_ENV_FILE}" "${TMP_BASE}"
+  else
+    sudo cat "${BASE_ENV_FILE}" > "${TMP_BASE}"
+  fi
+  BASE_DESCRIPTION="${BASE_ENV_FILE}"
 fi
 
 read_env_value() {
@@ -152,6 +176,29 @@ print(value)
 PY
 }
 
+metadata_access_token() {
+  curl -fsS -H "Metadata-Flavor: Google" \
+    "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token" \
+    | python3 -c 'import json,sys; print(json.load(sys.stdin)["access_token"])'
+}
+
+fetch_secret_latest() {
+  local project_id="$1"
+  local secret_id="$2"
+
+  if command -v gcloud >/dev/null 2>&1; then
+    gcloud secrets versions access latest --secret="${secret_id}" --project="${project_id}" 2>/dev/null
+    return $?
+  fi
+
+  local token
+  local response
+  token="$(metadata_access_token)"
+  response="$(curl -fsS -H "Authorization: Bearer ${token}" \
+    "https://secretmanager.googleapis.com/v1/projects/${project_id}/secrets/${secret_id}/versions/latest:access")"
+  python3 -c 'import base64,json,sys; print(base64.b64decode(json.load(sys.stdin)["payload"]["data"]).decode("utf-8"))' <<<"${response}"
+}
+
 if [[ -z "${PROJECT_ID}" ]]; then
   PROJECT_ID="$(read_env_value "${TMP_BASE}" "GCP_PROJECT_ID")"
 fi
@@ -161,7 +208,9 @@ if [[ "${PROJECT_ID}" == "your-gcp-project-id" ]]; then
 fi
 
 if [[ -z "${PROJECT_ID}" ]]; then
-  PROJECT_ID="$(gcloud config get-value project 2>/dev/null || true)"
+  if command -v gcloud >/dev/null 2>&1; then
+    PROJECT_ID="$(gcloud config get-value project 2>/dev/null || true)"
+  fi
 fi
 
 if [[ -z "${PROJECT_ID}" ]]; then
@@ -169,14 +218,14 @@ if [[ -z "${PROJECT_ID}" ]]; then
   exit 1
 fi
 
-declare -a SECRET_PAIRS
-declare -a MISSING_KEYS
+SECRET_PAIRS=()
+MISSING_KEYS=()
 
-echo "Rendering ${OUTPUT_FILE} from base ${BASE_ENV_FILE} with Secret Manager project ${PROJECT_ID}"
+echo "Rendering ${OUTPUT_FILE} from base ${BASE_DESCRIPTION} with Secret Manager project ${PROJECT_ID}"
 for key in "${KEYS[@]}"; do
   secret_id="$(secret_id_for_key "${key}")"
   secret_value=""
-  if secret_value="$(gcloud secrets versions access latest --secret="${secret_id}" --project="${PROJECT_ID}" 2>/dev/null)" && [[ -n "${secret_value}" ]]; then
+  if secret_value="$(fetch_secret_latest "${PROJECT_ID}" "${secret_id}" 2>/dev/null)" && [[ -n "${secret_value}" ]]; then
     if [[ "${secret_value}" == *$'\n'* ]]; then
       echo "Secret ${secret_id} for ${key} contains a newline and cannot be written to an env file safely." >&2
       exit 1
@@ -196,9 +245,11 @@ fi
 
 printf '' > "${TMP_SECRETS}"
 chmod 600 "${TMP_SECRETS}"
-for pair in "${SECRET_PAIRS[@]}"; do
-  printf '%s\n' "${pair}" >> "${TMP_SECRETS}"
-done
+if [[ "${#SECRET_PAIRS[@]}" -gt 0 ]]; then
+  for pair in "${SECRET_PAIRS[@]}"; do
+    printf '%s\n' "${pair}" >> "${TMP_SECRETS}"
+  done
+fi
 
 python3 - "${TMP_BASE}" "${TMP_OUTPUT}" "${TMP_SECRETS}" "${KEYS[@]}" <<'PY'
 import pathlib
@@ -240,11 +291,17 @@ for key in ordered_keys:
 output_path.write_text("\n".join(rendered) + "\n", encoding="utf-8")
 PY
 
-if [[ -w "$(dirname "${OUTPUT_FILE}")" ]] && [[ ! -e "${OUTPUT_FILE}" || -w "${OUTPUT_FILE}" ]]; then
-  install -d -m 0750 "$(dirname "${OUTPUT_FILE}")"
+OUTPUT_DIR="$(dirname "${OUTPUT_FILE}")"
+
+if [[ -w "${OUTPUT_DIR}" ]] && [[ ! -e "${OUTPUT_FILE}" || -w "${OUTPUT_FILE}" ]]; then
+  if [[ ! -d "${OUTPUT_DIR}" ]]; then
+    install -d -m 0750 "${OUTPUT_DIR}"
+  fi
   install -m 600 "${TMP_OUTPUT}" "${OUTPUT_FILE}"
 else
-  sudo install -d -m 0750 "$(dirname "${OUTPUT_FILE}")"
+  if [[ ! -d "${OUTPUT_DIR}" ]]; then
+    sudo install -d -m 0750 "${OUTPUT_DIR}"
+  fi
   sudo install -m 600 "${TMP_OUTPUT}" "${OUTPUT_FILE}"
 fi
 

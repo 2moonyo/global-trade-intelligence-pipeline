@@ -16,6 +16,31 @@ This directory holds the operator-facing pieces for the keyless GCE VM runtime.
 
 The default VM profile uses `e2-standard-2`, keeps runtime state on `/var/lib/pipeline`, and provisions a 4 GB swap file on that persistent disk during first boot.
 
+## Fastest end-to-end path
+
+If you already filled:
+
+- `infra/terraform/terraform.tfvars.json` with your project/bucket/zone/IAM settings
+- `.env` with the approved API/Postgres secrets you want pushed to Secret Manager
+
+the fastest local-machine setup path is now:
+
+```bash
+make vm-bootstrap VM_BOOTSTRAP_ARGS="--show-resolved"
+```
+
+This helper will:
+
+- run Terraform apply for the current tfvars
+- sync approved secrets from `.env` into Secret Manager
+- resolve the VM external IP and Linux user automatically
+- copy the current local repo contents to the VM by default, so GitHub access on the VM is not required for first boot
+- upload the current tfvars file to the VM
+- generate `/etc/capstone/pipeline.env` from tfvars + Secret Manager
+- start `capstone-stack`
+
+If you prefer the older manual setup or need finer-grained control, keep using the step-by-step sections below.
+
 ## First-time VM setup
 
 1. Apply Terraform from your laptop.
@@ -37,7 +62,8 @@ Approved secret values can then be refreshed from Secret Manager instead of bein
 cd /var/lib/pipeline/capstone
 ./scripts/render_pipeline_env_from_secret_manager.sh \
   --output-file /etc/capstone/pipeline.env \
-  --base-env-file /etc/capstone/pipeline.env \
+  --tfvars-file /var/lib/pipeline/capstone/infra/terraform/terraform.tfvars.json \
+  --env-profile vm \
   --show-keys
 ```
 
@@ -122,6 +148,26 @@ git pull --ff-only
 
 Use these scripts from your laptop to operate a VM runtime consistently.
 
+### 0) One-command bootstrap
+
+`scripts/vm_bootstrap.sh` is the easiest first-run path from a laptop.
+
+Default behavior:
+
+- transfer method is `copy`, not `git`
+- VM host/user are auto-resolved from Terraform + `gcloud compute ssh`
+- `/etc/capstone/pipeline.env` is rendered from tfvars + Secret Manager on the VM
+
+```bash
+bash scripts/vm_bootstrap.sh --show-resolved
+```
+
+If you specifically want the older git-based sync path instead of a local repo copy:
+
+```bash
+bash scripts/vm_bootstrap.sh --transfer git --repo-url git@github.com:OWNER/REPO.git --branch fresh-run --show-resolved
+```
+
 ### 1) Git sync only
 
 `scripts/vm_repo_sync.sh` only manages repository initialization/sync on the VM. It does not modify API keys.
@@ -154,6 +200,8 @@ If `--commit` is provided, the script checks out that commit in detached HEAD mo
 ### 2) API key insert/update
 
 `scripts/vm_api_insert.sh` updates runtime keys in `/etc/capstone/pipeline.env` when setup changes.
+
+For most fresh-account setups, prefer `scripts/sync_env_secrets_to_secret_manager.sh` locally plus `scripts/render_pipeline_env_from_secret_manager.sh` on the VM instead of manually editing API keys into the runtime env file.
 
 Interactive mode:
 

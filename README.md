@@ -15,6 +15,191 @@ The repo now also includes first-pass cloud paths for the PortWatch, Comtrade, B
 9. load `raw.dim_event`, `raw.bridge_event_month_chokepoint_core`, and `raw.bridge_event_month_maritime_region` into BigQuery
 10. point dbt at either DuckDB or BigQuery via `--target`
 
+## First-Time GCP VM Setup
+
+Use this path for a fresh GCP project, or for a deliberate destroy/recreate test in a disposable project.
+
+The setup has two phases:
+
+1. local laptop bootstrap creates cloud infrastructure, pushes approved secrets to Secret Manager, copies the repo to the VM, renders `/etc/capstone/pipeline.env`, and starts Docker Compose
+2. VM bootstrap runs the full data pipeline in dependency order
+
+### 1. Prepare GCP auth and APIs
+
+Use an isolated `gcloud` configuration so you do not accidentally deploy to the old project:
+
+```bash
+gcloud auth login
+gcloud config configurations create capstone-new-account
+gcloud config configurations activate capstone-new-account
+gcloud config set account YOUR_EMAIL
+gcloud config set project NEW_PROJECT_ID
+gcloud auth application-default login
+gcloud auth application-default set-quota-project NEW_PROJECT_ID
+```
+
+Enable the APIs Terraform and the VM runtime need:
+
+```bash
+gcloud services enable \
+  serviceusage.googleapis.com \
+  compute.googleapis.com \
+  iam.googleapis.com \
+  secretmanager.googleapis.com \
+  storage.googleapis.com \
+  bigquery.googleapis.com
+```
+
+### 2. Fill local config and secrets
+
+Create and edit Terraform inputs:
+
+```bash
+make tfvars-init
+```
+
+At minimum, set:
+
+- `project_id`
+- `gcp_location`
+- `primary_region`
+- `primary_zone`
+- `gcs_bucket_name`
+- IAM member lists for your user/service accounts
+
+For a Europe-first fresh VM, use:
+
+```json
+{
+  "gcp_location": "europe-west1",
+  "primary_region": "europe-west1",
+  "primary_zone": "europe-west1-b",
+  "legacy_compute_vm_enabled": false,
+  "primary_compute_vm_enabled": true,
+  "primary_boot_restore_from_snapshot": false,
+  "primary_data_restore_from_snapshot": false,
+  "recovery_boot_disk_enabled": false,
+  "recovery_data_disk_enabled": false,
+  "recovery_vm_enabled": false
+}
+```
+
+Create `.env` and add the approved secret values that will seed Secret Manager:
+
+```bash
+./scripts/bootstrap_local.sh
+```
+
+Fill these values in `.env`:
+
+- `FRED_API_KEY`
+- `COMTRADE_API_KEY_DATA`
+- `COMTRADE_API_KEY_DATA_A`
+- `COMTRADE_API_KEY_DATA_B`
+- `POSTGRES_USER`
+- `POSTGRES_PASSWORD`
+- `POSTGRES_DB`
+- `POSTGRES_SCHEMA`
+
+The VM does not need a local JSON key. Keep `GOOGLE_APPLICATION_CREDENTIALS=` empty for the VM path. GCP auth on the VM uses the attached service account through metadata ADC, while API/Postgres secrets are pulled from Secret Manager into `/etc/capstone/pipeline.env`.
+
+### 3. Create the VM and runtime stack
+
+From your laptop:
+
+```bash
+make vm-bootstrap VM_BOOTSTRAP_ARGS="--reset-known-host --show-resolved"
+```
+
+This command:
+
+- applies Terraform
+- syncs approved `.env` secrets to Secret Manager
+- resolves the VM external IP and Linux user
+- copies the current repo to `/var/lib/pipeline/capstone`
+- renders `/etc/capstone/pipeline.env` from Terraform config plus Secret Manager
+- starts/restarts `capstone-stack`
+
+The `--reset-known-host` flag is useful for destroy/recreate testing because recreated VMs can reuse an IP with a new SSH host key.
+
+### 4. Run the full first-time pipeline on the VM
+
+SSH to the VM:
+
+```bash
+gcloud compute ssh capstone-vm-eu --zone europe-west1-b
+```
+
+Then run the full bootstrap sequence:
+
+```bash
+cd /var/lib/pipeline/capstone
+./scripts/vm_batches/run_full_bootstrap.sh
+```
+
+That script runs, in order:
+
+- non-Comtrade phase 1
+- non-Comtrade phase 2
+- Comtrade day 1 through day 6
+- World Bank energy after Comtrade day 6 has completed
+
+If a batch fails, resume the failed set instead of restarting everything:
+
+```bash
+cd /var/lib/pipeline/capstone
+./scripts/vm_batches/run_set.sh comtrade-day-2 --start-at-task silver
+```
+
+If you need to refresh VM secrets from Secret Manager before a rerun:
+
+```bash
+cd /var/lib/pipeline/capstone
+SYNC_SECRETS_BEFORE_RUN=true SECRET_PROJECT_ID=NEW_PROJECT_ID \
+./scripts/vm_batches/run_set.sh comtrade-day-2
+```
+
+### 5. Enable timers only after the first bootstrap succeeds
+
+```bash
+sudo systemctl enable --now capstone-schedule-lane-incremental_daily.timer
+sudo systemctl enable --now capstone-schedule-lane-weekly_refresh.timer
+sudo systemctl enable --now capstone-schedule-lane-monthly_refresh.timer
+sudo systemctl enable --now capstone-schedule-lane-yearly_refresh.timer
+systemctl list-timers 'capstone-schedule-lane-*'
+```
+
+### Destroy/recreate smoke test
+
+Only use full destroy in a disposable project. It can delete Terraform-managed buckets, BigQuery datasets, secrets, VM disks, and runtime state.
+
+First set this in `infra/terraform/terraform.tfvars.json`:
+
+```json
+"allow_force_destroy": true
+```
+
+Then run:
+
+```bash
+make infra-destroy
+make vm-bootstrap VM_BOOTSTRAP_ARGS="--reset-known-host --show-resolved"
+```
+
+SSH to the new VM and run:
+
+```bash
+cd /var/lib/pipeline/capstone
+./scripts/vm_batches/run_full_bootstrap.sh
+```
+
+For a VM-only reset that keeps bucket, datasets, and Secret Manager resources, prefer:
+
+```bash
+make infra-destroy-vm
+make vm-bootstrap VM_BOOTSTRAP_ARGS="--reset-known-host --show-resolved"
+```
+
 ## Terraform-First Quick Start
 
 Once you have filled in `infra/terraform/terraform.tfvars.json`, the intended flow is:

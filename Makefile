@@ -7,7 +7,7 @@ TFVARS_EXAMPLE := $(TF_DIR)/terraform.tfvars.json.example
 
 .DEFAULT_GOAL := help
 
-.PHONY: help tfvars-init check-tfvars deps-sync gcp-auth infra-init infra-plan infra-apply infra-destroy infra-destroy-vm vm-status vm-start vm-stop vm-delete-gcloud vm-delete-disk-gcloud vm-destroy-gcloud env-file env-print cloud-bootstrap portwatch-extract portwatch-silver portwatch-cloud-dry-run portwatch-cloud portwatch-cloud-dry-run-with-bronze portwatch-cloud-with-bronze portwatch-refresh-cloud comtrade-silver comtrade-routing comtrade-cloud-dry-run comtrade-cloud comtrade-cloud-dry-run-with-bronze comtrade-cloud-with-bronze comtrade-refresh-cloud brent-extract brent-silver brent-cloud-dry-run brent-cloud brent-cloud-dry-run-with-bronze brent-cloud-with-bronze brent-refresh-cloud fx-extract fx-silver fx-cloud-dry-run fx-cloud fx-cloud-dry-run-with-bronze fx-cloud-with-bronze fx-refresh-cloud events-silver events-cloud-dry-run events-cloud events-refresh-cloud dbt-bigquery-debug dbt-bigquery-build dbt-bigquery-docs-generate dbt-bigquery-docs-serve dbt-bigquery-docs-static
+.PHONY: help tfvars-init check-tfvars deps-sync gcp-auth infra-init infra-plan infra-apply infra-destroy infra-destroy-vm vm-status vm-start vm-stop vm-delete-gcloud vm-delete-disk-gcloud vm-destroy-gcloud vm-bootstrap vm-env-print env-file env-print cloud-bootstrap portwatch-extract portwatch-silver portwatch-cloud-dry-run portwatch-cloud portwatch-cloud-dry-run-with-bronze portwatch-cloud-with-bronze portwatch-refresh-cloud comtrade-silver comtrade-routing comtrade-cloud-dry-run comtrade-cloud comtrade-cloud-dry-run-with-bronze comtrade-cloud-with-bronze comtrade-refresh-cloud brent-extract brent-silver brent-cloud-dry-run brent-cloud brent-cloud-dry-run-with-bronze brent-cloud-with-bronze brent-refresh-cloud fx-extract fx-silver fx-cloud-dry-run fx-cloud fx-cloud-dry-run-with-bronze fx-cloud-with-bronze fx-refresh-cloud events-silver events-cloud-dry-run events-cloud events-refresh-cloud dbt-bigquery-debug dbt-bigquery-build dbt-bigquery-docs-generate dbt-bigquery-docs-serve dbt-bigquery-docs-static
 .PHONY: portwatch-gcs-dry-run portwatch-gcs portwatch-gcs-dry-run-with-bronze portwatch-gcs-with-bronze
 .PHONY: comtrade-gcs-dry-run comtrade-gcs comtrade-gcs-dry-run-with-bronze comtrade-gcs-with-bronze
 .PHONY: brent-gcs-dry-run brent-gcs brent-gcs-dry-run-with-bronze brent-gcs-with-bronze
@@ -19,6 +19,8 @@ help:
 	@printf "%s\n" \
 		"make tfvars-init             Copy the Terraform vars example if needed." \
 		"make cloud-bootstrap         ADC auth if needed, terraform init/apply, and render .env." \
+		"make vm-bootstrap           Apply infra, sync secrets, resolve VM host/user, copy repo to VM, render VM env, and start the stack." \
+		"make vm-env-print           Print the non-secret VM runtime env derived from terraform tfvars." \
 		"make vm-status               Show the configured VM instance and persistent disk." \
 		"make vm-start                Start the paid VM runtime with gcloud." \
 		"make vm-stop                 Stop the paid VM runtime with gcloud." \
@@ -150,6 +152,12 @@ vm-delete-disk-gcloud: check-tfvars
 
 vm-destroy-gcloud: check-tfvars
 	scripts/vm_runtime_ctl.sh destroy-compute-gcloud
+
+vm-bootstrap: check-tfvars
+	bash scripts/vm_bootstrap.sh $(VM_BOOTSTRAP_ARGS)
+
+vm-env-print: check-tfvars
+	python $(TF_DIR)/render_dotenv.py --tfvars-file $(TFVARS) --profile vm
 
 env-file: check-tfvars
 	python $(TF_DIR)/render_dotenv.py > .env

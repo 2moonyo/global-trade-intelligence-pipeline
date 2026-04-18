@@ -239,6 +239,25 @@
 - Bruin dataset_batch asset now supports optional START_AT_TASK / START_AT_STEP_ORDER passthrough so the same restart semantics remain available for Bruin-triggered runs.
 - T4 patch implemented: `.bruin.yml` now keeps `default` as the selected environment and adds a minimal `production` environment, with both environments exposing the same env-var-backed `google_cloud_platform` connection name (`gcp-default`).
 
+## 2026-04-18 VM bootstrap hardening
+- Status: done
+- Objective: Make fresh-project bootstrap reliable for new users by handling the race between laptop-side repo/env setup and the VM metadata startup script installing systemd units.
+- Files changed:
+  - `scripts/vm_bootstrap.sh`
+  - `scripts/vm_repo_copy.sh`
+- Changes:
+  - Added a remote wait loop in `scripts/vm_bootstrap.sh` that waits up to 10 minutes for `/etc/systemd/system/capstone-stack.service` to exist before trying to start the stack.
+  - Added a defensive `systemctl daemon-reload` before `systemctl start capstone-stack`.
+  - Added targeted diagnostics on timeout: `systemctl status google-startup-scripts.service` and recent `journalctl` output for that unit.
+  - Added `COPY_EXTENDED_ATTRIBUTES_DISABLE=1` alongside `COPYFILE_DISABLE=1` in `scripts/vm_repo_copy.sh` to further reduce noisy macOS tar metadata during repo copy.
+- Validation:
+  - `bash -n scripts/vm_bootstrap.sh` -> passed
+  - `bash -n scripts/vm_repo_copy.sh` -> passed
+  - `bash scripts/vm_bootstrap.sh --help` -> passed
+  - `bash scripts/vm_repo_copy.sh --help` -> passed
+- Notes:
+  - The `LIBARCHIVE.xattr.com.apple.*` tar messages are cosmetic metadata warnings from macOS-originated archives; the real bootstrap blocker was the missing systemd unit race.
+
 ## Session update (2026-04-18)
 
 ### done
@@ -300,6 +319,57 @@
 
 ### next recommended step
 - Walk through `docs/new-gcp-account-vm-bootstrap.md` once with your actual new project id, chosen region/location, and branch name, then execute it in order without enabling timers until the full bootstrap completes.
+- New objective (2026-04-18): reduce VM setup friction for future operators by auto-generating the full VM runtime env from tfvars + Secret Manager and adding a single bootstrap path that can resolve VM host/user automatically.
+- New constraints (2026-04-18):
+  - Preserve VM-first runtime and keyless metadata auth.
+  - Preserve Secret Manager as the secret source of truth.
+  - Prefer additive helpers over replacing working scripts.
+  - Avoid making GitHub access from the VM a first-run requirement when local-to-VM repo transfer can unblock setup.
+
+### setup simplification implementation (2026-04-18)
+- Status: done
+- Summary:
+  1. Extended `infra/terraform/render_dotenv.py` with a `vm` profile so it can emit the non-secret VM runtime contract from tfvars, not just the base cloud env.
+  2. Extended `scripts/render_pipeline_env_from_secret_manager.sh` so it can build `/etc/capstone/pipeline.env` directly from tfvars plus Secret Manager, and so it works both locally and on the VM by using `gcloud` when available or metadata-server auth when running on the VM.
+  3. Added `scripts/vm_repo_copy.sh` to copy the current local repo contents to the VM over SSH without requiring GitHub access on the VM for first boot.
+  4. Added `scripts/vm_bootstrap.sh` as the new one-command local bootstrap path: terraform apply, secret sync, VM host/user resolution, repo transfer, tfvars upload, VM env render, and stack start.
+  5. Added `make vm-bootstrap` and `make vm-env-print`, and updated the VM/operator docs plus the new-account runbook to advertise the simpler path.
+
+### files changed for setup simplification
+- Makefile
+- infra/terraform/render_dotenv.py
+- scripts/render_pipeline_env_from_secret_manager.sh
+- scripts/sync_env_secrets_to_secret_manager.sh
+- scripts/vm_repo_sync.sh
+- scripts/vm_repo_copy.sh
+- scripts/vm_bootstrap.sh
+- ops/vm/README.md
+- docs/new-gcp-account-vm-bootstrap.md
+- docs/agent-worklog.md
+
+### validation log for setup simplification
+- `bash -n scripts/render_pipeline_env_from_secret_manager.sh scripts/vm_repo_copy.sh scripts/vm_bootstrap.sh scripts/vm_repo_sync.sh scripts/sync_env_secrets_to_secret_manager.sh` -> passed.
+- `python3 -m py_compile infra/terraform/render_dotenv.py` -> passed.
+- `bash scripts/vm_bootstrap.sh --help` -> passed.
+- `bash scripts/vm_repo_copy.sh --help` -> passed.
+- `bash scripts/render_pipeline_env_from_secret_manager.sh --help` -> passed.
+- `make vm-env-print` -> passed; printed the expected non-secret VM runtime env derived from current tfvars.
+- Real merge smoke test: `scripts/render_pipeline_env_from_secret_manager.sh --tfvars-file infra/terraform/terraform.tfvars.json --env-profile vm --output-file /tmp/... --project fullcap-911` -> passed structurally after Bash portability fixes; current local project state reported the expected env base plus `missing ... unavailable` for Secret Manager lookups, indicating project/auth/secret presence still needs to be correct for real secret hydration.
+
+### next recommended step
+- Run `make vm-bootstrap VM_BOOTSTRAP_ARGS="--show-resolved"` against the new account once the required secrets exist in Secret Manager for that project, then confirm the generated `/etc/capstone/pipeline.env` on the VM and proceed with the initial bootstrap batches.
+
+### 2026-04-18 - Entry 053 - vm_bootstrap empty Terraform arg expansion fixed for macOS Bash
+- Status: done
+- Summary: User hit `scripts/vm_bootstrap.sh: line 260: TERRAFORM_VAR_ARGS[@]: unbound variable` during `make vm-bootstrap`. Root cause was another Bash 3.2 + `set -u` edge case on macOS: expanding an empty optional array directly in the `terraform apply` invocation. Updated the script to call `terraform apply` without array expansion when no extra `-var-file` args are present.
+- Files changed: scripts/vm_bootstrap.sh, docs/agent-worklog.md
+- Validation: `bash -n scripts/vm_bootstrap.sh` -> passed; `bash scripts/vm_bootstrap.sh --help` -> passed.
+
+### 2026-04-18 - Entry 054 - vm_repo_copy permission handling fixed for root-owned repo path
+- Status: done
+- Summary: User hit `tar: Cannot mkdir: Permission denied` while `make vm-bootstrap` was copying the repo to `/var/lib/pipeline/capstone`. Root cause was the VM startup path creating the repo root as a root-owned directory, while `scripts/vm_repo_copy.sh` tried to extract the archive as the normal SSH user. Updated the copy helper to prepare the repo directory with `sudo install -d` and `sudo chown`, then extract as the target user. Also disabled macOS AppleDouble sidecar copying by setting `COPYFILE_DISABLE=1` and excluding `._*`.
+- Files changed: scripts/vm_repo_copy.sh, docs/agent-worklog.md
+- Validation: `bash -n scripts/vm_repo_copy.sh scripts/vm_bootstrap.sh` -> passed.
 - The `.bruin.yml` scaffold intentionally relies on `use_application_default_credentials: true` plus existing `GCP_PROJECT_ID` / `GCP_LOCATION` env vars, preserving local ADC and VM metadata auth instead of introducing a second secret source.
 - Post-change Bruin validation outcomes are unchanged in shape: pipelines parse successfully and only emit the pre-existing local used-tables/sql-parser warning.
 - T5 patch implemented: added an additive `portwatch_bootstrap_phase_1` Bruin pipeline that exposes the existing batch-plan steps as five explicit Python assets with linear `depends` edges.
@@ -703,3 +773,34 @@
 - Last completed validation: the shared state helper now uses append-only rows plus latest-row selection, which should benefit Brent, FX, PortWatch, Comtrade, Events, and World Bank energy uniformly.
 - Last operational evidence: the latest Brent failure occurred after the raw table delete/load stage and during the load-state table update, which means the prior date-cast fixes were effective enough to expose this second-order rerun issue.
 - Resume point: pull the latest repo state on the VM, restart the stack, rerun Brent, and only then continue the sequential Bruin sweep.
+
+### 2026-04-18 - Entry 053 - VM bootstrap heredoc counter escaping fix
+- Status: done
+- Summary: Fresh-project bootstrap surfaced `scripts/vm_bootstrap.sh: line 332: waited: unbound variable` before the SSH remote script ran. Root cause was one remaining arithmetic expansion inside the unquoted SSH heredoc (`waited=$((...))`) being evaluated by the local shell under `set -u` instead of on the VM. Escaped that assignment so the retry counter now runs remotely as intended.
+- Files changed: scripts/vm_bootstrap.sh, docs/agent-worklog.md
+- Validation: `bash -n scripts/vm_bootstrap.sh` -> passed; `bash scripts/vm_bootstrap.sh --help` -> passed.
+
+### 2026-04-18 - Entry 054 - VM bootstrap stale known_hosts opt-in reset
+- Status: done
+- Summary: Fresh-project VM recreation produced `REMOTE HOST IDENTIFICATION HAS CHANGED` during `make vm-bootstrap` because the laptop still had an old SSH host key cached for the recycled VM IP. Added an opt-in `--reset-known-host` flag to `scripts/vm_bootstrap.sh` that removes stale `known_hosts` entries for the resolved VM host before the first SSH/SCP hop.
+- Files changed: scripts/vm_bootstrap.sh, docs/agent-worklog.md
+- Validation: `bash -n scripts/vm_bootstrap.sh` -> passed; `bash scripts/vm_bootstrap.sh --help` -> passed.
+
+### 2026-04-18 - Entry 055 - VM batch wrappers handle root-protected pipeline.env
+- Status: done
+- Summary: After successful VM bootstrap, first batch wrapper calls emitted `Env file does not exist: /etc/capstone/pipeline.env` even though `sudo docker compose --env-file /etc/capstone/pipeline.env` worked. Root cause: `/etc/capstone` and `pipeline.env` are intentionally root-protected, so the normal VM user could not stat the env file before the wrapper delegated to `sudo docker compose`. Updated the VM batch common helper to check the env file with `sudo test -f`. Also hardened `render_pipeline_env_from_secret_manager.sh` so a protected `--base-env-file /etc/capstone/pipeline.env` is recognized before falling back to `sudo cat`.
+- Files changed: scripts/vm_batches/common.sh, scripts/render_pipeline_env_from_secret_manager.sh, docs/agent-worklog.md
+- Validation: `bash -n scripts/vm_batches/common.sh` -> passed; `bash -n scripts/render_pipeline_env_from_secret_manager.sh` -> passed.
+
+### 2026-04-18 - Entry 056 - Repo copy no longer clobbers Postgres data ownership
+- Status: done
+- Summary: Fresh VM batch startup failed with `FATAL: could not open file "global/pg_filenode.map": Permission denied` from Postgres after rerunning bootstrap/copy. Root cause is likely the local repo copy helper recursively chowning the entire VM repo directory, including `runtime/postgres`, after the Postgres container had initialized its data directory under the container's postgres UID. Updated `scripts/vm_repo_copy.sh` to chown only the repo root directory, not the full tree, preserving runtime data ownership. Also changed `scripts/vm_bootstrap.sh` to restart `capstone-stack` after syncing so copied code changes rebuild/reload containers rather than no-oping on an already-active oneshot service.
+- Files changed: scripts/vm_repo_copy.sh, scripts/vm_bootstrap.sh, docs/agent-worklog.md
+- Validation: `bash -n scripts/vm_repo_copy.sh` -> passed; `bash -n scripts/vm_bootstrap.sh` -> passed; helper `--help` checks passed for both scripts.
+- Operational repair needed on affected VMs: stop the stack, chown `/var/lib/pipeline/capstone/runtime/postgres` back to the postgres container UID/GID, then restart the stack.
+
+### 2026-04-18 - Entry 057 - First-time VM setup documented and full bootstrap runner added
+- Status: done
+- Summary: User asked whether a destroy/recreate should now allow the setup scripts to run cleanly and requested a step-by-step first-time setup in the README. Added `scripts/vm_batches/run_full_bootstrap.sh` as a VM-side orchestration wrapper that runs non-Comtrade phase 1/2, Comtrade day 1 through day 6, and then the dependent World Bank energy lane in order. Updated the root README with a first-time GCP VM setup section covering GCP auth/API enablement, tfvars, `.env` secret seeding, `make vm-bootstrap --reset-known-host`, full VM pipeline execution, timer enablement, and destroy/recreate smoke testing.
+- Files changed: README.md, scripts/vm_batches/run_full_bootstrap.sh, docs/agent-worklog.md
+- Validation: `bash -n scripts/vm_batches/run_full_bootstrap.sh` -> passed; file mode is executable (`-rwxr-xr-x`).

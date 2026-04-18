@@ -95,17 +95,23 @@ if ! command -v gcloud >/dev/null 2>&1; then
   exit 1
 fi
 
-declare -A SECRET_BY_KEY=(
-  [FRED_API_KEY]="capstone-fred-api-key"
-  [COMTRADE_API_KEY]="capstone-comtrade-api-key"
-  [COMTRADE_API_KEY_DATA]="capstone-comtrade-api-key-data"
-  [COMTRADE_API_KEY_DATA_A]="capstone-comtrade-api-key-data-a"
-  [COMTRADE_API_KEY_DATA_B]="capstone-comtrade-api-key-data-b"
-  [POSTGRES_USER]="capstone-postgres-user"
-  [POSTGRES_PASSWORD]="capstone-postgres-password"
-  [POSTGRES_DB]="capstone-postgres-db"
-  [POSTGRES_SCHEMA]="capstone-postgres-schema"
-)
+secret_id_for_key() {
+  case "$1" in
+    FRED_API_KEY) echo "capstone-fred-api-key" ;;
+    COMTRADE_API_KEY) echo "capstone-comtrade-api-key" ;;
+    COMTRADE_API_KEY_DATA) echo "capstone-comtrade-api-key-data" ;;
+    COMTRADE_API_KEY_DATA_A) echo "capstone-comtrade-api-key-data-a" ;;
+    COMTRADE_API_KEY_DATA_B) echo "capstone-comtrade-api-key-data-b" ;;
+    POSTGRES_USER) echo "capstone-postgres-user" ;;
+    POSTGRES_PASSWORD) echo "capstone-postgres-password" ;;
+    POSTGRES_DB) echo "capstone-postgres-db" ;;
+    POSTGRES_SCHEMA) echo "capstone-postgres-schema" ;;
+    *)
+      echo "Unsupported managed key: $1" >&2
+      return 1
+      ;;
+  esac
+}
 
 KEYS=(
   FRED_API_KEY
@@ -128,7 +134,7 @@ for key in "${KEYS[@]}"; do
     continue
   fi
 
-  secret_id="${SECRET_BY_KEY[$key]}"
+  secret_id="$(secret_id_for_key "$key")"
 
   if ! gcloud secrets describe "$secret_id" --project "$PROJECT_ID" >/dev/null 2>&1; then
     gcloud secrets create "$secret_id" \

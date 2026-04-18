@@ -625,3 +625,19 @@
 - Last completed validation: events and World Bank energy do not share this failure mode; PortWatch and Comtrade were patched proactively, while Brent and FX were patched reactively from live VM evidence.
 - Last operational evidence: all observed failures still occur before `load_table_from_uri(...)` and therefore do not imply a shift away from the intended GCS -> BigQuery architecture.
 - Resume point: pull the latest repo state on the VM, restart the stack, rerun the remaining Bruin proof runs from the updated checkout, and only then assess whether any further raw-table schema cleanup is still needed.
+
+### 2026-04-18 - Entry 052 - BigQuery load-state helper switched to append-only semantics
+- Status: done
+- Summary: User hit a new Brent Bruin failure after the delete-predicate fixes were live. This traceback no longer came from the raw data table delete step; it failed inside `warehouse/bigquery_load_state.py` when `replace_load_state_rows(...)` attempted to `DELETE` previously inserted rows from `raw.brent_load_state`. BigQuery rejected that mutation because the rows were still in the streaming buffer (`UPDATE or DELETE statement ... would affect rows in the streaming buffer, which is not supported`). This revealed a broader rerun reliability issue in the shared load-state helper: it used row-by-row streaming inserts (`insert_rows_json`) but still expected immediate `DELETE` support on the same table. The smallest safe fix was to make the state table append-only and teach reads to select the latest row per `entity_key` instead of trying to mutate recent rows in place.
+- Files inspected: warehouse/bigquery_load_state.py, warehouse/load_brent_to_bigquery.py, docs/agent-worklog.md
+- Files changed: warehouse/bigquery_load_state.py, docs/agent-worklog.md
+- Validation: `fetch_load_state_checksums(...)` now selects the newest state row per `entity_key` using `row_number() over (partition by entity_key order by loaded_at desc, run_id desc)`; `replace_load_state_rows(...)` no longer issues `DELETE` statements and now appends new state snapshots only. This removes the BigQuery streaming-buffer mutation hazard while preserving checksum-based skip semantics for subsequent runs.
+
+## Next safest step
+- Sync the updated shared load-state helper to the VM, restart the stack, rerun Brent first to confirm the shared state-table fix, then continue with FX and the remaining Bruin proof runs from the updated checkout.
+
+## Handoff note
+- Current task: the next blocker has shifted from raw-table delete predicates to the shared BigQuery load-state mutation strategy.
+- Last completed validation: the shared state helper now uses append-only rows plus latest-row selection, which should benefit Brent, FX, PortWatch, Comtrade, Events, and World Bank energy uniformly.
+- Last operational evidence: the latest Brent failure occurred after the raw table delete/load stage and during the load-state table update, which means the prior date-cast fixes were effective enough to expose this second-order rerun issue.
+- Resume point: pull the latest repo state on the VM, restart the stack, rerun Brent, and only then continue the sequential Bruin sweep.

@@ -67,9 +67,19 @@ def fetch_load_state_checksums(
 
     query = f"""
     select entity_key, source_checksum
-    from `{state_table_id}`
-    where entity_type = @entity_type
-      and entity_key in unnest(@entity_keys)
+    from (
+        select
+            entity_key,
+            source_checksum,
+            row_number() over (
+                partition by entity_key
+                order by loaded_at desc, run_id desc
+            ) as row_num
+        from `{state_table_id}`
+        where entity_type = @entity_type
+          and entity_key in unnest(@entity_keys)
+    )
+    where row_num = 1
     """
     job = client.query(
         query,
@@ -96,29 +106,6 @@ def replace_load_state_rows(
 ) -> None:
     if not rows:
         return
-
-    rows_by_type: dict[str, list[LoadStateRecord]] = {}
-    for row in rows:
-        rows_by_type.setdefault(row.entity_type, []).append(row)
-
-    for entity_type, grouped_rows in rows_by_type.items():
-        entity_keys = sorted({row.entity_key for row in grouped_rows})
-        delete_sql = f"""
-        delete from `{state_table_id}`
-        where entity_type = @entity_type
-          and entity_key in unnest(@entity_keys)
-        """
-        delete_job = client.query(
-            delete_sql,
-            location=location,
-            job_config=bigquery.QueryJobConfig(
-                query_parameters=[
-                    bigquery.ScalarQueryParameter("entity_type", "STRING", entity_type),
-                    bigquery.ArrayQueryParameter("entity_keys", "STRING", entity_keys),
-                ]
-            ),
-        )
-        delete_job.result()
 
     loaded_at = datetime.now(timezone.utc).isoformat()
     payload = [

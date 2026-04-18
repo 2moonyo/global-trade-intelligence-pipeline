@@ -476,6 +476,12 @@
 - Files changed: docs/agent-worklog.md
 - Validation: compared user-reported VM `stat` failures against local `git status --short`, which still shows `scripts/render_pipeline_env_from_secret_manager.sh` and `bruin/pipelines/comtrade_bootstrap_day_2/` as untracked local additions.
 
+### 2026-04-18 - Entry 038 - Secret renderer safety tightened to avoid process-arg leakage
+- Status: done
+- Summary: During follow-up review of the new Secret Manager renderer, found that the first implementation no longer echoed secret values but still passed `KEY=value` pairs to the embedded Python merge step as command-line arguments. Tightened the implementation by writing those pairs to a temporary `0600` file and passing only file paths to Python, so the renderer now logs only key names / secret ids and does not expose secret values through shell tracing or `ps`-style process argument inspection.
+- Files changed: scripts/render_pipeline_env_from_secret_manager.sh, docs/agent-worklog.md
+- Validation: `bash -n scripts/render_pipeline_env_from_secret_manager.sh` passed; local fake-`gcloud` render test still succeeded after the change and preserved the same output behavior without printing secret values.
+
 ## Next safest step
 - Commit/push or otherwise sync the local renderer and `comtrade_bootstrap_day_2` pipeline to the VM checkout first, then rerun the VM Secret Manager refresh and day-2 proof commands.
 

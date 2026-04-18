@@ -539,3 +539,41 @@
 - Summary: User asked to switch the next proof runs to the additive Bruin stage-level pipelines and to start with Brent and FX before Comtrade day 3 in order to test Bruin dependency logic and lineage visibility. Confirmed this is a reasonable next test order because `brent_bootstrap_phase_1` and `fx_bootstrap_phase_1` are independent phase-1 bootstrap pipelines with no operational dependency on Comtrade. Also clarified the scope of what Bruin will prove in the current repo state: `bruin run` will exercise stage-level asset dependency ordering within each pipeline (`extract -> silver -> publish_gcs -> load_bigquery -> dbt_build`, plus routing where present), and `bruin lineage` can document that dependency graph for any individual asset. However, cross-pipeline dependency waiting is not being tested by these local VM runs because the repo’s additive pipelines do not yet define URI-based external dependencies; Bruin’s cross-pipeline dependency model is a Bruin Cloud feature documented separately and is not part of the current VM-first baseline.
 - Files changed: docs/agent-worklog.md
 - Validation: reviewed local additive pipeline file sets for Brent, FX, and Comtrade day 3; reviewed Bruin MCP docs for `commands/run`, `commands/lineage`, `getting-started/pipeline`, and `cloud/cross-pipeline`.
+
+### 2026-04-18 - Entry 045 - Bruin VM warning and cross-pipeline configuration caveat noted
+- Status: done
+- Summary: User's first VM `bruin validate --fast -o json` command for Brent emitted only the recurring `SDK ... falling back to IMDSv1 ... 405` warnings. This appears to be the same non-blocking Bruin/AWS-SDK environment noise previously seen on the GCP VM rather than a Brent pipeline failure, especially because the command redirected JSON output to a file and no structural validation error followed. Also clarified that cross-pipeline dependencies are configurable in Bruin via asset URIs and `depends: - uri: ...`, but the automatic waiting/sensor behavior documented by Bruin is a Bruin Cloud feature; it is not something the current VM-first local CLI baseline will fully exercise just by adding config.
+- Files changed: docs/agent-worklog.md
+- Validation: interpreted the user-provided Brent validation stderr output against prior VM Bruin warnings and the Bruin `cloud/cross-pipeline` documentation.
+
+### 2026-04-18 - Entry 046 - Bruin lineage IMDS warning traced to environment-level AWS SDK probing
+- Status: done
+- Summary: User continued to see `SDK ... falling back to IMDSv1 ... 405` warnings specifically on `bruin lineage` even after validation noise subsided. Repo inspection confirmed `.bruin.yml` only configures GCP ADC connections, so the warning is not being introduced by project connection settings. The most likely cause is an internal Bruin or dependency code path that initializes AWS SDK credential/provider probing during some commands, which then attempts EC2 metadata access on the GCP VM and logs a harmless warning. Safest mitigation for VM proof runs is to set `AWS_EC2_METADATA_DISABLED=true` for Bruin commands so the SDK does not attempt IMDS at all. Optional additional cleanup is `TELEMETRY_OPTOUT=true` if the user wants to suppress Bruin telemetry traffic as well, though telemetry is separate from the IMDS warning.
+- Files changed: docs/agent-worklog.md
+- Validation: inspected `.bruin.yml` and Bruin docs for telemetry and environment configuration; conclusion is an environment-level inference from the warning text and the absence of any AWS connection config in the repo.
+
+### 2026-04-18 - Entry 047 - VM Bruin IMDS mitigation documented for operators
+- Status: done
+- Summary: Added a small operator-facing note to the VM runtime documentation describing the recurring Bruin `IMDSv1` warning on the GCP VM, why it is harmless, and how to suppress it cleanly with `AWS_EC2_METADATA_DISABLED=true`. Also added optional `TELEMETRY_OPTOUT=true` guidance and included both values in the example VM environment contract so future VM setup does not rediscover the issue.
+- Files changed: ops/vm/README.md, ops/vm/pipeline.env.example, docs/agent-worklog.md
+- Validation: documentation-only change; guidance matches the previously reviewed `.bruin.yml` and Bruin telemetry/environment behavior.
+
+### 2026-04-18 - Entry 048 - Brent BigQuery load fix started after Bruin proof failure
+- Status: done
+- Summary: User's first Brent Bruin proof run failed at `capstone.brent_bootstrap_phase_1_load_bigquery` with a BigQuery `No matching signature for operator IN UNNEST for argument types: TIMESTAMP, ARRAY<DATE>` error. Read-only inspection isolated the failure to the Brent daily delete-before-load query in `warehouse/load_brent_to_bigquery.py`, which currently compares `date_trunc(trade_date, month)` against an `ARRAY<DATE>` parameter. A quick audit of the other current loaders confirmed this specific mismatch is Brent-only in the present repo state: FX compares `month_start_date` to `ARRAY<DATE>`, Comtrade compares `ref_date` to `ARRAY<DATE>`, World Bank compares integer `year` to integer arrays, and PortWatch compares `date_day` / `month_start_date` date fields to `ARRAY<DATE>`.
+- Files inspected: warehouse/load_brent_to_bigquery.py, warehouse/load_fx_to_bigquery.py, warehouse/load_comtrade_to_bigquery.py, warehouse/load_worldbank_energy_to_bigquery.py, warehouse/load_portwatch_to_bigquery.py, models/staging/stg_brent_daily.sql, ingest/fred/brent_silver.py
+- Ordered plan:
+  1. Apply the smallest safe Brent-only fix by casting the daily delete expression to `DATE` before `DATE_TRUNC`, preserving the existing parameter type and table schema.
+  2. Validate the loader locally with `python -m py_compile`.
+  3. Resume VM proof with a full Brent Bruin rerun and then a targeted Brent dbt smoke check before moving to FX.
+- Files changed: warehouse/load_brent_to_bigquery.py, docs/agent-worklog.md
+- Validation: Brent daily delete predicate updated to `date_trunc(cast(trade_date as date), month) in unnest(@touched_month_start_dates)`; `python -m py_compile warehouse/load_brent_to_bigquery.py` passed; quick audit re-confirmed no equivalent DATE/TIMESTAMP mismatch in the current FX, Comtrade, World Bank, or PortWatch loaders.
+
+## Next safest step
+- Sync the Brent loader fix to the VM, rerun the full `brent_bootstrap_phase_1` Bruin pipeline, then run a targeted Brent dbt smoke check before continuing to FX and Comtrade day 3.
+
+## Handoff note
+- Current task: Brent Bruin proof-run failure has been reduced to a loader-level BigQuery delete-type mismatch and fixed locally.
+- Last completed validation: Brent loader compiles locally after the fix; loader audit confirms the mismatch was Brent-only among the current loaders.
+- Last operational evidence: Brent Bruin run previously reached `load_bigquery` successfully after `extract`, `silver`, and `publish_gcs`, so the rerun target remains the loader fix and downstream dbt confirmation, not the earlier stages.
+- Resume point: pull the updated repo on the VM, rerun Brent via Bruin, then if successful run a Brent-focused dbt smoke check and proceed to FX.

@@ -41,6 +41,26 @@ cd /var/lib/pipeline/capstone
   --show-keys
 ```
 
+### Bruin on the GCP VM
+
+When running `bruin validate`, `bruin lineage`, or `bruin run` inside the `orchestrator` container on the GCP VM, you may see warnings like:
+
+```text
+SDK ... falling back to IMDSv1 ... StatusCode: 405 ...
+```
+
+This is environment noise from AWS metadata probing, not a project connection issue. The VM uses GCP ADC, not AWS credentials.
+
+To suppress the warning for VM Bruin commands, set these optional environment variables in `/etc/capstone/pipeline.env` and restart the stack:
+
+```bash
+AWS_EC2_METADATA_DISABLED=true
+TELEMETRY_OPTOUT=true
+```
+
+- `AWS_EC2_METADATA_DISABLED=true` is the important fix for the IMDS warning.
+- `TELEMETRY_OPTOUT=true` is optional and only disables Bruin telemetry.
+
 5. Start the stack:
 
 ```bash

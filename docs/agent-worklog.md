@@ -238,6 +238,68 @@
 - Existing VM phase wrappers already forward arbitrary dataset-batch args, so manual restart can now use current entrypoints directly without scheduler, wrapper, or secret-flow changes.
 - Bruin dataset_batch asset now supports optional START_AT_TASK / START_AT_STEP_ORDER passthrough so the same restart semantics remain available for Bruin-triggered runs.
 - T4 patch implemented: `.bruin.yml` now keeps `default` as the selected environment and adds a minimal `production` environment, with both environments exposing the same env-var-backed `google_cloud_platform` connection name (`gcp-default`).
+
+## Session update (2026-04-18)
+
+### done
+- Objective: Produce a repo-grounded runbook for standing up the full VM-first pipeline in a brand new GCP account while leaving the existing account/runtime untouched.
+- Constraints respected:
+  - Keep VM-first baseline.
+  - Preserve Secret Manager-backed runtime secret flow.
+  - Do not introduce serverless paths.
+  - Prefer operator-safe, resumable bootstrap sequencing over one-shot rewrite ideas.
+- Actions completed:
+  1. Re-read the current worklog and verified Bruin MCP/tooling availability in-session.
+  2. Inspected repo deployment docs, Terraform scaffold, VM runtime guide, env examples, batch plan, run scripts, VM batch helpers, docker compose wiring, IAM bindings, Secret Manager sync scripts, and startup script behavior.
+  3. Authored `docs/new-gcp-account-vm-bootstrap.md` with the end-to-end sequence covering: isolated gcloud config, tfvars setup, Terraform apply, local `.env` preparation, Secret Manager sync, VM repo sync, `/etc/capstone/pipeline.env` creation, keyless VM auth settings, first bootstrap order, resumability, and timer enablement.
+
+### files inspected this session
+- README.md
+- ops/vm/README.md
+- ops/vm/pipeline.env.example
+- .env.example
+- Makefile
+- scripts/run_pipeline.sh
+- ops/batch_plan.json
+- scripts/sync_env_secrets_to_secret_manager.sh
+- scripts/render_pipeline_env_from_secret_manager.sh
+- .bruin.yml
+- scripts/vm_fasttrack_bruin_bootstrap.sh
+- scripts/vm_runtime_ctl.sh
+- docker/docker-compose.yml
+- infra/terraform/README.md
+- infra/terraform/terraform.tfvars.json.example
+- infra/terraform/variables.tf
+- infra/terraform/main.tf
+- infra/terraform/outputs.tf
+- infra/terraform/iam.tf
+- infra/terraform/compute.tf
+- infra/terraform/secrets.tf
+- infra/terraform/templates/vm_startup.sh.tftpl
+- infra/terraform/render_dotenv.py
+- scripts/bootstrap_local.sh
+- scripts/vm_batches/run_set.sh
+- scripts/vm_batches/common.sh
+
+### files changed this session
+- docs/new-gcp-account-vm-bootstrap.md
+- docs/agent-worklog.md
+
+### validation log (2026-04-18)
+- Bruin MCP availability verified via `bruin_get_overview`.
+- Repo readback confirmed the current VM-first baseline, keyless VM ADC pattern, and Secret Manager-backed env flow are documented consistently across Terraform, VM docs, and runtime scripts.
+- Runbook content cross-checked against:
+  - `scripts/run_pipeline.sh` entrypoints
+  - `ops/batch_plan.json` batch ordering/dependencies
+  - `scripts/vm_batches/run_set.sh` resumable dispatcher behavior
+  - `ops/vm/pipeline.env.example` VM env contract
+  - `infra/terraform/terraform.tfvars.json.example` fresh-account defaults
+
+### outcome
+- The repository now contains a dedicated new-account bootstrap runbook that matches the current codebase instead of relying on legacy/manual operator memory.
+
+### next recommended step
+- Walk through `docs/new-gcp-account-vm-bootstrap.md` once with your actual new project id, chosen region/location, and branch name, then execute it in order without enabling timers until the full bootstrap completes.
 - The `.bruin.yml` scaffold intentionally relies on `use_application_default_credentials: true` plus existing `GCP_PROJECT_ID` / `GCP_LOCATION` env vars, preserving local ADC and VM metadata auth instead of introducing a second secret source.
 - Post-change Bruin validation outcomes are unchanged in shape: pipelines parse successfully and only emit the pre-existing local used-tables/sql-parser warning.
 - T5 patch implemented: added an additive `portwatch_bootstrap_phase_1` Bruin pipeline that exposes the existing batch-plan steps as five explicit Python assets with linear `depends` edges.

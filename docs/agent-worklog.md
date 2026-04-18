@@ -577,3 +577,19 @@
 - Last completed validation: Brent loader compiles locally after the fix; loader audit confirms the mismatch was Brent-only among the current loaders.
 - Last operational evidence: Brent Bruin run previously reached `load_bigquery` successfully after `extract`, `silver`, and `publish_gcs`, so the rerun target remains the loader fix and downstream dbt confirmation, not the earlier stages.
 - Resume point: pull the updated repo on the VM, rerun Brent via Bruin, then if successful run a Brent-focused dbt smoke check and proceed to FX.
+
+### 2026-04-18 - Entry 049 - Brent monthly delete path also needed DATE cast
+- Status: done
+- Summary: User reran the Brent Bruin pipeline after syncing the first Brent loader fix and still hit the same BigQuery signature error, but the new traceback moved from the first `_submit_load_if_needed` call to the second one. Local line inspection of `warehouse/load_brent_to_bigquery.py` confirmed the updated VM run was now failing in the monthly delete-before-load path, not the daily one: the daily delete SQL already casts `trade_date` to `DATE`, while the monthly delete SQL was still comparing `month_start_date` directly to an `ARRAY<DATE>`. Given the persisted BigQuery error signature and the current local line numbers, the safest interpretation is that the raw `brent_monthly.month_start_date` column is also `TIMESTAMP`-typed in BigQuery, so the monthly delete predicate needs the same `DATE` normalization.
+- Files inspected: warehouse/load_brent_to_bigquery.py, ingest/fred/brent_silver.py, models/staging/stg_brent_monthly.sql, docs/agent-worklog.md
+- Files changed: warehouse/load_brent_to_bigquery.py, docs/agent-worklog.md
+- Validation: updated Brent monthly delete predicate to `cast(month_start_date as date) in unnest(@touched_month_start_dates)`; this preserves the existing raw table schema and the `DATE` array parameter contract while making the delete comparison type-consistent for `TIMESTAMP`-typed historical tables.
+
+## Next safest step
+- Sync the updated Brent loader to the VM and rerun the full `brent_bootstrap_phase_1` Bruin pipeline. If Brent passes, run the targeted Brent dbt smoke check before continuing to FX and Comtrade day 3.
+
+## Handoff note
+- Current task: Brent Bruin proof run is now narrowed to a second, monthly-side raw BigQuery delete mismatch in the same loader.
+- Last completed validation: local Brent loader now normalizes both delete predicates (`trade_date` and `month_start_date`) before comparing against `ARRAY<DATE>` values.
+- Last operational evidence: the VM traceback line moved from the daily load call to the monthly load call, which confirms the first Brent fix was active on the VM.
+- Resume point: pull the latest repo state on the VM, rebuild/restart the stack, rerun Brent via Bruin, and only after a clean Brent pass continue to the Brent dbt smoke check and then FX.

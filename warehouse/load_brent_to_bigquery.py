@@ -624,7 +624,7 @@ def load_brent(
             replace_touched_partitions=replace_touched_partitions,
             delete_sql="""
                 delete from `{table_id}`
-                where month_start_date in unnest(@{delete_parameter_name})
+                where cast(month_start_date as date) in unnest(@{delete_parameter_name})
             """,
             delete_parameter_name="touched_month_start_dates",
             table_id=monthly_table_id,

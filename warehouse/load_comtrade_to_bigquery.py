@@ -527,7 +527,7 @@ def load_comtrade(
                 logger.info("Deleting touched ref_date partitions from %s", fact_table_id)
                 delete_sql = f"""
                 delete from `{fact_table_id}`
-                where ref_date in unnest(@touched_month_start_dates)
+                where cast(ref_date as date) in unnest(@touched_month_start_dates)
                 """
                 delete_job = client.query(
                     delete_sql,

@@ -604,7 +604,7 @@ def load_portwatch(
             replace_touched_partitions=replace_touched_partitions,
             delete_sql="""
             delete from `{table_id}`
-            where date_trunc(date_day, month) in unnest(@{delete_parameter_name})
+            where date_trunc(cast(date_day as date), month) in unnest(@{delete_parameter_name})
             """,
             delete_parameter_name="touched_month_start_dates",
             table_id=daily_table_id,
@@ -620,7 +620,7 @@ def load_portwatch(
             replace_touched_partitions=replace_touched_partitions,
             delete_sql="""
             delete from `{table_id}`
-            where month_start_date in unnest(@{delete_parameter_name})
+            where cast(month_start_date as date) in unnest(@{delete_parameter_name})
             """,
             delete_parameter_name="touched_month_start_dates",
             table_id=monthly_table_id,

@@ -448,7 +448,7 @@ def load_fx(
             delete_job = client.query(
                 f"""
                 delete from `{table_id}`
-                where month_start_date in unnest(@touched_month_start_dates)
+                where cast(month_start_date as date) in unnest(@touched_month_start_dates)
                 """,
                 location=config.gcp_location,
                 job_config=bigquery.QueryJobConfig(

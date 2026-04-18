@@ -593,3 +593,35 @@
 - Last completed validation: local Brent loader now normalizes both delete predicates (`trade_date` and `month_start_date`) before comparing against `ARRAY<DATE>` values.
 - Last operational evidence: the VM traceback line moved from the daily load call to the monthly load call, which confirms the first Brent fix was active on the VM.
 - Resume point: pull the latest repo state on the VM, rebuild/restart the stack, rerun Brent via Bruin, and only after a clean Brent pass continue to the Brent dbt smoke check and then FX.
+
+### 2026-04-18 - Entry 050 - FX BigQuery delete path has the same historical DATE/TIMESTAMP mismatch
+- Status: done
+- Summary: User's first Bruin proof run for `fx_bootstrap_phase_1` failed in `capstone.fx_bootstrap_phase_1_load_bigquery` with the same BigQuery signature error shape seen earlier in Brent: `No matching signature for operator IN UNNEST for argument types: TIMESTAMP, ARRAY<DATE>`. Read-only inspection of `warehouse/load_fx_to_bigquery.py` confirmed the current FX loader always submits BigQuery loads via `client.load_table_from_uri(...)`, so the load source is still GCS, not the VM filesystem, and the Bruin asset does not override the default `--source gcs`. The failure is in the pre-load delete query against the existing raw BigQuery table, which currently compares `month_start_date` directly to an `ARRAY<DATE>`. This explains why the issue may appear now even if earlier bootstrap loads seemed fine: initial loads can bypass the delete path when the destination table does not yet exist, while reruns against an existing historical raw table hit the delete-before-replace branch and expose legacy TIMESTAMP typing in the destination schema.
+- Files inspected: warehouse/load_fx_to_bigquery.py, bruin/pipelines/fx_bootstrap_phase_1/assets/fx_bootstrap_phase_1_load_bigquery.py, docs/agent-worklog.md
+- Files changed: warehouse/load_fx_to_bigquery.py, docs/agent-worklog.md
+- Validation: updated FX delete predicate to `cast(month_start_date as date) in unnest(@touched_month_start_dates)`; this preserves the existing raw table schema and the `DATE` array parameter contract while normalizing the delete comparison for reruns against TIMESTAMP-typed historical tables.
+
+## Next safest step
+- Sync both the Brent and FX loader fixes to the VM, restart the stack, rerun `fx_bootstrap_phase_1` via Bruin, and then continue to the deferred Brent/FX dbt smoke checks only after the loader reruns succeed.
+
+## Handoff note
+- Current task: stage-level Bruin proof runs are surfacing historical raw BigQuery schema drift in delete-before-reload queries, not a problem with the GCS-to-BigQuery load architecture itself.
+- Last completed validation: local inspection confirms the FX loader still loads from GCS URIs with `load_table_from_uri`, and only the delete predicate needed normalization.
+- Last operational evidence: FX `extract`, `silver`, and `publish_gcs` all succeeded; the failure occurred before the BigQuery load job due to the delete query on the existing raw table.
+- Resume point: pull the latest repo state on the VM, rebuild/restart, rerun FX via Bruin, then continue with targeted dbt smoke validation and the remaining Bruin proof runs.
+
+### 2026-04-18 - Entry 051 - Audit completed across all BigQuery loaders; PortWatch and Comtrade hardened proactively
+- Status: done
+- Summary: User asked for a full audit of the delete-before-reload characteristic across all dataset BigQuery loaders. Inspection covered Brent, FX, PortWatch, Comtrade, Events, and World Bank energy. Results: Brent and FX already reproduced the `TIMESTAMP` vs `ARRAY<DATE>` failure on reruns and had been patched earlier; PortWatch still used `date_trunc(date_day, month)` and `month_start_date in unnest(...)` directly; Comtrade still used `ref_date in unnest(...)` directly; Events does not use a partition-delete query at all and instead reloads selected assets with `WRITE_TRUNCATE`; World Bank energy deletes by integer `year`, so it is not exposed to the same type mismatch. Because PortWatch and Comtrade both ingest date-like columns from pandas datetime paths and because the current failures are tied to historical raw BigQuery table typing rather than the silver/GCS architecture, both loaders were hardened proactively by normalizing the delete-side column expression to `DATE` while preserving the existing `ARRAY<DATE>` parameter contract.
+- Files inspected: warehouse/load_brent_to_bigquery.py, warehouse/load_fx_to_bigquery.py, warehouse/load_portwatch_to_bigquery.py, warehouse/load_comtrade_to_bigquery.py, warehouse/load_events_to_bigquery.py, warehouse/load_worldbank_energy_to_bigquery.py, ingest/portwatch/portwatch_silver.py, ingest/comtrade/comtrade_silver.py, bruin/pipelines/fx_bootstrap_phase_1/assets/fx_bootstrap_phase_1_load_bigquery.py
+- Files changed: warehouse/load_portwatch_to_bigquery.py, warehouse/load_comtrade_to_bigquery.py, docs/agent-worklog.md
+- Validation: PortWatch delete predicates now use `date_trunc(cast(date_day as date), month)` and `cast(month_start_date as date) in unnest(...)`; Comtrade fact delete predicate now uses `cast(ref_date as date) in unnest(...)`; Events loader confirmed to use `load_table_from_uri(..., write_disposition=WRITE_TRUNCATE)` with no delete query; World Bank energy loader confirmed to use integer `year in unnest(@touched_years)`.
+
+## Next safest step
+- Sync the loader hardening set to the VM and continue the Bruin proof sequence. Recommended order is: rerun FX first, rerun Brent if needed from the updated checkout, then proceed to Comtrade day 3 and PortWatch only after the updated delete-path safeguards are live on the VM.
+
+## Handoff note
+- Current task: delete-before-reload hardening is now applied across all date-based loaders that could hit the same historical raw BigQuery schema drift.
+- Last completed validation: events and World Bank energy do not share this failure mode; PortWatch and Comtrade were patched proactively, while Brent and FX were patched reactively from live VM evidence.
+- Last operational evidence: all observed failures still occur before `load_table_from_uri(...)` and therefore do not imply a shift away from the intended GCS -> BigQuery architecture.
+- Resume point: pull the latest repo state on the VM, restart the stack, rerun the remaining Bruin proof runs from the updated checkout, and only then assess whether any further raw-table schema cleanup is still needed.

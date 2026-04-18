@@ -30,6 +30,17 @@ sudo chmod 600 /etc/capstone/pipeline.env
 sudo editor /etc/capstone/pipeline.env
 ```
 
+Keep the non-secret settings here (`GCP_PROJECT_ID`, bucket/dataset names, auth mode, batch-plan path).
+Approved secret values can then be refreshed from Secret Manager instead of being edited by hand:
+
+```bash
+cd /var/lib/pipeline/capstone
+./scripts/render_pipeline_env_from_secret_manager.sh \
+  --output-file /etc/capstone/pipeline.env \
+  --base-env-file /etc/capstone/pipeline.env \
+  --show-keys
+```
+
 5. Start the stack:
 
 ```bash
@@ -408,11 +419,22 @@ sudo docker compose --env-file /etc/capstone/pipeline.env -f /var/lib/pipeline/c
 
 ```bash
 cd /var/lib/pipeline/capstone
+./scripts/render_pipeline_env_from_secret_manager.sh \
+  --output-file /etc/capstone/pipeline.env \
+  --base-env-file /etc/capstone/pipeline.env \
+  --project fullcap-10111 \
+  --show-keys
+```
+
+This preserves the current `/etc/capstone/pipeline.env` runtime contract while refreshing only approved secret-backed keys from Secret Manager.
+
+Batch helpers can also refresh the same keys automatically before a manual run:
+
+```bash
+cd /var/lib/pipeline/capstone
 SYNC_SECRETS_BEFORE_RUN=true SECRET_PROJECT_ID=fullcap-10111 \
 ./scripts/vm_batches/run_set.sh comtrade-day-1 --trigger-type manual
 ```
-
-This updates only approved runtime keys in `/etc/capstone/pipeline.env` before the set starts.
 
 ### 6) Run the target set out of schedule
 

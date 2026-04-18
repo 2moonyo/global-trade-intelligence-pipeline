@@ -36,10 +36,22 @@
 ## Task board
 
 ### todo
-- None currently.
+1. [in progress] Comtrade bronze data sync: Copy local monthly_history to VM persistent disk and disable disk wipe for testing.
 
 ### in progress
-- None currently.
+1. Comtrade bronze data sync and persistent disk wipe disablement for testing (2026-04-17)
+	- Objective: Fix missing day1 data on VM persistent disk for Comtrade bronze, unblock silver pipeline, and disable disk wipe logic for test runs.
+	- Constraints: Do not break production durability; only disable wipe for local/test. Use smallest safe change. Document all actions.
+	- Plan & Findings:
+	  1. Inspected all batch scripts, pipeline runners, and Makefile: No code-based logic found that wipes or deletes the bronze persistent disk for Comtrade.
+	  2. No 'rm', 'shutil.rmtree', or similar destructive calls found in scripts, Python, or shell wrappers.
+	  3. No Makefile or ops/ targets for 'clean', 'wipe', or 'reset'.
+	  4. If bronze data is missing, it is likely due to manual cleanup, VM disk misconfiguration, or external process.
+	  5. To restore bronze data, use rsync from your Mac:
+		  rsync -avP ~/Documents/Python/Data\ Enginering\ Zoomcamp/Capstone_monthly/data/bronze/comtrade/monthly_history/ [VM_USER]@[VM_HOST]:/var/lib/pipeline/capstone/data/bronze/comtrade/monthly_history/
+	  6. Ensure no manual or external cleanup is performed during test runs.
+	  7. If you use VM snapshots or disk re-creation, ensure bronze data is preserved.
+	  8. No code changes required at this time; if future wipe logic is added, gate it behind a prod-only flag or env var.
 
 ### done
 - T1: Re-read authoritative instruction files (AGENTS.md and .github instruction set).
@@ -410,11 +422,65 @@
 - Files changed: scripts/run_pipeline.sh, docs/agent-worklog.md
 - Validation: `bash -n scripts/run_pipeline.sh` passed; diff is limited to the one-line generic `python)` case change from `exec python` to `run_python`.
 
+### 2026-04-18 - Entry 029 - Worklog continuity and GCS publish dedupe review
+- Status: done
+- Summary: Compared `docs/agent-worklog CODEX_end.md` against the current `docs/agent-worklog.md` and confirmed the only post-handoff addition is a task-board note about Comtrade bronze sync / disk wipe disablement; there are no corresponding repo code changes in the current worktree. Reviewed the checksum-aware GCS publish path and current local publish evidence. PortWatch logs on the active local bucket show checksum-match skips working as intended. Comtrade uses the same shared checksum-aware publish helper and older manifests show correct skip behavior on prior buckets, but the local workspace does not yet contain a Comtrade publish manifest for the current `buckwheat_10111` bucket. Also noted that the additive `comtrade_bootstrap_day_1` Bruin publish asset currently publishes the full `2020-01..2025-12` fact window, so repeated proof runs will still enumerate the entire Comtrade fact tree even when most files should skip.
+- Files changed: docs/agent-worklog.md
+- Validation: compared `docs/agent-worklog CODEX_end.md` and `docs/agent-worklog.md`; checked `git status --short`; inspected `warehouse/gcs_publish_common.py`, `warehouse/publish_comtrade_to_gcs.py`, `bruin/pipelines/comtrade_bootstrap_day_1/assets/comtrade_bootstrap_day_1_publish_gcs.py`, `.env`, `logs/portwatch/publish_portwatch_to_gcs.log`, `logs/portwatch/publish_portwatch_to_gcs_manifest.jsonl`, `logs/comtrade/publish_comtrade_to_gcs.log`, and `logs/comtrade/publish_comtrade_to_gcs_manifest.jsonl`.
+
+### 2026-04-18 - Entry 030 - VM Comtrade publish evidence confirmed checksum mismatches
+- Status: done
+- Summary: User supplied VM `publish_comtrade_to_gcs` lines for the active proof run showing `uploaded>0`, `skipped_existing=0`, and `checksum_mismatched>0` across multiple `silver_comtrade_fact` 2025 partitions. This confirms the current issue is not missing-remote uploads: the target GCS objects already exist, but the local VM parquet bytes differ from the existing remote objects. The shared checksum guard is therefore functioning as designed. The remaining diagnostic split is whether this was a one-time reconciliation against older remote parquet files or whether local Comtrade fact parquet is being rewritten before every publish.
+- Files changed: docs/agent-worklog.md
+- Validation: interpreted user-reported VM log lines alongside `warehouse/gcs_publish_common.py` checksum-aware upload behavior and `ingest/comtrade/comtrade_silver.py` local `skip_unchanged` / fingerprinted fact-slice write path.
+
+### 2026-04-18 - Entry 031 - VM manifest snippet clarified audit skips vs fact scope
+- Status: done
+- Summary: User supplied a manifest excerpt from the same VM proof-run showing `metadata/comtrade/ingest_reports/run_id=...` files with `action=skipped_existing` and `upload_reason=checksum_match`. This confirms the audit-artifact branch is deduping correctly on the active bucket. The run-level `touched_year_months` list in that excerpt reflects the Comtrade fact months included in the publish selection, not a claim that every listed month was uploaded. The remaining open question stays focused on the `uploads.silver_comtrade_fact` summary and samples for the same run.
+- Files changed: docs/agent-worklog.md
+- Validation: mapped the user-provided manifest excerpt to the `audit_comtrade` / run-level manifest structure in `warehouse/publish_comtrade_to_gcs.py`.
+
+### 2026-04-18 - Entry 032 - Bruin expansion recommendation and deferred dbt geo-fix captured
+- Status: done
+- Summary: Reviewed the current VM wrapper entrypoints and additive Bruin coverage to define the safest next expansion pattern. Recommendation: keep one additive stage-level Bruin pipeline per real batch shape rather than collapsing multiple Comtrade days or non-Comtrade variants into a single heavily-parameterized pipeline. The existing wrappers already map cleanly to distinct batch IDs (`comtrade_bootstrap_day_1` through `_day_6`, `portwatch/brent/fx/events` phase 1 and phase 2, plus `worldbank_energy`), so mirroring those batch shapes in Bruin preserves restart semantics, logs, secret flow, and VM operator familiarity. The next safest rollout order after the current proof runs is: `comtrade_bootstrap_day_2`, then remaining Comtrade days 3-6, then `brent_bootstrap_phase_1`, `fx_bootstrap_phase_1`, `events_bootstrap_phase_1`, then the phase-2 non-Comtrade lanes, and only after those the separate `worldbank_energy_bootstrap_full` / refresh shape. Also captured a deferred follow-up task for the chokepoint latitude/longitude mismatch issue affecting geo marts, including the user-provided root-cause hypothesis, required model inspection list, canonicalization-macro direction, and requested validation outputs.
+- Files changed: docs/agent-worklog.md
+- Validation: inspected `scripts/vm_batches/run_set.sh`, all `scripts/vm_batches/run_comtrade_day_{1..6}.sh`, `scripts/vm_batches/run_noncomtrade_phase_{1,2}_{portwatch,brent,fx,events}.sh`, `ops/batch_plan.json`, and `docs/bruin-refactor-plan.md`.
+
+### 2026-04-18 - Entry 033 - Deferred dbt chokepoint geo-fix requirements preserved
+- Status: done
+- Summary: Preserved the deferred follow-up for the chokepoint latitude/longitude mismatch affecting semantic geo marts, especially `mart_chokepoint_monthly_hotspot_map`. Stored context: coordinates appear to exist in the raw chokepoint dimension but are being lost because `chokepoint_id` is name-hash based and likely inconsistent across sources such as raw dim, PortWatch monthly/daily, event bridges, and route-derived chokepoints. Known suspected aliases to normalize include `Hormuz Strait` / `Hormuz` -> `Strait of Hormuz`, `Bab el-Mandeb Strait` -> `Bab el-Mandeb`, whitespace-polluted `Panama` variants -> `Panama Canal`, and to evaluate `Malacca` -> `Malacca Strait` plus `Gibraltar` -> `Strait of Gibraltar`. Required future inspection/edit scope: `models/staging/stg_dim_chokepoint.sql`, `models/staging/stg_portwatch_stress_metrics.sql`, `models/staging/stg_portwatch_daily.sql`, `models/marts/dimensions/dim_chokepoint.sql`, `models/marts/semantics/mart_chokepoint_monthly_hotspot_map.sql`, plus any bridge/event model that hashes chokepoint names. Preferred implementation direction: add a reusable dbt macro such as `canonicalize_chokepoint_name(name_expr)`, use the canonicalized business name and hashed ID everywhere upstream before joins, update `dim_chokepoint` to use the canonical backbone, then validate with tests/audit queries for null coordinates, unmatched hotspot mart chokepoints, and `has_map_coordinates_flag = false`.
+- Files changed: docs/agent-worklog.md
+- Validation: user-provided follow-up prompt distilled into a concrete deferred task note inside the continuity journal.
+
+### 2026-04-18 - Entry 034 - T9 additive Comtrade day 2 pipeline start
+- Status: done
+- Summary: Completed the planning and inspection phase for the next additive Bruin expansion slice. Confirmed `comtrade_bootstrap_day_2` is the right next batch to mirror and that its shape differs from day 1 only where expected: no explicit metadata step and a `2015-01` through `2019-12` extraction/publish/load window.
+- Files changed: docs/agent-worklog.md
+- Validation: inspected `ops/batch_plan.json`, `scripts/vm_batches/run_comtrade_day_2.sh`, and the existing `bruin/pipelines/comtrade_bootstrap_day_1` assets to lock the smallest-safe day-2 mirror.
+
+### 2026-04-18 - Entry 035 - T9 additive Comtrade day 2 pipeline implemented
+- Status: done
+- Summary: Added an additive `comtrade_bootstrap_day_2` Bruin pipeline that mirrors the existing day-2 VM batch shape with explicit stage dependencies for extract, silver, routing, GCS publish, BigQuery load, and dbt build. Preserved the current VM-first baseline by reusing the same repo scripts, encoded reporters/commodities/flows, registry/checkpoint paths, and date windows already present in the day-2 batch plan.
+- Files changed: bruin/pipelines/comtrade_bootstrap_day_2/pipeline.yml, bruin/pipelines/comtrade_bootstrap_day_2/assets/comtrade_bootstrap_day_2_extract.py, bruin/pipelines/comtrade_bootstrap_day_2/assets/comtrade_bootstrap_day_2_silver.py, bruin/pipelines/comtrade_bootstrap_day_2/assets/comtrade_bootstrap_day_2_routing.py, bruin/pipelines/comtrade_bootstrap_day_2/assets/comtrade_bootstrap_day_2_publish_gcs.py, bruin/pipelines/comtrade_bootstrap_day_2/assets/comtrade_bootstrap_day_2_load_bigquery.py, bruin/pipelines/comtrade_bootstrap_day_2/assets/comtrade_bootstrap_day_2_dbt_build.py, docs/agent-worklog.md
+- Validation: `python -m py_compile bruin/pipelines/comtrade_bootstrap_day_2/assets/*.py` passed; `bruin validate --fast ./bruin/pipelines/comtrade_bootstrap_day_2/pipeline.yml` completed with the same warning-only `used-tables/sql-parser` profile seen in earlier additive pipelines, with no pipeline syntax failure.
+
+### 2026-04-18 - Entry 036 - VM Secret Manager runtime-env hardening start
+- Status: done
+- Summary: Completed the VM-first Secret Manager hardening slice. Added a repo-native renderer for `/etc/capstone/pipeline.env` that preserves non-secret settings from a base env file and refreshes only approved secret-backed keys from Secret Manager. Updated the VM batch helper to call that renderer when `SYNC_SECRETS_BEFORE_RUN=true`, replacing the prior in-place Python write path that did not align with the documented root-owned `0600` runtime env file. Updated VM docs and the example env contract to point operators at the new renderer while preserving the existing `pipeline.env` runtime model.
+- Files changed: docs/agent-worklog.md
+- Validation: added `scripts/render_pipeline_env_from_secret_manager.sh`; updated `scripts/vm_batches/common.sh`, `ops/vm/pipeline.env.example`, and `ops/vm/README.md`; `bash -n` passed for the modified shell scripts; local fake-`gcloud` render test confirmed base env preservation, secret-key overwrite behavior, missing-secret tolerance, and quiet output without leaking secret values.
+
+### 2026-04-18 - Entry 037 - VM proof-run blocker identified as repo sync gap
+- Status: done
+- Summary: User VM commands failed with `No such file or directory` for `scripts/render_pipeline_env_from_secret_manager.sh` and Bruin could not find `bruin/pipelines/comtrade_bootstrap_day_2/pipeline.yml`. Local repo inspection confirmed the new renderer and day-2 Bruin pipeline are still only present in the current workspace as uncommitted changes, so the VM restart rebuilt the older checkout successfully but could not expose files that have not yet been committed/pushed or otherwise synced to the VM.
+- Files changed: docs/agent-worklog.md
+- Validation: compared user-reported VM `stat` failures against local `git status --short`, which still shows `scripts/render_pipeline_env_from_secret_manager.sh` and `bruin/pipelines/comtrade_bootstrap_day_2/` as untracked local additions.
+
 ## Next safest step
-- Prove the additive PortWatch and Comtrade stage-level Bruin pipelines in real VM runs before changing any default execution path.
+- Commit/push or otherwise sync the local renderer and `comtrade_bootstrap_day_2` pipeline to the VM checkout first, then rerun the VM Secret Manager refresh and day-2 proof commands.
 
 ## Handoff note
 - Current task: Current planned Bruin refactor slice completed.
 - Last completed validation: workflow YAML parsed successfully; local Bruin fast validation coverage now spans the wrapper pipelines plus the additive PortWatch and Comtrade stage-level pipelines; refactor-plan doc readback passed.
 - Last operational evidence: VM ops tables show repeated failures for brent/comtrade/events/fx despite some successful dataset runs.
-- Resume point: run the additive PortWatch and Comtrade stage-level Bruin pipelines on the VM as proof runs, compare behavior with the wrapper baseline, and only then consider expanding coverage or changing defaults.
+- Resume point: run the new Secret Manager-backed `pipeline.env` renderer on the VM, restart the stack if env values change, then finish confirming whether the active Comtrade checksum mismatches were a one-time reconciliation or a repeatable local rewrite issue before continuing with `comtrade_bootstrap_day_2` proof and later batch mirroring. Deferred follow-up already captured in detail: upstream dbt chokepoint canonicalization / geo-coordinate fix for semantic marts.

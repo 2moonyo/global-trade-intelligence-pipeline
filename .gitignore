@@ -75,3 +75,9 @@ override.tf.json
 
 .bruin.yml
 .env
+deploy_option_a_git_pull.sh
+check_hub_integrity.py
+NEXT_STEPS.md
+.DS_Store
+notebooks/
+.github/workflows/

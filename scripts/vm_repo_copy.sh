@@ -130,7 +130,13 @@ echo "Copying local repo contents to ${REMOTE}:${VM_REPO_DIR} ..."
     --exclude='docker/streamlit' \
     --exclude='infra/terraform/.terraform' \
     --exclude='infra/terraform/*.tfstate' \
+    --exclude='*.MD' \
+    --exclude='*.md' \
+    --exclude='check_db.py' \
+    --exclude='deploy_option_a_git_pull.sh' \
     --exclude='infra/terraform/*.tfstate.*' \
+    --include='README.md' \
+    --include='README.MD' \
     .
 ) | ssh "${SSH_OPTS[@]}" "${REMOTE}" "tar -xf - -C '${VM_REPO_DIR}'"
 

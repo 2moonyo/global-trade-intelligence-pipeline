@@ -8,17 +8,17 @@ locals {
   vm_metadata_startup_script = templatefile(
     "${path.module}/templates/vm_startup.sh.tftpl",
     {
-      project_id            = var.project_id
-      data_disk_device_name = var.vm_data_disk_device_name
-      data_mount_point      = var.vm_data_mount_point
-      repo_root             = var.vm_repo_root
-      env_file_path         = var.vm_env_file_path
-      vm_secret_sync_enabled = var.vm_secret_sync_enabled
+      project_id                 = var.project_id
+      data_disk_device_name      = var.vm_data_disk_device_name
+      data_mount_point           = var.vm_data_mount_point
+      repo_root                  = var.vm_repo_root
+      env_file_path              = var.vm_env_file_path
+      vm_secret_sync_enabled     = var.vm_secret_sync_enabled
       vm_secret_env_to_secret_id = var.vm_secret_env_to_secret_id
-      swap_enabled          = var.vm_swap_enabled
-      swap_size_gb          = var.vm_swap_size_gb
-      swap_file_path        = var.vm_swap_file_path
-      schedule_lane_timers  = var.vm_schedule_lane_timers
+      swap_enabled               = var.vm_swap_enabled
+      swap_size_gb               = var.vm_swap_size_gb
+      swap_file_path             = var.vm_swap_file_path
+      schedule_lane_timers       = var.vm_schedule_lane_timers
     },
   )
 }

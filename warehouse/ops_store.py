@@ -26,6 +26,17 @@ def _utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def _env_flag(name: str, default: bool) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() not in {"0", "false", "no", "off"}
+
+
+def postgres_ops_enabled() -> bool:
+    return _env_flag("OPS_POSTGRES_ENABLED", True)
+
+
 def _validate_identifier(value: str, *, label: str) -> str:
     if not VALID_IDENTIFIER.fullmatch(value):
         raise ValueError(f"Invalid {label}: {value}")
@@ -533,6 +544,38 @@ class PostgresOpsStore:
 
 
 @dataclass
+class NoOpPostgresOpsStore:
+    """Drop-in store used by stateless runtimes that mirror ops records to BigQuery only."""
+
+    schema: str = DEFAULT_POSTGRES_SCHEMA
+
+    @classmethod
+    def from_env(cls) -> "NoOpPostgresOpsStore":
+        return cls(schema=os.getenv("POSTGRES_SCHEMA", DEFAULT_POSTGRES_SCHEMA))
+
+    def ensure_schema(self) -> None:
+        return None
+
+    def insert_pipeline_run(self, row: dict[str, Any]) -> None:
+        return None
+
+    def insert_task_run(self, row: dict[str, Any]) -> None:
+        return None
+
+    def insert_task_artifacts(self, rows: list[dict[str, Any]]) -> None:
+        return None
+
+    def upsert_partition_checkpoints(self, rows: list[dict[str, Any]]) -> None:
+        return None
+
+    def upsert_retry_registry(self, row: dict[str, Any]) -> None:
+        return None
+
+    def fetch_latest_batch_statuses(self) -> dict[str, dict[str, Any]]:
+        return {}
+
+
+@dataclass
 class BigQueryOpsMirror:
     config: GcpCloudConfig
 
@@ -601,9 +644,12 @@ def _build_arg_parser() -> argparse.ArgumentParser:
 def main() -> None:
     args = _build_arg_parser().parse_args()
     if args.command in {"ensure-postgres", "ensure-all"}:
-        store = PostgresOpsStore.from_env()
-        store.ensure_schema()
-        print(f"Ensured Postgres ops schema {store.schema}.")
+        if postgres_ops_enabled():
+            store = PostgresOpsStore.from_env()
+            store.ensure_schema()
+            print(f"Ensured Postgres ops schema {store.schema}.")
+        else:
+            print("Postgres ops store disabled by OPS_POSTGRES_ENABLED=false.")
 
     if args.command in {"ensure-bigquery", "ensure-all"}:
         if not bigquery_mirror_enabled():

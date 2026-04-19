@@ -12,12 +12,14 @@ This directory provisions the shared cloud resources plus a configurable Compute
 - one optional primary instance schedule policy
 - two optional scheduled snapshot policies for the primary boot and data disks
 - IAM grants for bucket object admin, dataset editors/viewers, and project-level `bigquery.jobUser`
+- optional Cloud Run Jobs and Cloud Scheduler triggers for non-Comtrade hybrid execution
 
 ## Execution modes
 
 - Local Docker: the lightweight development path that uses local ADC from `gcloud auth application-default login`.
 - GCE VM runtime: the supported cloud-hosted runtime that uses metadata-based ADC from the attached service account, a persistent disk, systemd timers, and an instance schedule.
 - Manual fallback recovery: a disabled-by-default Terraform path that can recreate the VM in `europe-west1-d` from explicit boot and data snapshots.
+- Hybrid VM + Cloud Run: optional profile where Comtrade remains VM-owned and non-Comtrade scheduled refreshes run as Cloud Run Jobs.
 
 ## Local Terraform auth
 
@@ -131,6 +133,40 @@ sudo systemctl enable --now capstone-schedule-lane-yearly_refresh.timer
 ```
 
 The timers call the existing `schedule_lane_queue` wrapper inside the orchestrator container, so the VM path reuses the same batch plan, retry, checkpoint, and Postgres ops ledger logic as local runs.
+
+## Hybrid Cloud Run Jobs
+
+Serverless resources are inactive by default because `execution_profile` defaults to `all_vm`. To enable the additive hybrid path, build and push the pipeline image first, then set the profile and image URI in tfvars or CLI vars.
+
+Required settings for hybrid preview:
+
+```json
+{
+  "execution_profile": "hybrid_vm_serverless",
+  "serverless_container_image": "REGION-docker.pkg.dev/PROJECT/REPOSITORY/capstone-pipeline:TAG",
+  "serverless_scheduler_paused": true
+}
+```
+
+The first hybrid apply should keep `serverless_scheduler_paused=true`. This creates Cloud Run Jobs and Cloud Scheduler jobs without starting scheduled ownership before the VM env has been rendered with `EXECUTION_PROFILE=hybrid_vm_serverless`.
+
+Image build example:
+
+```bash
+export IMAGE_URI=REGION-docker.pkg.dev/PROJECT/REPOSITORY/capstone-pipeline:TAG
+gcloud auth configure-docker REGION-docker.pkg.dev
+docker buildx build --platform linux/amd64 -f docker/pipeline/Dockerfile -t "$IMAGE_URI" --push .
+```
+
+Hybrid resources include:
+
+- `capstone-serverless-runtime` service account for Cloud Run Job ADC
+- `capstone-serverless-scheduler` service account for Cloud Scheduler OAuth calls
+- Cloud Run Jobs for PortWatch, Brent, FX, Events, and World Bank Energy scheduled batches
+- Cloud Scheduler HTTP triggers using `https://run.googleapis.com/v2/projects/PROJECT/locations/REGION/jobs/JOB:run`
+- Secret Manager env injection for approved serverless secrets, currently `FRED_API_KEY` by default
+
+Comtrade is intentionally not represented in `serverless_scheduled_batches`. Keep Comtrade on the VM.
 
 ## Secret Manager-backed runtime env sync
 

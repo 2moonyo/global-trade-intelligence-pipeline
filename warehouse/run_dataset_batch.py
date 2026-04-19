@@ -28,8 +28,10 @@ from ingest.common.run_artifacts import (
 from warehouse.batch_plan import BatchDefinition, BatchStep, load_batch_plan, resolve_batch_plan_path
 from warehouse.ops_store import (
     BigQueryOpsMirror,
+    NoOpPostgresOpsStore,
     PostgresOpsStore,
     bigquery_mirror_enabled,
+    postgres_ops_enabled,
 )
 
 
@@ -635,7 +637,7 @@ def execute_batch(
         "skipped_step_count": resolved_start_step_order - 1,
     }
 
-    store = PostgresOpsStore.from_env()
+    store = PostgresOpsStore.from_env() if postgres_ops_enabled() else NoOpPostgresOpsStore.from_env()
     store.ensure_schema()
 
     mirror: BigQueryOpsMirror | None = None

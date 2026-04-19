@@ -134,4 +134,15 @@ echo "Copying local repo contents to ${REMOTE}:${VM_REPO_DIR} ..."
     .
 ) | ssh "${SSH_OPTS[@]}" "${REMOTE}" "tar -xf - -C '${VM_REPO_DIR}'"
 
+EVENTS_SEED_PATH="data/seed/events/events_seed.csv"
+if [[ -f "${LOCAL_PROJECT_ROOT}/${EVENTS_SEED_PATH}" ]]; then
+  echo "Copying required seed file ${EVENTS_SEED_PATH} ..."
+  (
+    cd "${LOCAL_PROJECT_ROOT}"
+    COPYFILE_DISABLE=1 COPY_EXTENDED_ATTRIBUTES_DISABLE=1 tar -cf - "${EVENTS_SEED_PATH}"
+  ) | ssh "${SSH_OPTS[@]}" "${REMOTE}" "tar -xf - -C '${VM_REPO_DIR}'"
+else
+  echo "Warning: required seed file not found locally: ${EVENTS_SEED_PATH}" >&2
+fi
+
 echo "Repo copy complete."

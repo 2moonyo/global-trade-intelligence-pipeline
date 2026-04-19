@@ -853,3 +853,142 @@
 - Files changed: docs/agent-worklog.md.
 - Validation: VM grep confirmed old code in both places; phase logs still show every day writing `rows=0 saved=None`.
 - Next recommended step: stop the currently running old-code PortWatch run, sync the local repo fix to the VM, rebuild/recreate the Docker runtime image, then rerun PortWatch phases.
+
+## Hybrid VM + Cloud Run implementation session (2026-04-19)
+
+### objective
+- [in progress] Implement additive `hybrid_vm_serverless` execution profile while preserving default `all_vm` VM-first behavior.
+
+### constraints
+- Comtrade remains VM-only.
+- VM bootstrap, systemd timers, Docker Compose, metadata ADC, and `/etc/capstone/pipeline.env` remain compatible.
+- Secret Manager remains the only cloud secret source; no service-account JSON keys.
+- Existing GCS prefixes, raw BigQuery tables, dbt models, semantic marts, and dashboard outputs must not drift.
+- Cloud Run path is additive and disabled unless `execution_profile=hybrid_vm_serverless`.
+
+### ordered implementation plan
+1. [in progress] Add repo-local execution ownership profile and validation helpers.
+2. [todo] Add serverless-safe runner pieces with Postgres disabled by default in Cloud Run.
+3. [todo] Add additive Terraform Cloud Run Jobs, Scheduler, IAM, and env/secret wiring.
+4. [todo] Update docs and operator examples for both profiles.
+5. [todo] Run static, profile, Bruin, shell, and Terraform validation where possible.
+
+### files inspected in this session
+- docs/agent-worklog.md
+- ops/batch_plan.json
+- scripts/run_pipeline.sh
+- scripts/run_dbt.sh
+- scripts/google_auth_env.sh
+- scripts/vm_batches/common.sh
+- scripts/vm_batches/run_set.sh
+- warehouse/run_dataset_batch.py
+- warehouse/run_batch_queue.py
+- warehouse/batch_plan.py
+- warehouse/ops_store.py
+- ingest/common/cloud_config.py
+- ingest/common/gcs_io.py
+- ingest/common/run_artifacts.py
+- ingest/world_bank/worldbank_energy.py
+- docker/pipeline/Dockerfile
+- .dockerignore
+- .gitignore
+- infra/terraform/variables.tf
+- infra/terraform/iam.tf
+- infra/terraform/compute.tf
+- infra/terraform/secrets.tf
+- infra/terraform/outputs.tf
+- infra/terraform/render_dotenv.py
+- infra/terraform/terraform.tfvars.json.example
+- README.md
+- ops/vm/README.md
+- infra/terraform/README.md
+
+### tool/config verification
+- Bruin CLI present: `bruin version` returned v0.11.464; latest lookup failed due local/network metadata but installed CLI is available.
+- Terraform CLI present from earlier session inspection; local provider grep did not reveal existing Cloud Run/Scheduler resources.
+
+### progress update - execution profile foundation
+- [done] Added `ops/execution_profiles.json` with default `all_vm` and additive `hybrid_vm_serverless` ownership rules.
+- [done] Added `warehouse/execution_profiles.py` for profile parsing, validation, runtime ownership lookup, and CLI inspection.
+- [done] Updated `warehouse/run_batch_queue.py` so scheduled queues filter batches by `EXECUTION_PROFILE`/`EXECUTION_RUNTIME`; manual dataset batch wrappers still call `run_dataset_batch.py` directly and are not filtered.
+- [done] Added `OPS_POSTGRES_ENABLED=false` support via `NoOpPostgresOpsStore`; default remains Postgres enabled for VM compatibility.
+- Files changed: `ops/execution_profiles.json`, `warehouse/execution_profiles.py`, `warehouse/run_batch_queue.py`, `warehouse/ops_store.py`, `warehouse/run_dataset_batch.py`, `docs/agent-worklog.md`.
+
+### progress update - serverless runner foundation
+- [done] Added `warehouse/serverless_preflight.py` to enforce profile ownership and hydrate World Bank `dim_country` from the existing Comtrade GCS/BigQuery contract before Cloud Run execution.
+- [done] Added `warehouse/upload_serverless_artifacts.py` for best-effort upload of Cloud Run logs/manifests to `metadata/serverless_runs/...` without altering data contracts.
+- [done] Added `scripts/run_serverless_batch.sh` as the Cloud Run Job entrypoint around existing dataset-batch execution with `OPS_POSTGRES_ENABLED=false` and BigQuery ops mirror enabled.
+- [done] Updated `.dockerignore` and `docker/pipeline/Dockerfile` so only `data/seed/events/events_seed.csv` is included from `data/` for serverless Events jobs.
+- Files changed: `warehouse/serverless_preflight.py`, `warehouse/upload_serverless_artifacts.py`, `scripts/run_serverless_batch.sh`, `.dockerignore`, `docker/pipeline/Dockerfile`, `docs/agent-worklog.md`.
+
+### progress update - Terraform and env profile wiring
+- [done] Added `infra/terraform/serverless.tf` with additive Cloud Run Jobs, Cloud Scheduler triggers, serverless runtime/scheduler service accounts, IAM, Secret Manager env references, and non-secret env injection.
+- [done] Added Terraform variables/outputs for `execution_profile`, serverless image, region, scheduler pause state, scheduled non-Comtrade batches, and service-account names.
+- [done] Updated Terraform dotenv rendering and env examples with `EXECUTION_PROFILE`, `EXECUTION_RUNTIME`, `EXECUTION_PROFILE_PATH`, and `OPS_POSTGRES_ENABLED` defaults.
+- [done] Kept serverless resources inactive for `execution_profile=all_vm`; hybrid requires `serverless_container_image` before Cloud Run Jobs can be planned/applied.
+- Files changed: `infra/terraform/serverless.tf`, `infra/terraform/variables.tf`, `infra/terraform/outputs.tf`, `infra/terraform/render_dotenv.py`, `infra/terraform/terraform.tfvars.json.example`, `.env.example`, `ops/vm/pipeline.env.example`, `.gitignore`, `docs/agent-worklog.md`.
+
+### progress update - documentation
+- [done] Added `docs/hybrid-vm-serverless-rollout-plan.md` with architecture summary, checklist, data flow, Terraform rollout, validation, rollback, and risks.
+- [done] Updated `README.md` with execution profile overview and hybrid image/plan workflow.
+- [done] Updated `ops/vm/README.md` with VM profile ownership env values and duplicate-scheduling guardrails.
+- [done] Updated `infra/terraform/README.md` with hybrid Cloud Run Job rollout instructions and resource summary.
+- Files changed: `docs/hybrid-vm-serverless-rollout-plan.md`, `README.md`, `ops/vm/README.md`, `infra/terraform/README.md`, `docs/agent-worklog.md`.
+
+### validation update - hybrid implementation
+- [done] Corrected validation command usage after noticing `python -m json.tool` accepts a single input/output pair; restored `ops/execution_profiles.json` and documented safe loop usage.
+- [done] JSON validation: `ops/batch_plan.json` and `ops/execution_profiles.json` parsed successfully.
+- [done] Python compile: `warehouse/execution_profiles.py`, `warehouse/run_dataset_batch.py`, `warehouse/run_batch_queue.py`, `warehouse/serverless_preflight.py`, and `warehouse/upload_serverless_artifacts.py` passed.
+- [done] Shell syntax: `scripts/run_serverless_batch.sh`, `scripts/run_pipeline.sh`, and `scripts/run_dbt.sh` passed `bash -n`.
+- [done] Execution profile checks: `all_vm` owns 21/21 batches for VM; `hybrid_vm_serverless` selects only Comtrade for VM and non-Comtrade datasets for Cloud Run.
+- [done] VM hybrid queue smoke test: `weekly_refresh` with `EXECUTION_PROFILE=hybrid_vm_serverless EXECUTION_RUNTIME=vm OPS_POSTGRES_ENABLED=false` skipped PortWatch/Brent/FX as `cloud_run` owned and executed 0 batches.
+- [done] Serverless preflight smoke test: Events preflight passed and found `data/seed/events/events_seed.csv`.
+- [done] Bruin fast validation ran for PortWatch, Brent, FX, and World Bank Energy pipelines; commands exited 0 with the existing local used-tables/sql-parser warnings and Rudder network noise.
+- [done] Terraform formatting passed after running `terraform fmt`; note `infra/terraform/compute.tf` received formatting-only alignment changes.
+- [done] Terraform validate passed outside sandbox after provider plugin execution was allowed.
+- [done] Terraform all_vm plan with `-refresh=false` exited 0 and produced no Cloud Run/Scheduler resource matches.
+- [done] Terraform hybrid plan with `-refresh=false` exited 0 and rendered five Cloud Run Jobs plus five Scheduler `jobs/JOB:run` URIs.
+- [blocked] `dbt parse --profiles-dir . --target bigquery_dev` produced no output and appeared hung locally; process was stopped. Existing dbt model/schema files were not changed in this implementation.
+
+## 2026-04-19 - Hybrid Test Runbook And Seed Copy Check
+
+### objective
+- Help prepare a clean hybrid test on a separate GCP project/account.
+- Diagnose why `data/seed/events/events_seed.csv` did not copy/build during the earlier VM/Terraform/bootstrap attempt.
+- Keep changes minimal and preserve the VM-first baseline.
+
+### constraints
+- Do not print or inspect secret values.
+- Do not change warehouse contracts, GCS prefixes, BigQuery raw tables, dbt models, or Comtrade runtime ownership.
+- Preserve the VM copy bootstrap path and avoid copying the whole local `data/` runtime directory.
+
+### findings
+- [done] Current `.dockerignore` permits only `data/seed/events/events_seed.csv` through the Docker build context.
+- [done] Current `docker/pipeline/Dockerfile` explicitly copies `data/seed/events/events_seed.csv` into the pipeline image.
+- [done] `scripts/vm_repo_copy.sh` still excludes the entire `data/` directory during VM copy bootstrap, which means the VM Docker build context can miss the seed file even though the image now expects it.
+- [done] Current `.env` has the hybrid/dbt execution keys present by name; values were not printed.
+- [done] `infra/terraform/terraform.tfvars_tummodz_fresh-run.json` is missing several hybrid/serverless keys by name, including `execution_profile`, `serverless_*`, and `project_bigquery_user_members`; values were not printed.
+
+### tasks
+- [in progress] Patch `scripts/vm_repo_copy.sh` to copy the required Events seed file as a narrow second transfer while keeping the broad `data/` exclusion.
+- [todo] Validate shell syntax for the copy helper.
+- [todo] Provide a clean rebuild/runbook for Terraform, VM bootstrap, serverless manual execution, and Comtrade Day 4.
+
+### progress update - seed copy patch
+- [done] Updated `scripts/vm_repo_copy.sh` to keep the broad `data/` exclusion but copy `data/seed/events/events_seed.csv` as a second narrow tar transfer.
+- [done] Validation: `bash -n scripts/vm_repo_copy.sh` passed.
+- [done] Validation: static text check confirmed the script still excludes `data/` broadly and now includes the required Events seed transfer.
+- Files changed: `scripts/vm_repo_copy.sh`, `docs/agent-worklog.md`.
+- Next recommended step: use `--transfer copy` during VM bootstrap, then verify the seed exists on the VM before Docker Compose build/start.
+
+### finding - hybrid apply image placeholder
+- [done] User's hybrid apply failed because `serverless_container_image` was still `REPLACE_AFTER_BUILD`; Cloud Run requires a real image URI such as `europe-west1-docker.pkg.dev/PROJECT/REPOSITORY/capstone-pipeline:TAG`.
+- [done] Confirmed local `infra/terraform/terraform.tfvars.json` still has a placeholder image value by status only; no secret values were printed.
+- [todo] Add Terraform guardrail so placeholder image values fail during plan/precondition instead of at Cloud Run API create time.
+
+### progress update - image URI guardrail
+- [done] Added a Terraform Cloud Run Job precondition in `infra/terraform/serverless.tf` that rejects empty, placeholder, or non-container-registry `serverless_container_image` values.
+- [done] Validation: `terraform -chdir=infra/terraform fmt -check serverless.tf` passed.
+- [done] Validation: `terraform -chdir=infra/terraform validate` passed when provider plugin execution was allowed.
+- [done] Validation: `terraform -chdir=infra/terraform plan -refresh=false` now fails early with the explicit image URI message while `serverless_container_image` is `REPLACE_AFTER_BUILD`.
+- Files changed: `infra/terraform/serverless.tf`, `docs/agent-worklog.md`.

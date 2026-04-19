@@ -1,52 +1,35 @@
 {
-  "project_id": "your-gcp-project-id",
-  "gcp_location": "us-central1",
-  "gcs_bucket_name": "your-capstone-bucket",
-  "gcs_prefix": "",
+  "project_id": "fullcap-911",
+  "gcp_location": "europe-west1",
+  "gcs_bucket_name": "buckwheat_2206",
+  "gcs_prefix": "cap",
   "raw_dataset_id": "raw",
   "analytics_dataset_id": "analytics",
-  "execution_profile": "all_vm",
-  "serverless_enabled": true,
-  "serverless_region": null,
-  "serverless_scheduler_region": null,
-  "serverless_container_image": "",
-  "serverless_scheduler_paused": true,
 
   "primary_region": "europe-west1",
   "primary_zone": "europe-west1-b",
   "fallback_zone": "europe-west1-d",
-  "legacy_region": "us-central1",
-  "legacy_zone": "us-central1-a",
-
-  "legacy_compute_vm_enabled": false,
-  "legacy_vm_name": "capstone-vm",
-  "legacy_data_disk_name": "secondary-data-disk",
-  "legacy_instance_schedule_enabled": false,
-  "legacy_schedule_name": "capstone-vm-schedule",
-  "legacy_schedule_timezone": "UTC",
-  "legacy_start_schedule": "45 5 * * *",
-  "legacy_stop_schedule": "45 16 * * *",
 
   "primary_compute_vm_enabled": true,
   "primary_vm_name": "capstone-vm-eu",
   "primary_boot_disk_name": "capstone-vm-eu-boot",
   "primary_data_disk_name": "capstone-vm-eu-data",
-  "primary_instance_schedule_enabled": true,
+  "primary_instance_schedule_enabled": false,
   "primary_schedule_name": "capstone-vm-eu-schedule",
   "primary_schedule_timezone": "UTC",
   "primary_start_schedule": "45 5 * * *",
   "primary_stop_schedule": "45 16 * * *",
   "primary_boot_restore_from_snapshot": false,
-  "primary_boot_source_snapshot": "",
+  "primary_boot_source_snapshot": "snapshot-1-bootdisk-140426",
   "primary_data_restore_from_snapshot": false,
-  "primary_data_source_snapshot": "",
+  "primary_data_source_snapshot": "snapshot-2-persistent-disk-140426",
 
-  "vm_machine_type": "e2-standard-2",
+  "vm_machine_type": "n2-standard-4",
   "vm_boot_image": "debian-cloud/debian-11",
   "vm_boot_disk_size_gb": 25,
   "vm_boot_disk_type": "pd-standard",
   "vm_data_disk_device_name": "data-disk",
-  "vm_data_disk_size_gb": 30,
+  "vm_data_disk_size_gb": 50,
   "vm_data_disk_type": "pd-standard",
   "vm_network": "default",
   "vm_subnetwork": null,
@@ -55,7 +38,7 @@
   "vm_repo_root": "/var/lib/pipeline/capstone",
   "vm_env_file_path": "/etc/capstone/pipeline.env",
   "vm_swap_enabled": true,
-  "vm_swap_size_gb": 4,
+  "vm_swap_size_gb": 8,
   "vm_swap_file_path": "/var/lib/pipeline/swapfile",
   "vm_schedule_lane_timers": {
     "incremental_daily": "*-*-* 06:00:00 UTC",
@@ -66,7 +49,7 @@
   "vm_service_account_email": null,
 
   "primary_snapshot_schedule_enabled": true,
-  "primary_snapshot_hours_in_cycle": 72,
+  "primary_snapshot_hours_in_cycle": 24,
   "primary_snapshot_start_time": "04:00",
   "primary_snapshot_retention_days": 7,
   "primary_snapshot_storage_locations": [
@@ -83,22 +66,19 @@
   "recovery_vm_name": "capstone-vm-recovery",
   "recovery_boot_disk_name": "capstone-vm-recovery-boot",
   "recovery_data_disk_name": "capstone-vm-recovery-data",
+  "allow_force_destroy": true,
 
-  "allow_force_destroy": false,
   "project_job_user_members": [
-    "user:your.name@example.com"
-  ],
-  "project_bigquery_user_members": [
-    "user:your.name@example.com"
+    "user:tummodz@gmail.com"
   ],
   "storage_object_admin_members": [
-    "user:your.name@example.com"
+    "user:tummodz@gmail.com"
   ],
   "raw_dataset_editor_members": [
-    "user:your.name@example.com"
+    "user:tummodz@gmail.com"
   ],
   "analytics_dataset_editor_members": [
-    "user:your.name@example.com"
+    "user:tummodz@gmail.com"
   ],
   "analytics_dataset_viewer_members": [],
   "labels": {

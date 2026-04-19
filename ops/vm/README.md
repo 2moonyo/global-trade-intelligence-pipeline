@@ -537,6 +537,31 @@ sudo docker compose --env-file /etc/capstone/pipeline.env -f /var/lib/pipeline/c
 - you can keep timers enabled while still running these scripts manually when needed
 
 
+## Execution profile ownership on the VM
+
+`EXECUTION_PROFILE=all_vm` is the default and keeps the VM responsible for every scheduled dataset. In hybrid mode, set these values in `/etc/capstone/pipeline.env` before relying on Cloud Scheduler:
+
+```bash
+EXECUTION_PROFILE=hybrid_vm_serverless
+EXECUTION_RUNTIME=vm
+EXECUTION_PROFILE_PATH=ops/execution_profiles.json
+OPS_POSTGRES_ENABLED=true
+```
+
+With those values, VM schedule-lane timers continue to run the queue wrapper, but `warehouse/run_batch_queue.py` skips datasets owned by `cloud_run`. Comtrade remains VM-owned, and manual recovery wrappers such as `scripts/vm_batches/run_set.sh noncomtrade-phase-1-portwatch` remain available because they call the dataset batch runner directly.
+
+Before unpausing Cloud Scheduler, verify VM ownership filtering from inside the pipeline container:
+
+```bash
+sudo docker compose --env-file /etc/capstone/pipeline.env -f /var/lib/pipeline/capstone/docker/docker-compose.yml \
+  exec -T pipeline python warehouse/execution_profiles.py \
+  --profile hybrid_vm_serverless \
+  --runtime vm \
+  --plan-path ops/batch_plan.json
+```
+
+Rollback is env-only on the VM: render or edit `/etc/capstone/pipeline.env` back to `EXECUTION_PROFILE=all_vm`, then keep using the existing timers and wrappers.
+
 ## Enable schedule lanes
 
 The startup script writes one timer unit per configured schedule lane. Enable only the lanes you want:

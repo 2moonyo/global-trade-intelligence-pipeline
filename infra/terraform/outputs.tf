@@ -46,6 +46,46 @@ output "runtime_env" {
   }
 }
 
+output "execution_profile" {
+  value       = var.execution_profile
+  description = "Configured runtime ownership profile."
+}
+
+output "serverless_active" {
+  value       = local.serverless_active
+  description = "Whether additive Cloud Run Job resources are active for the current profile."
+}
+
+output "serverless_region" {
+  value       = local.serverless_active ? local.serverless_region : null
+  description = "Cloud Run Job region when serverless resources are active."
+}
+
+output "serverless_runtime_service_account_email" {
+  value       = local.serverless_active ? google_service_account.serverless_runtime[0].email : null
+  description = "Service account used by Cloud Run Jobs for keyless ADC."
+}
+
+output "serverless_scheduler_service_account_email" {
+  value       = local.serverless_active ? google_service_account.serverless_scheduler[0].email : null
+  description = "Service account used by Cloud Scheduler to execute Cloud Run Jobs."
+}
+
+output "serverless_cloud_run_job_names" {
+  value       = local.serverless_active ? [for job in values(google_cloud_run_v2_job.serverless_dataset_batch) : job.name] : []
+  description = "Cloud Run Job names created for non-Comtrade scheduled batches."
+}
+
+output "serverless_scheduler_job_names" {
+  value       = local.serverless_active ? [for job in values(google_cloud_scheduler_job.serverless_dataset_batch) : job.name] : []
+  description = "Cloud Scheduler job names created for non-Comtrade scheduled batches."
+}
+
+output "serverless_scheduler_paused" {
+  value       = local.serverless_active ? var.serverless_scheduler_paused : null
+  description = "Whether Cloud Scheduler jobs are paused."
+}
+
 output "primary_region" {
   value       = var.primary_region
   description = "Primary region for the Europe runtime and its snapshot policies."

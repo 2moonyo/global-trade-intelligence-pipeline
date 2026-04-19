@@ -1,0 +1,22 @@
+{
+  "default_profile": "all_vm",
+  "profiles": {
+    "all_vm": {
+      "description": "Current VM-first baseline. Every dataset is owned by the VM runtime.",
+      "default_runtime": "vm",
+      "datasets": {}
+    },
+    "hybrid_vm_serverless": {
+      "description": "Hybrid profile: Comtrade remains VM-owned; bounded non-Comtrade datasets run on Cloud Run Jobs.",
+      "default_runtime": "vm",
+      "datasets": {
+        "comtrade": "vm",
+        "portwatch": "cloud_run",
+        "brent": "cloud_run",
+        "fx": "cloud_run",
+        "events": "cloud_run",
+        "worldbank_energy": "cloud_run"
+      }
+    }
+  }
+}

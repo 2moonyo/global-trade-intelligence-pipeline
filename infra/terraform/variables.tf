@@ -104,6 +104,210 @@ variable "allow_force_destroy" {
   default     = false
 }
 
+variable "execution_profile" {
+  description = "Runtime ownership profile. all_vm preserves the VM-first baseline; hybrid_vm_serverless adds Cloud Run Jobs for non-Comtrade scheduled batches."
+  type        = string
+  default     = "all_vm"
+
+  validation {
+    condition     = contains(["all_vm", "hybrid_vm_serverless"], var.execution_profile)
+    error_message = "execution_profile must be one of: all_vm, hybrid_vm_serverless."
+  }
+}
+
+variable "serverless_enabled" {
+  description = "Whether serverless resources may be created when execution_profile is hybrid_vm_serverless."
+  type        = bool
+  default     = true
+}
+
+variable "serverless_region" {
+  description = "Region for Cloud Run Jobs. Leave null to use primary_region."
+  type        = string
+  default     = null
+}
+
+variable "serverless_scheduler_region" {
+  description = "Region for Cloud Scheduler jobs. Leave null to use serverless_region."
+  type        = string
+  default     = null
+}
+
+variable "serverless_container_image" {
+  description = "Container image URI for the pipeline image used by Cloud Run Jobs. Required when hybrid serverless resources are active."
+  type        = string
+  default     = ""
+}
+
+variable "serverless_runtime_service_account_id" {
+  description = "Account id for the Cloud Run Job runtime service account."
+  type        = string
+  default     = "capstone-serverless-runtime"
+}
+
+variable "serverless_runtime_service_account_display_name" {
+  description = "Display name for the Cloud Run Job runtime service account."
+  type        = string
+  default     = "Capstone Serverless Runtime"
+}
+
+variable "serverless_scheduler_service_account_id" {
+  description = "Account id for the Cloud Scheduler invoker service account."
+  type        = string
+  default     = "capstone-serverless-scheduler"
+}
+
+variable "serverless_scheduler_service_account_display_name" {
+  description = "Display name for the Cloud Scheduler invoker service account."
+  type        = string
+  default     = "Capstone Serverless Scheduler"
+}
+
+variable "serverless_secret_env_to_secret_id" {
+  description = "Approved Secret Manager env bindings injected into Cloud Run Jobs. Keep this aligned with the existing Secret Manager model."
+  type        = map(string)
+  default = {
+    FRED_API_KEY = "capstone-fred-api-key"
+  }
+}
+
+variable "serverless_deletion_protection" {
+  description = "Whether Cloud Run Jobs should use deletion protection."
+  type        = bool
+  default     = false
+}
+
+variable "serverless_default_cpu" {
+  description = "Default Cloud Run Job CPU limit."
+  type        = string
+  default     = "2"
+}
+
+variable "serverless_default_memory" {
+  description = "Default Cloud Run Job memory limit."
+  type        = string
+  default     = "4Gi"
+}
+
+variable "serverless_default_task_timeout" {
+  description = "Default Cloud Run Job task timeout."
+  type        = string
+  default     = "3600s"
+}
+
+variable "serverless_default_max_retries" {
+  description = "Default Cloud Run Job task retry count."
+  type        = number
+  default     = 0
+}
+
+variable "serverless_scheduler_time_zone" {
+  description = "Default IANA time zone for Cloud Scheduler jobs."
+  type        = string
+  default     = "UTC"
+}
+
+variable "serverless_scheduler_paused" {
+  description = "Whether Terraform-created Cloud Scheduler jobs start paused. Keep true during rollout until VM env ownership is set to hybrid."
+  type        = bool
+  default     = true
+}
+
+variable "serverless_scheduler_attempt_deadline" {
+  description = "Default Cloud Scheduler HTTP attempt deadline."
+  type        = string
+  default     = "320s"
+}
+
+variable "serverless_scheduler_retry_count" {
+  description = "Default Cloud Scheduler retry count."
+  type        = number
+  default     = 1
+}
+
+variable "serverless_scheduler_min_backoff_duration" {
+  description = "Default minimum backoff duration for Cloud Scheduler retries."
+  type        = string
+  default     = "60s"
+}
+
+variable "serverless_scheduler_max_backoff_duration" {
+  description = "Default maximum backoff duration for Cloud Scheduler retries."
+  type        = string
+  default     = "300s"
+}
+
+variable "serverless_scheduler_max_doublings" {
+  description = "Default maximum retry backoff doublings for Cloud Scheduler retries."
+  type        = number
+  default     = 3
+}
+
+variable "serverless_scheduled_batches" {
+  description = "Map of non-Comtrade scheduled dataset batches to Cloud Run Job and Cloud Scheduler settings."
+  type = map(object({
+    job_name              = string
+    scheduler_name        = string
+    dataset_name          = string
+    batch_id              = string
+    schedule              = string
+    description           = string
+    time_zone             = optional(string)
+    timeout               = optional(string)
+    cpu                   = optional(string)
+    memory                = optional(string)
+    max_retries           = optional(number)
+    task_count            = optional(number)
+    parallelism           = optional(number)
+    attempt_deadline      = optional(string)
+    scheduler_retry_count = optional(number)
+  }))
+  default = {
+    events_incremental_recent = {
+      job_name       = "capstone-events-incremental"
+      scheduler_name = "capstone-events-incremental"
+      dataset_name   = "events"
+      batch_id       = "events_incremental_recent"
+      schedule       = "0 5 * * *"
+      description    = "Run the Events incremental recent batch as a Cloud Run Job."
+    }
+    portwatch_weekly_refresh = {
+      job_name       = "capstone-portwatch-weekly"
+      scheduler_name = "capstone-portwatch-weekly"
+      dataset_name   = "portwatch"
+      batch_id       = "portwatch_weekly_refresh"
+      schedule       = "15 5 * * 1"
+      description    = "Run the PortWatch weekly refresh batch as a Cloud Run Job."
+    }
+    brent_weekly_refresh = {
+      job_name       = "capstone-brent-weekly"
+      scheduler_name = "capstone-brent-weekly"
+      dataset_name   = "brent"
+      batch_id       = "brent_weekly_refresh"
+      schedule       = "35 5 * * 1"
+      description    = "Run the Brent weekly refresh batch as a Cloud Run Job."
+    }
+    fx_weekly_refresh = {
+      job_name       = "capstone-fx-weekly"
+      scheduler_name = "capstone-fx-weekly"
+      dataset_name   = "fx"
+      batch_id       = "fx_weekly_refresh"
+      schedule       = "55 5 * * 1"
+      description    = "Run the FX weekly refresh batch as a Cloud Run Job."
+    }
+    worldbank_energy_yearly_refresh = {
+      job_name       = "capstone-worldbank-energy-yearly"
+      scheduler_name = "capstone-worldbank-energy-yearly"
+      dataset_name   = "worldbank_energy"
+      batch_id       = "worldbank_energy_yearly_refresh"
+      schedule       = "15 7 1 1 *"
+      description    = "Run the World Bank energy yearly refresh batch as a Cloud Run Job."
+      timeout        = "7200s"
+      memory         = "4Gi"
+    }
+  }
+}
+
 variable "primary_region" {
   description = "Region for the primary VM runtime and snapshot policies."
   type        = string
@@ -222,15 +426,15 @@ variable "vm_secret_env_to_secret_id" {
   description = "Map of env var names to Secret Manager secret IDs. Only these keys are synced into the VM runtime env file."
   type        = map(string)
   default = {
-    FRED_API_KEY      = "capstone-fred-api-key"
-    COMTRADE_API_KEY  = "capstone-comtrade-api-key"
-    COMTRADE_API_KEY_DATA    = "capstone-comtrade-api-key-data"
-    COMTRADE_API_KEY_DATA_A  = "capstone-comtrade-api-key-data-a"
-    COMTRADE_API_KEY_DATA_B  = "capstone-comtrade-api-key-data-b"
-    POSTGRES_USER     = "capstone-postgres-user"
-    POSTGRES_PASSWORD = "capstone-postgres-password"
-    POSTGRES_DB       = "capstone-postgres-db"
-    POSTGRES_SCHEMA   = "capstone-postgres-schema"
+    FRED_API_KEY            = "capstone-fred-api-key"
+    COMTRADE_API_KEY        = "capstone-comtrade-api-key"
+    COMTRADE_API_KEY_DATA   = "capstone-comtrade-api-key-data"
+    COMTRADE_API_KEY_DATA_A = "capstone-comtrade-api-key-data-a"
+    COMTRADE_API_KEY_DATA_B = "capstone-comtrade-api-key-data-b"
+    POSTGRES_USER           = "capstone-postgres-user"
+    POSTGRES_PASSWORD       = "capstone-postgres-password"
+    POSTGRES_DB             = "capstone-postgres-db"
+    POSTGRES_SCHEMA         = "capstone-postgres-schema"
   }
 }
 

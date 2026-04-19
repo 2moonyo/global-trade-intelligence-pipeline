@@ -35,6 +35,7 @@ deep*.md
 !**/README.md
 !docs/agent-worklog.md
 !docs/bruin-refactor-plan.md
+!docs/hybrid-vm-serverless-rollout-plan.md
 
 # Secrets and backups
 .env.bak

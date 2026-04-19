@@ -12,7 +12,12 @@ __pycache__
 *.zip
 *.duckdb
 
-data
+data/*
+!data/seed/
+data/seed/*
+!data/seed/events/
+data/seed/events/*
+!data/seed/events/events_seed.csv
 logs
 target
 dbt_packages

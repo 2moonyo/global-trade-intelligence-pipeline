@@ -228,6 +228,39 @@ If you later want to tear the Terraform-managed cloud resources back down, set `
 make infra-destroy
 ```
 
+## Execution Profiles: VM Only vs Hybrid
+
+The default execution profile is `all_vm`. It preserves the current VM-first baseline: systemd timers on the VM own all scheduled datasets, and existing VM batch wrappers continue to work.
+
+The additive hybrid profile is `hybrid_vm_serverless`:
+
+- Comtrade stays on the VM.
+- PortWatch, Brent, FX, Events, and World Bank Energy scheduled refreshes run as Cloud Run Jobs.
+- GCS prefixes, BigQuery raw tables, dbt models, marts, and dashboard-facing outputs stay the same.
+- Cloud Run uses service-account ADC and Secret Manager env injection; no JSON key is required.
+
+Execution ownership lives in `ops/execution_profiles.json`. The VM queue runner reads `EXECUTION_PROFILE` and `EXECUTION_RUNTIME`; manual VM dataset wrappers still call the dataset batch runner directly for operator recovery.
+
+For a safe hybrid rollout:
+
+```bash
+# 1. Prove all_vm remains the active baseline.
+terraform -chdir=infra/terraform plan -var='execution_profile=all_vm'
+
+# 2. Build/push the pipeline image for Cloud Run.
+export IMAGE_URI=REGION-docker.pkg.dev/PROJECT/REPOSITORY/capstone-pipeline:TAG
+gcloud auth configure-docker REGION-docker.pkg.dev
+docker buildx build --platform linux/amd64 -f docker/pipeline/Dockerfile -t "$IMAGE_URI" --push .
+
+# 3. Preview hybrid resources. Keep Scheduler paused for first rollout.
+terraform -chdir=infra/terraform plan \
+  -var='execution_profile=hybrid_vm_serverless' \
+  -var="serverless_container_image=$IMAGE_URI" \
+  -var='serverless_scheduler_paused=true'
+```
+
+After applying hybrid infrastructure, render the VM env with `EXECUTION_PROFILE=hybrid_vm_serverless`, validate that VM scheduled queues skip serverless-owned non-Comtrade batches, execute one Cloud Run Job manually, then unpause Cloud Scheduler. The full checklist is in `docs/hybrid-vm-serverless-rollout-plan.md`.
+
 ## VM operations quick links
 
 For VM runtime setup and operations, see `ops/vm/README.md`.

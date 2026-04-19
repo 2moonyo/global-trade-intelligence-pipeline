@@ -1,5 +1,5 @@
 resource "google_project_service" "secretmanager" {
-  count = var.vm_secret_sync_enabled ? 1 : 0
+  count = var.vm_secret_sync_enabled || local.serverless_active ? 1 : 0
 
   project            = var.project_id
   service            = "secretmanager.googleapis.com"

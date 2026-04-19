@@ -239,6 +239,32 @@
 - Bruin dataset_batch asset now supports optional START_AT_TASK / START_AT_STEP_ORDER passthrough so the same restart semantics remain available for Bruin-triggered runs.
 - T4 patch implemented: `.bruin.yml` now keeps `default` as the selected environment and adds a minimal `production` environment, with both environments exposing the same env-var-backed `google_cloud_platform` connection name (`gcp-default`).
 
+## Investigation log (append-only)
+
+### 2026-04-19: PortWatch VM failure log check
+- status: done
+- Objective: Inspect the most recent VM logs for the last two PortWatch-related run IDs and identify why PortWatch failed.
+- Constraints: Preserve VM-first runtime, do not change pipeline behavior, use existing ops/logging surfaces first, and keep Postgres/BigQuery logging optional.
+- Ordered plan:
+  1. Identify the VM connection path and runtime log locations from repo docs/scripts.
+  2. Query VM ops records for the latest two PortWatch pipeline run IDs and task log paths.
+  3. Read the relevant VM task/pipeline logs and manifests for failure evidence.
+  4. Summarize root cause, affected run IDs, validation, and next recommended step.
+- Files inspected: docs/agent-worklog.md, ops/vm/README.md, warehouse/run_dataset_batch.py, warehouse/ops_store.py, scripts/vm_batches/common.sh, scripts/vm_batches/run_noncomtrade_phase_1_portwatch.sh.
+- Files changed: docs/agent-worklog.md.
+- VM run IDs inspected:
+  - pipeline_run_20260418T195533Z_c3eaaf95: portwatch_bootstrap_phase_2 failed at silver after extract completed.
+  - pipeline_run_20260418T194431Z_1cfb31d6: portwatch_bootstrap_phase_1 failed at silver after extract completed.
+- Findings:
+  - Both failed silver tasks raised FileNotFoundError: No parquet files found under /workspace/data/bronze/portwatch.
+  - Phase 1 extract completed but processed 2300 days with days_with_rows=0, null_days=2300, total_rows=0, files_written=[].
+  - Phase 2 extract completed but processed 1826 days with days_with_rows=0, null_days=1826, total_rows=0, files_written=[].
+  - VM file check confirmed /var/lib/pipeline/capstone/data/bronze/portwatch does not exist.
+  - Targeted VM API probe confirmed the ArcGIS endpoint has data: unfiltered count=74452; timestamp date filter for 2020-01-01 count=28; timestamp date filter plus chokepoint1 count=1.
+  - The extractor's current millisecond numeric date predicate returns ArcGIS error code 400 ("Unable to perform query. Please check your parameters."). The extractor treats missing features as empty data and does not fail fast on payload["error"], causing a false-success extract and downstream silver failure.
+- Validation: VM ops Postgres queried for latest PortWatch runs/task records; VM silver logs, extract logs, extract/silver manifests, bronze directory, and ArcGIS query behavior inspected.
+- Next recommended step: Patch PortWatch extract to use ArcGIS timestamp date syntax and fail fast when the API returns an error payload, then rerun PortWatch from extract for the failed phase(s).
+
 ## 2026-04-18 VM bootstrap hardening
 - Status: done
 - Objective: Make fresh-project bootstrap reliable for new users by handling the race between laptop-side repo/env setup and the VM metadata startup script installing systemd units.
@@ -804,3 +830,26 @@
 - Summary: User asked whether a destroy/recreate should now allow the setup scripts to run cleanly and requested a step-by-step first-time setup in the README. Added `scripts/vm_batches/run_full_bootstrap.sh` as a VM-side orchestration wrapper that runs non-Comtrade phase 1/2, Comtrade day 1 through day 6, and then the dependent World Bank energy lane in order. Updated the root README with a first-time GCP VM setup section covering GCP auth/API enablement, tfvars, `.env` secret seeding, `make vm-bootstrap --reset-known-host`, full VM pipeline execution, timer enablement, and destroy/recreate smoke testing.
 - Files changed: README.md, scripts/vm_batches/run_full_bootstrap.sh, docs/agent-worklog.md
 - Validation: `bash -n scripts/vm_batches/run_full_bootstrap.sh` -> passed; file mode is executable (`-rwxr-xr-x`).
+
+### 2026-04-19 - Entry 058 - PortWatch ArcGIS extract fix
+- Status: done
+- Objective: Fix the PortWatch VM failure where extract falsely completed with zero bronze rows because the ArcGIS date predicate returned an API error payload that was treated as empty data.
+- Constraints: Preserve VM-first orchestration and existing batch wrappers; keep the change focused on PortWatch extract reliability; do not alter downstream silver/load contracts.
+- Ordered plan:
+  1. Patch `ingest/portwatch/portwatch_extract.py` to use ArcGIS timestamp date predicates and fail fast on ArcGIS `error` payloads.
+  2. Add focused local tests for API error handling and daily query construction/normalization.
+  3. Validate with Python compile and the targeted tests.
+  4. Provide exact VM rerun instructions for the failed PortWatch phases.
+- Files inspected: docs/agent-worklog.md, ingest/portwatch/portwatch_extract.py, ops/batch_plan.json, pyproject.toml, tests/.
+- Files changed: ingest/portwatch/portwatch_extract.py, tests/test_portwatch_extract.py, docs/agent-worklog.md.
+- Validation: `python -m py_compile ingest/portwatch/portwatch_extract.py tests/test_portwatch_extract.py` -> passed; `python -m unittest tests.test_portwatch_extract` -> passed (2 tests).
+- Outcome: PortWatch daily extraction now uses ArcGIS timestamp predicates instead of millisecond numeric predicates, and `_request_json` raises on ArcGIS `error` payloads so bad API queries fail in extract instead of producing false-success zero-row bronze runs.
+- Next recommended step: sync this repo state to the VM, restart/rebuild the runtime if needed, then rerun `portwatch_bootstrap_phase_1` and `portwatch_bootstrap_phase_2` from extract.
+
+### 2026-04-19 - Entry 059 - PortWatch VM still running old extractor
+- Status: done
+- Summary: User reported that PortWatch still produced zero rows on the VM while the same script worked locally. Read-only VM comparison showed both the VM repo copy (`/var/lib/pipeline/capstone/ingest/portwatch/portwatch_extract.py`) and the running pipeline container copy (`/workspace/ingest/portwatch/portwatch_extract.py`) still contain the old `day_start_ms` / millisecond numeric date predicate, not the local timestamp-predicate fix. Latest VM ops records show `pipeline_run_20260419T083525Z_a33b7828` failed for phase 1, and `pipeline_run_20260419T084521Z_f1b508a1` was still running phase 2 with the old code.
+- Files inspected: docs/agent-worklog.md, VM repo `ingest/portwatch/portwatch_extract.py`, container `/workspace/ingest/portwatch/portwatch_extract.py`, VM ops pipeline_run records, PortWatch phase extract logs.
+- Files changed: docs/agent-worklog.md.
+- Validation: VM grep confirmed old code in both places; phase logs still show every day writing `rows=0 saved=None`.
+- Next recommended step: stop the currently running old-code PortWatch run, sync the local repo fix to the VM, rebuild/recreate the Docker runtime image, then rerun PortWatch phases.

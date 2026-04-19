@@ -59,12 +59,41 @@ def _request_json(session: requests.Session, url: str, params: dict, cfg: PortWa
         try:
             response = session.get(url, params=params, timeout=cfg.timeout_s)
             response.raise_for_status()
-            return response.json()
         except Exception as exc:
             last_err = exc
-            sleep_s = cfg.retry_backoff_s ** attempt
-            time.sleep(sleep_s)
+            if attempt < cfg.max_retries:
+                sleep_s = cfg.retry_backoff_s ** attempt
+                time.sleep(sleep_s)
+            continue
+
+        try:
+            payload = response.json()
+        except Exception as exc:
+            last_err = exc
+            if attempt < cfg.max_retries:
+                sleep_s = cfg.retry_backoff_s ** attempt
+                time.sleep(sleep_s)
+            continue
+
+        error = payload.get("error")
+        if error:
+            code = error.get("code", "unknown")
+            message = error.get("message") or "ArcGIS query failed"
+            details = error.get("details") or []
+            detail_text = "; ".join(str(detail) for detail in details)
+            suffix = f": {detail_text}" if detail_text else ""
+            raise RuntimeError(f"ArcGIS API error {code}: {message}{suffix}")
+
+        return payload
     raise RuntimeError(f"Failed after {cfg.max_retries} retries: {last_err}")
+
+
+def _arcgis_sql_string(value: str) -> str:
+    return "'" + value.replace("'", "''") + "'"
+
+
+def _arcgis_timestamp_literal(value: date) -> str:
+    return f"timestamp '{value.isoformat()} 00:00:00'"
 
 
 def fetch_chokepoints_lookup(cfg: PortWatchConfig) -> pd.DataFrame:
@@ -84,15 +113,16 @@ def fetch_daily_for_date(
     if not chokepoint_ids:
         raise ValueError("Provide at least one chokepoint id (for example 'chokepoint1').")
 
-    quoted = ",".join([f"'{value}'" for value in chokepoint_ids])
-    day_start = datetime(one_day.year, one_day.month, one_day.day, tzinfo=timezone.utc)
-    day_end = day_start + timedelta(days=1)
-    day_start_ms = int(day_start.timestamp() * 1000)
-    day_end_ms = int(day_end.timestamp() * 1000)
+    quoted = ",".join([_arcgis_sql_string(value) for value in chokepoint_ids])
+    next_day = one_day + timedelta(days=1)
 
     # Apply day-level filtering in the ArcGIS query itself to avoid repeatedly
     # paging across a mostly recent global record set and missing older history.
-    where = f"portid IN ({quoted}) AND date >= {day_start_ms} AND date < {day_end_ms}"
+    where = (
+        f"portid IN ({quoted}) "
+        f"AND date >= {_arcgis_timestamp_literal(one_day)} "
+        f"AND date < {_arcgis_timestamp_literal(next_day)}"
+    )
 
     params_base = {
         "where": where,

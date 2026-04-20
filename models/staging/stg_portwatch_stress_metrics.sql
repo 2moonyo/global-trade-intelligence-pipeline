@@ -3,8 +3,8 @@
 with raw_portwatch as (
   select
     {{ cast_string('chokepoint_id') }} as portwatch_source_chokepoint_id,
-    {{ hash_text("lower(trim(" ~ cast_string('chokepoint_name') ~ "))") }} as chokepoint_id,
-    {{ cast_string('chokepoint_name') }} as chokepoint_name,
+    {{ canonical_chokepoint_id('chokepoint_name') }} as chokepoint_id,
+    {{ canonicalize_chokepoint_name('chokepoint_name') }} as chokepoint_name,
     cast(
       coalesce(
         cast(month_start_date as date),
@@ -19,7 +19,7 @@ with raw_portwatch as (
     {{ cast_float('dry_bulk_share') }} as dry_bulk_share
   from {{ source('raw', 'portwatch_monthly') }}
   where year_month is not null
-    and chokepoint_name is not null
+    and {{ clean_label_text('chokepoint_name') }} is not null
 ),
 chokepoint_bounds as (
   select

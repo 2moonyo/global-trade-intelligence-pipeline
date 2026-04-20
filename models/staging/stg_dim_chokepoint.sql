@@ -1,6 +1,6 @@
 select
-  {{ hash_text('lower(trim(chokepoint_name))') }} as chokepoint_id,
-  {{ cast_string('chokepoint_name') }} as chokepoint_name,
+  {{ canonical_chokepoint_id('chokepoint_name') }} as chokepoint_id,
+  {{ canonicalize_chokepoint_name('chokepoint_name') }} as chokepoint_name,
   {{ cast_string('kind') }} as chokepoint_kind,
   {{ cast_float('longitude') }} as longitude,
   {{ cast_float('latitude') }} as latitude,

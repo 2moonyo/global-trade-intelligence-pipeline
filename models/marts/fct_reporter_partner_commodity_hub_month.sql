@@ -2,7 +2,7 @@ with route_candidates as (
   select
     upper(trim(reporter_iso3)) as reporter_iso3,
     upper(trim(partner_iso3)) as partner_iso3,
-    main_chokepoint,
+    {{ canonicalize_chokepoint_name('main_chokepoint') }} as main_chokepoint,
     route_status,
     route_confidence,
     transport_evidence,

@@ -19,6 +19,16 @@ RUN curl -LsSf https://astral.sh/uv/install.sh | sh \
 
 WORKDIR /workspace
 
+RUN printf '%s\n' \
+      'export VIRTUAL_ENV="${VIRTUAL_ENV:-/workspace/.venv}"' \
+      'export UV_PROJECT_ENVIRONMENT="${UV_PROJECT_ENVIRONMENT:-/workspace/.venv}"' \
+      'export UV_CACHE_DIR="${UV_CACHE_DIR:-/workspace/.uv-cache}"' \
+      'case ":${PATH}:" in' \
+      '  *":${VIRTUAL_ENV}/bin:"*) ;;' \
+      '  *) export PATH="${VIRTUAL_ENV}/bin:/root/.local/bin:${PATH}" ;;' \
+      'esac' \
+    > /etc/profile.d/capstone-venv.sh
+
 COPY pyproject.toml uv.lock README.md ./
 RUN uv sync --frozen --no-dev --no-install-project
 

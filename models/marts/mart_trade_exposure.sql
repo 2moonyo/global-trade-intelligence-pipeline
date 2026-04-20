@@ -7,11 +7,11 @@ with routed_trade as (
     partner_iso3,
     period,
     year_month,
-    main_chokepoint,
+    {{ canonicalize_chokepoint_name('main_chokepoint') }} as main_chokepoint,
     route_confidence_score,
     trade_value_usd
   from {{ ref('fct_reporter_partner_commodity_route_month') }}
-  where main_chokepoint is not null
+  where {{ clean_label_text('main_chokepoint') }} is not null
     and coalesce(is_maritime_routed, false)
 ),
 reporter_month_totals as (
@@ -26,7 +26,7 @@ reporter_month_totals as (
 reporter_chokepoint_confidence as (
   select
     rt.reporter_iso3,
-    {{ hash_text('lower(trim(rt.main_chokepoint))') }} as chokepoint_id,
+    {{ canonical_chokepoint_id('rt.main_chokepoint') }} as chokepoint_id,
     rt.main_chokepoint as chokepoint_name,
     rt.period,
     rt.year_month,

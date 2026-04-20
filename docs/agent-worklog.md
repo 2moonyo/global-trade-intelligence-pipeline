@@ -39,6 +39,85 @@
 1. [in progress] Comtrade bronze data sync: Copy local monthly_history to VM persistent disk and disable disk wipe for testing.
 
 ### in progress
+1. [done] Delivery README packaging and operator guide refresh (2026-04-20)
+	- Objective: Rework the README into a clearer delivery guide for non-technical and technical users, including setup, VM/manual and Cloud Run/manual commands, Bruin usage, scheduling ownership, Comtrade batching rationale, metadata setup, observability, VM recovery fallback, and project lessons learned.
+	- Constraints: Preserve VM-first baseline as the recommended path, keep serverless framed as additive/hybrid, do not invent a new secret source, do not alter runtime code unless documentation inspection proves a real gap, and keep explanations shallow-first with technical detail available below.
+	- Plan:
+	  1. Inspect README, batch plan, VM wrappers, Cloud Run job definitions, scheduling config, Bruin docs/config, Comtrade metadata script behavior, and recovery-zone Terraform variables.
+	  2. Confirm current public setup links for GCP project creation, API enabling, FRED API keys, and UN Comtrade API keys before adding external guidance.
+	  3. Patch README sections for delivery overview, setup, env/context headers, manual run matrices, scheduling map, Comtrade metadata and batching, observability, recovery, and lessons learned.
+	  4. Validate Markdown structure and command references without executing live cloud operations.
+	- Validation notes:
+	  1. 2026-04-20: README readback completed after the delivery-guide rewrite.
+	  2. 2026-04-20: Command sections were checked against `ops/batch_plan.json`, VM batch wrappers, Cloud Run job names, Bruin documentation/tooling, and env examples.
+	  3. 2026-04-20: No live GCP, Cloud Run, VM, or Bruin pipeline runs were executed; this was a documentation/package-readiness update.
+	- Outcome:
+	  1. done: Reworked `README.md` into a deliverable operator guide with plain-English and technical setup paths.
+	  2. done: Added local, VM, Cloud Run, and Bruin command headers, explicit dataset run commands, matching log inspection commands, scheduling locations, Comtrade metadata/batching rationale, observability, VM recovery fallback, data availability lessons, commodity aggregation lessons, and events-layer explanation.
+
+1. Chokepoint canonical naming and geo join fix (2026-04-20)
+	- Objective: Fix semantic geo mart coordinate loss caused by independent name-hash chokepoint_id derivations across raw dim, PortWatch, events, and route-derived marts.
+	- Constraints: Preserve VM/dbt baseline, keep changes incremental, fix upstream canonical naming/ID logic rather than patching final marts, preserve Looker-friendly business labels.
+	- Plan:
+	  1. Inspect chokepoint staging, PortWatch daily/monthly staging, event bridge models, route-derived marts, dim_chokepoint, and hotspot map joins.
+	  2. Add one reusable dbt canonicalization macro for chokepoint labels and IDs.
+	  3. Apply the canonical label/ID before every chokepoint hash and route/event/PortWatch name join that feeds semantic marts.
+	  4. Add dbt audit tests for dim coordinate nulls, hotspot missing coordinates, and hotspot-to-dim unmatched chokepoints.
+	  5. Validate with parse/targeted dbt checks where local DuckDB locking allows; use source-Parquet DuckDB audits for before/after count evidence if warehouse DB remains locked.
+	- Initial findings:
+	  1. Current independent lower(trim(name)) hashes split `Hormuz Strait` from `Strait of Hormuz`.
+	  2. Current independent lower(trim(name)) hashes split `Bab el-Mandeb` from `Bab el-Mandeb Strait`.
+	  3. Local silver audit shows simulated current dim_chokepoint has 10 rows with 2 null-coordinate alias rows, and PortWatch hotspot source shape has 86 rows without coordinates.
+	  4. Canonical mapping is expected to reduce cross-source chokepoint IDs from 11 raw-name IDs to 9 canonical IDs and remove the PortWatch coordinate misses.
+	- Status: done (2026-04-20).
+	- Files inspected:
+	  - models/staging/stg_dim_chokepoint.sql
+	  - models/staging/stg_portwatch_stress_metrics.sql
+	  - models/staging/stg_portwatch_daily.sql
+	  - models/staging/stg_chokepoint_bridge.sql
+	  - models/staging/events/stg_event_month_chokepoint.sql
+	  - models/staging/events/stg_event_location.sql
+	  - models/marts/dimensions/dim_chokepoint.sql
+	  - models/marts/dimensions/bridge_event_chokepoint.sql
+	  - models/marts/fct_reporter_partner_commodity_route_month.sql
+	  - models/marts/fct_reporter_partner_commodity_hub_month.sql
+	  - models/marts/mart_trade_exposure.sql
+	  - models/marts/mart_reporter_month_chokepoint_exposure.sql
+	  - models/marts/semantics/mart_chokepoint_monthly_stress.sql
+	  - models/marts/semantics/mart_chokepoint_monthly_hotspot_map.sql
+	  - models/marts/semantics/mart_reporter_partner_commodity_month_enriched.sql
+	  - tests/stg_portwatch_stress_metrics_canonical_id.sql
+	- Files changed:
+	  - macros/shared_utils.sql
+	  - models/staging/stg_dim_chokepoint.sql
+	  - models/staging/stg_portwatch_stress_metrics.sql
+	  - models/staging/stg_portwatch_daily.sql
+	  - models/staging/stg_chokepoint_bridge.sql
+	  - models/staging/events/stg_event_month_chokepoint.sql
+	  - models/staging/stg_dim_trade_route_geography.sql
+	  - models/marts/dimensions/dim_chokepoint.sql
+	  - models/marts/dimensions/bridge_event_chokepoint.sql
+	  - models/marts/fct_reporter_partner_commodity_route_month.sql
+	  - models/marts/fct_reporter_partner_commodity_hub_month.sql
+	  - models/marts/mart_trade_exposure.sql
+	  - models/marts/mart_reporter_month_chokepoint_exposure.sql
+	  - models/marts/semantics/mart_chokepoint_monthly_stress.sql
+	  - models/marts/semantics/mart_reporter_partner_commodity_month_enriched.sql
+	  - tests/stg_portwatch_stress_metrics_canonical_id.sql
+	  - tests/dim_chokepoint_null_coordinates.sql
+	  - tests/mart_chokepoint_monthly_hotspot_map_missing_coordinates.sql
+	  - tests/mart_chokepoint_monthly_hotspot_map_unmatched_dim_chokepoints.sql
+	  - docs/chokepoint-canonicalization-worklog.md
+	  - docs/agent-worklog.md
+	  - .gitignore
+	- Validation:
+	  - DuckDB source-Parquet audit of raw dim, PortWatch monthly/daily, event bridge, and route chokepoint labels completed.
+	  - Before: simulated dim_chokepoint had 10 rows and 2 null-coordinate alias rows; simulated hotspot source shape had 86 of 218 rows without coordinates.
+	  - After canonical mapping: simulated dim_chokepoint has 8 rows and 0 null-coordinate rows; simulated hotspot source shape has 0 of 218 rows without coordinates.
+	  - Direct dbt parse/compile attempts hung locally with no useful output; stuck commands were stopped. No repo DuckDB/profile removal or restructuring was performed.
+	  - `git diff --check` passed.
+	  - `rg` confirmed no remaining chokepoint-name hash derivations using raw `lower(trim(...))`; remaining `lower(trim(chokepoint_name))` hits are event-region classification logic, not chokepoint IDs.
+
 1. Comtrade bronze data sync and persistent disk wipe disablement for testing (2026-04-17)
 	- Objective: Fix missing day1 data on VM persistent disk for Comtrade bronze, unblock silver pipeline, and disable disk wipe logic for test runs.
 	- Constraints: Do not break production durability; only disable wipe for local/test. Use smallest safe change. Document all actions.
@@ -54,6 +133,7 @@
 	  8. No code changes required at this time; if future wipe logic is added, gate it behind a prod-only flag or env var.
 
 ### done
+- Chokepoint canonical naming and geo join fix for semantic hotspot map (2026-04-20).
 - T1: Re-read authoritative instruction files (AGENTS.md and .github instruction set).
 - T2: Re-analyse VM orchestration architecture, env flow, logging hierarchy, scheduler path, and Bruin granularity.
 - S1: Inspect secrets propagation chain (.env -> pipeline.env -> Secret Manager -> runtime).
@@ -992,3 +1072,94 @@
 - [done] Validation: `terraform -chdir=infra/terraform validate` passed when provider plugin execution was allowed.
 - [done] Validation: `terraform -chdir=infra/terraform plan -refresh=false` now fails early with the explicit image URI message while `serverless_container_image` is `REPLACE_AFTER_BUILD`.
 - Files changed: `infra/terraform/serverless.tf`, `docs/agent-worklog.md`.
+
+## 2026-04-20 - VM GCS-to-BigQuery Reload Runbook
+
+### objective
+- Provide an operator VM command path to load existing GCS silver outputs into BigQuery raw tables and run dbt across all datasets.
+
+### findings
+- [done] BigQuery loaders default to `--source gcs` and read existing silver GCS prefixes; bronze is not used for the BigQuery load step.
+- [done] Expected GCS paths are governed by `GCS_BUCKET` and `GCS_PREFIX` from `/etc/capstone/pipeline.env` / Terraform settings.
+- [done] Loaders support idempotent checksum/state behavior, plus force flags such as `--include-loaded-months`, `--include-loaded-assets`, and `--include-loaded-years`.
+- [done] dbt should run after all raw tables are loaded because broad `dbt build` can fail when upstream source tables are missing.
+
+### update - persistent disk log clarity and bronze-start recommendation
+- [done] Inspected VM persistent-disk logs at `/var/lib/pipeline/capstone/logs` via read-only SSH.
+- [done] Latest VM env points at `global-insights-capstone`, bucket `kapi-stoney-10111`, prefix `cap`, raw dataset `raw`, analytics dataset `analytics`.
+- [done] Logs are mixed historical carry-over: several older entries reference previous projects/buckets such as `fullcap-10111` and `buckwheat_10111`, so logs prove prior run history but not necessarily current-project completeness.
+- [done] Latest visible dbt log on the VM ended with `PASS=460 WARN=0 ERROR=0`, but that run should be interpreted with the historical-project caveat.
+- [done] Read-only current BigQuery raw metadata query showed current project has Brent, FX, PortWatch, and ops tables populated, but no Comtrade, Events, or World Bank raw tables yet in the result set.
+- [done] Confirmed silver builders generally consume local `data/bronze/...`; starting from GCS bronze requires hydrating bronze from GCS onto the VM persistent disk first, then running silver -> publish silver -> load BigQuery -> dbt.
+
+### update - no BigQuery movement diagnosis
+- [done] Current `global-insights-capstone.raw` metadata still only shows Brent, FX, PortWatch, and ops tables; Events, World Bank, and Comtrade raw tables are absent.
+- [done] VM persistent-disk logs show no new loader/dbt logs after 2026-04-19T11:03 UTC while VM time is 2026-04-20T00:38 UTC, indicating the pasted recovery command likely did not reach the container or did not run.
+- [done] VM canonical data paths contain Events seed/silver and Comtrade bronze/silver, but no World Bank bronze/silver.
+- [done] Current GCS prefix `gs://kapi-stoney-10111/cap` contains Comtrade bronze/silver and metadata, but no Events silver and no World Bank bronze/silver.
+- [done] Confirmed VM code has the BigQuery date-cast load fixes for Comtrade/FX-style partition deletion.
+- [todo] Recommend a heredoc/script-based rerun to avoid nested SSH quoting issues, with World Bank explicitly blocked until data is present or extracted.
+
+### update - live Comtrade recovery VM unresponsive during silver step
+- [done] User reported the new VM recovery run reached `comtrade_silver.py` Step 2 after loading 4,172 bronze JSON files and 10,149,879 rows.
+- [done] SSH to `capstone-vm-eu` timed out on port 22 while the VM was RUNNING, so container-level inspection could not complete.
+- [done] Non-SSH instance metadata confirmed the VM is `n2-standard-8` with a 30 GB data disk and 16 GB swap.
+- [done] Serial-port output showed Docker health-check timeouts, Google guest-agent timeouts, and `systemd-journald` watchdog failures after the silver step began, consistent with severe CPU/memory/I/O pressure rather than a clean pipeline wait.
+- [done] Local code inspection confirmed `ingest/comtrade/comtrade_silver.py` loads all matching bronze JSON files into pandas before filtering and then copies/transforms the full frame in Step 2, so the all-history recovery command is likely overloading the VM.
+- [todo] Recommend killing/resetting the stuck VM run, then rerunning Comtrade in smaller bounded slices or patching silver to pre-filter bronze files before JSON load.
+
+### update - GCS silver import strategy question
+- [done] User clarified the goal is to import all data captured by another VM, including logs/ops context where possible, into the current project's BigQuery warehouse.
+- [done] Reviewed loader entrypoints and confirmed the dataset BigQuery loaders can load directly from canonical GCS silver using `--source gcs` plus include-loaded flags, while also creating loader audit/load-state tables.
+- [done] Reviewed ops store behavior: `scripts/run_pipeline.sh ops-init-bigquery` creates BigQuery ops mirror tables; direct dataset loaders create dataset-specific audit/state tables; full wrapper runs create pipeline/task ops snapshots.
+- [todo] Recommend avoiding full Comtrade bronze->silver rebuild unless canonical silver is missing or invalid; use GCS silver->BigQuery import first, with VM resize only as a fallback for one-time full silver rebuild.
+
+### update - Comtrade Day 2/Day 3 forensic checkpoint from current GCS
+- [done] Mapped Comtrade day definitions from `ops/batch_plan.json`: Day 2 is first reporter group for 2015-2019 and commodities 1001/1005/1006/1201/2709/2710; Day 3 is second reporter group for 2020-2025 using the same commodities.
+- [done] Current GCS `metadata/comtrade/ingest_reports` includes completed silver summaries through `comtrade_silver_20260418T000916Z_a46b4998`.
+- [done] Day 2 evidence: checkpoint shows `position.index=480` and `total=480` for the 2015-2019 first-reporter-group extraction; latest Day 2 silver summary touched all 60 months and skipped 10,524 unchanged fact slices; current GCS silver inventory contains 10,524 fact files for 2015-2019.
+- [done] Day 3 evidence: current GCS bronze inventory contains only the first reporter group codes, not the second reporter group expected for Day 3; current GCS silver inventory for 2020-2025 contains only the first reporter group ISO3 set and 11,840 fact files, so current GCS does not show Day 3 second-reporter-group silver completion.
+- [done] Current BigQuery raw metadata query shows no Comtrade raw tables loaded yet in `global-insights-capstone.raw`.
+- [blocked] Old bucket `buckwheat_10111` is not listable by the active local account and `fullcap-10111` was not found; additional Day 3 evidence may still exist on old VM disk/logs or in a bucket/account not currently accessible.
+
+### update - local copied Comtrade data/log forensic check
+- [done] Direct SSH to `capstone-vm-eu` still times out on port 22 after the user stopped the pipeline run; GCP metadata shows the VM remains RUNNING but serial output still shows guest-agent and journald timeouts. A full VM stop/start or recovery-disk attach is needed before host `/workspace/data` can be inspected remotely.
+- [done] Inspected the local copied `data/` and `logs/` directories available in the repo workspace as a proxy evidence set.
+- [done] Local `data/bronze/comtrade/monthly_history` contains 672 JSON files for 2020-2026, all first reporter group only (`076,097,100,156,251,360,528,591,642,643,699,710,724,792,818,842`) with commodities `1001,1005,1006,1201,2709,2710` and flows `M,X`; no second reporter group Day 3/4 raw files were found.
+- [done] Local `logs/monthly_history/extraction_registry.jsonl` contains 1,167 entries, all first reporter group; no Day 3/4 second reporter group entries were found. It includes 1,152 completed and 15 failed entries, with historical failed `10,12` attempts plus later grain/energy commodity groups.
+- [done] Local `logs/comtrade/extraction_registry.jsonl` contains 96 completed entries, all first reporter group for 2026 grain/energy commodities; no Day 3/4 second reporter group entries were found.
+- [done] Local `data/silver/comtrade/comtrade_fact` contains 11,756 parquet fact files for 2020-01 through 2026-01, all first reporter ISO3 set (`BGR,BRA,CHN,EGY,ESP,EUR,FRA,IDN,IND,NLD,PAN,ROU,RUS,TUR,USA,ZAF`) and commodities `1001,1005,1006,1201,2709,2710`; no second reporter group silver facts were found.
+- [done] Mapped Day 3 reporter codes to ISO3 from `data/metadata/comtrade/reporters.csv`: `AUS,CAN,JPN,KOR,MYS,MEX,MAR,NOR,PHL,QAT,SAU,SGP,THA,ARE,GBR,VNM`.
+
+### update - reset VM direct Day 3 forensic check
+- [done] After VM reset, SSH succeeded and direct inspection of `/var/lib/pipeline/capstone/data` found 4,172 Comtrade bronze JSON files. `/workspace/data` is not a host path; it is only the container mount target.
+- [done] Day 3 raw bronze evidence is complete on the VM: expected 576 unique jobs for second reporter group, years 2020-2025, commodities `1001,1005,1006,1201,2709,2710`, flows `M,X`; present 576/576, missing 0. Registry latest status also shows 576 completed.
+- [done] Day 4 raw bronze evidence is partial: expected 480 unique jobs for second reporter group, years 2015-2019; present 419/480, missing 61. Missing is primarily VNM/reporter 704 (30 jobs) and GBR/reporter 826 (29 jobs), plus one MAR/reporter 504 and one ARE/reporter 784. Registry latest status shows 417 completed, 5 failed, 58 missing_registry.
+- [done] Day 1 and Day 2 raw coverage are complete by unique job inventory. Day 1 has duplicate/retry copies for all 576 keys; Day 2 has 480/480 unique jobs.
+- [done] Current VM local `data/silver/comtrade/comtrade_fact` contains 0 parquet files, so the VM currently has raw bronze/log evidence but not a local rebuilt silver fact store under the active contract path.
+- [todo] Recommend hydrating existing GCS silver locally before any Day 3 silver build, then build/publish Day 3 from a constrained bronze subset to avoid the full-history pandas load.
+
+## Operational recovery note (2026-04-20)
+- Objective: Recover Comtrade GCS silver hydration and BigQuery/dbt load after VM reset and copied persistent-disk data.
+- Finding: Local GCS silver hydrate count was correct after fixing VM permissions, so existing GCS silver is present on the VM.
+- New blocker: `warehouse/load_comtrade_to_bigquery.py` failed inside `capstone-pipeline` with `ModuleNotFoundError: No module named 'dotenv'`.
+- Inspection: `pyproject.toml` includes `python-dotenv==1.2.1`, and `docker/pipeline/Dockerfile` runs `uv sync --frozen --no-dev --no-install-project`; likely the running container was built without a complete `.venv` or the mounted `/workspace/.uv-cache`/build state caused dependency drift. Recommended recovery is to run via `uv run` or rebuild with `--no-cache` and verify `import dotenv` inside the container before resuming the BigQuery/dbt load.
+- Follow-up fix (2026-04-20): Hardened container/VM scripts against venv PATH drift by exporting `/workspace/.venv` in `scripts/container_entrypoint.sh`, adding `/etc/profile.d/capstone-venv.sh` to `docker/pipeline/Dockerfile`, and making `scripts/run_dbt.sh`/`scripts/run_pipeline.sh` prefer the project venv Python/dbt explicitly. Validation: `bash -n` passed for touched shell scripts.
+
+## Operational recovery note (2026-04-20) - BigQuery dbt dataset permissions
+- Finding: Comtrade raw BigQuery load succeeded from GCS silver (`candidate_fact_file_count=22364`, `fact_batches_loaded=132`, `output_rows.comtrade_fact=3043110`). The subsequent failure was dbt, not Comtrade silver.
+- Root cause: Terraform currently creates only BigQuery datasets `raw` and `analytics` (`infra/terraform/main.tf`). dbt profile base dataset is `DBT_BIGQUERY_DATASET`/`GCP_BIGQUERY_ANALYTICS_DATASET`, usually `analytics`; dbt custom schemas append suffixes such as `staging` and `marts`, so BigQuery target datasets become `analytics_staging` and `analytics_marts`. Some event model configs hardcode schemas like `analytics_marts`, which can produce compatibility datasets such as `analytics_analytics_marts` under dbt's default schema naming.
+- IAM gap: `infra/terraform/iam.tf` grants dataEditor only on Terraform-managed `raw` and `analytics`, plus project job roles. It does not create/grant `analytics_staging` or `analytics_marts`, so the VM service account can load raw tables but cannot create dbt staging/mart relations there.
+- Secondary dependency issue: `models/staging/stg_dim_time.sql` unions observed months from multiple raw sources, including events (`raw.bridge_event_month_chokepoint_core` / `raw.bridge_event_month_maritime_region`). A Comtrade-only dbt selector can still compile/run shared calendar models that require non-Comtrade raw tables to exist.
+- Operator note: The local `bq` CLI does not support `mk --dataset --if_not_exists`; use `bq show || bq mk --dataset` and ensure VM service account resolution is non-empty before IAM binding.
+- Follow-up analysis (2026-04-20): User asked why previous VMs seemed to have access while the current VM lacks dbt dataset permissions. Working explanation: raw Comtrade load uses Terraform-managed `raw` dataset permissions, but dbt writes to schema-suffixed datasets (`analytics_staging`, `analytics_marts`) derived from `DBT_BIGQUERY_DATASET=analytics` plus dbt `+schema`. Terraform currently creates/grants only `raw` and `analytics`. Earlier VMs may have used broader project-level/default Compute Engine SA permissions, manually created datasets/IAM that survived outside Terraform, DuckDB/local dbt target, or failed before reaching dbt so the gap was hidden. This is infrastructure drift/least-privilege mismatch, not a Comtrade silver defect.
+- Recovery action (2026-04-20): Granted project-level `roles/bigquery.admin` and confirmed `roles/bigquery.jobUser` for VM runtime service account `capstone-pipeline@global-insights-capstone.iam.gserviceaccount.com` on project `global-insights-capstone`. Did not grant full project `roles/editor`; IAM output showed the default Compute Engine service account already has `roles/editor`, but the active VM is attached to the user-managed `capstone-pipeline` service account, which explains why older/default-SA runs may have appeared more permissive.
+- Recovery finding (2026-04-20): Events loader failed with `FileNotFoundError: No candidate parquet objects found for events asset dim_event` while running `warehouse/load_events_to_bigquery.py --source gcs --include-loaded-assets`. This means the loader searched GCS for `silver/events/dim_event.parquet` under the configured bucket/prefix and found no candidate object. It is not a Comtrade silver failure; it indicates Events silver has not been published to GCS in the current project/prefix, or was not copied from the prior VM/GCS state. Recommended recovery: run `ingest/events/events_silver.py`, publish with `warehouse/publish_events_to_gcs.py --overwrite-existing`, then rerun `warehouse/load_events_to_bigquery.py --source gcs --include-loaded-assets` before dbt.
+- BigQuery raw inventory (2026-04-20): Compared `models/sources/silver_sources.yml` and actual `raw.__TABLES__`. Required/used raw sources present with rows include Comtrade (`comtrade_fact` 3,043,110 rows plus dimensions/routes), Events (`dim_event` 13, `bridge_event_month_chokepoint_core` 306, `bridge_event_month_maritime_region` 137), PortWatch (`portwatch_daily` 13,295, `portwatch_monthly` 440), Brent (`brent_daily` 5,685, `brent_monthly` 274), FX (`ecb_fx_eu_monthly` 1,039), and ops tables. Missing blocking source is `raw.energy_vulnerability`, referenced by `models/staging/stg_dim_time.sql` and `models/staging/stg_energy_vulnerability.sql`. `raw.chokepoint_bridge` is listed in `models/sources/silver_sources.yml` but current SQL models use `raw.bridge_event_month_chokepoint_core`; it is a legacy/contract mismatch, not currently a full-build blocker.
+- GCS/local check (2026-04-20): `gs://kapi-stoney-10111/cap/silver/worldbank_energy/energy_vulnerability/**` returned no objects, while local repo data contains World Bank energy silver parquet partitions for years 2019-2024. Recommended recovery is publish local World Bank energy silver to GCS, then load `raw.energy_vulnerability` from GCS before running full semantic dbt build.
+- Correction/recovery finding (2026-04-20): World Bank energy silver partitions existed in the local Mac workspace, but not on the VM host/container mount. VM inspection showed missing `data/silver/worldbank_energy`, `data/silver/worldbank_energy/energy_vulnerability`, `/workspace/data/silver/worldbank_energy`, and `/workspace/data/silver/worldbank_energy/energy_vulnerability`. The failed `publish_worldbank_energy_to_gcs.py --skip-bronze --overwrite-existing` therefore failed correctly because `/workspace/data/silver/worldbank_energy/energy_vulnerability` was absent on the VM. Recommended recovery: publish the local Mac silver partitions directly to GCS with `gcloud storage rsync`, then run the VM/container BigQuery loader from GCS; no need to rebuild World Bank energy on the VM for this recovery step.
+- Semantic dbt test finding/fix (2026-04-20): Full BigQuery dbt build completed all models and 459/460 tests; only `tests/mart_chokepoint_monthly_hotspot_map_high_medium_consistency.sql` failed. Queried failing rows in `analytics_marts.mart_chokepoint_monthly_hotspot_map`: six Suez Canal month rows had `high_medium_exposed_trade_value_usd` greater than `total_exposed_trade_value_usd` only by floating-point summation deltas of `7.62939453125e-6` or `1.52587890625e-5` USD, with reporter counts equal and no material data issue. Patched the test tolerance from a hard `0.000001` USD to `greatest(0.01, abs(total_exposed_trade_value_usd) * 1e-12)` while preserving the reporter-count assertion.
+- Follow-up test deployment finding (2026-04-20): User reran the patched `mart_chokepoint_monthly_hotspot_map_high_medium_consistency` test and still saw the same six failing rows. Likely reason: `docker/docker-compose.yml` does not bind-mount repo source/test files into `/workspace`; the pipeline/dbt containers use source copied into the Docker image at build time. Copying the patched SQL file to `/var/lib/pipeline/capstone/tests/...` on the VM host does not update `/workspace/tests/...` inside the running container unless the image is rebuilt/recreated or the file is explicitly copied into the container. Recommended immediate recovery: `docker compose cp` the patched test into `pipeline`/`dbt` containers or rebuild the image, then rerun the single dbt test.
+- Serverless World Bank energy guidance (2026-04-20): User asked how to process World Bank energy 2015-current through serverless. Finding: `bruin/pipelines/worldbank_energy_bootstrap_full` and `ops/batch_plan.json` already encode `worldbank_energy_bootstrap_full` as 2015-2026, which is current for 2026-04-20. However the provided Bruin command runs inside the VM orchestrator container, not actual Cloud Run. Existing Terraform Cloud Run job is `capstone-worldbank-energy-yearly`, mapped to `worldbank_energy_yearly_refresh` only (start 2026). Safest actual Cloud Run one-off is to temporarily update that job args to `worldbank_energy worldbank_energy_bootstrap_full`, execute it with `--wait`, then restore args to `worldbank_energy worldbank_energy_yearly_refresh`. Caveat: Cloud Run image may be older than local recovery patches unless rebuilt/pushed.
+- Cloud Run verification (2026-04-20): Confirmed actual non-VM Cloud Run Job `capstone-worldbank-energy-yearly` exists in `europe-west1`. It uses image `europe-west1-docker.pkg.dev/global-insights-capstone/capstone/capstone-pipeline:hybrid-8394738-20260419171613`, command `/workspace/scripts/run_serverless_batch.sh`, args `worldbank_energy worldbank_energy_yearly_refresh`, timeout `7200`, and service account `capstone-serverless-runtime@global-insights-capstone.iam.gserviceaccount.com`. To run 2015-current serverlessly without VM orchestrator, update that job's args to `worldbank_energy worldbank_energy_bootstrap_full`, execute with `gcloud run jobs execute --wait`, then restore args to yearly refresh.
+- Cloud Run IAM recovery action (2026-04-20): Granted project-level `roles/bigquery.admin` to Cloud Run runtime service account `capstone-serverless-runtime@global-insights-capstone.iam.gserviceaccount.com` on `global-insights-capstone`, matching the temporary recovery permission given to the VM runtime service account. This is needed because actual serverless jobs do not run as the VM `capstone-pipeline` service account and otherwise may fail dbt dataset/table creation for `analytics_staging`/`analytics_marts`.

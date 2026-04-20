@@ -36,6 +36,7 @@ deep*.md
 !docs/agent-worklog.md
 !docs/bruin-refactor-plan.md
 !docs/hybrid-vm-serverless-rollout-plan.md
+!docs/chokepoint-canonicalization-worklog.md
 
 # Secrets and backups
 .env.bak

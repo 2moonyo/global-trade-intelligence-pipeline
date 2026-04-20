@@ -2,9 +2,9 @@ with route_candidates as (
   select
     upper(trim(reporter_iso3)) as reporter_iso3,
     upper(trim(partner_iso3)) as partner_iso3,
-    main_chokepoint,
-    first_chokepoint,
-    last_chokepoint,
+    {{ canonicalize_chokepoint_name('main_chokepoint') }} as main_chokepoint,
+    {{ canonicalize_chokepoint_name('first_chokepoint') }} as first_chokepoint,
+    {{ canonicalize_chokepoint_name('last_chokepoint') }} as last_chokepoint,
     chokepoint_sequence_str,
     headline_exposure_group,
     route_group,

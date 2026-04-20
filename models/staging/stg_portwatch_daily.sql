@@ -6,8 +6,8 @@ with raw_portwatch as (
   select
     cast(date_day as date) as date_day,
     {{ cast_string('chokepoint_id') }} as portwatch_source_chokepoint_id,
-    {{ hash_text("lower(trim(" ~ cast_string('chokepoint_name') ~ "))") }} as chokepoint_id,
-    {{ cast_string('chokepoint_name') }} as chokepoint_name,
+    {{ canonical_chokepoint_id('chokepoint_name') }} as chokepoint_id,
+    {{ canonicalize_chokepoint_name('chokepoint_name') }} as chokepoint_name,
     {{ cast_float('n_total') }} as n_total,
     {{ cast_float('capacity') }} as capacity,
     {{ cast_float('n_tanker') }} as n_tanker,
@@ -19,7 +19,7 @@ with raw_portwatch as (
   from {{ source('raw', 'portwatch_daily') }}
   where date_day is not null
     and chokepoint_id is not null
-    and chokepoint_name is not null
+    and {{ clean_label_text('chokepoint_name') }} is not null
 ),
 observed_daily as (
   select

@@ -1,44 +1,94 @@
-# DuckDB + dbt Analytics Warehouse
+# Macro-Political Trade Intelligence Pipeline
 
-This repository contains the implemented DuckDB warehouse and dbt project for the capstone analytics stack. The current build is larger than the original bootstrap: it includes core trade facts, route and hub enrichments, macro and energy marts, event impact modelling, canonical-grain provenance, a dbt-generated time dimension, and a generic event location layer.
+This repository packages a portfolio-grade data pipeline for studying how trade, chokepoints, macro signals, energy dependence, and disruptive events interact over time.
 
-The repo now also includes first-pass cloud paths for the PortWatch, Comtrade, Brent, and events vertical slices:
+In plain language: the project collects public and API-based data, stores it in cloud storage, cleans it into analytical tables, and builds dashboard-ready models that help answer questions like:
 
-1. publish local PortWatch bronze and silver parquet assets to GCS
-2. load `silver/portwatch/portwatch_monthly` into BigQuery `raw.portwatch_monthly`
-3. build canonical Comtrade silver fact slices, dimensions, and routing outputs
-4. publish Comtrade silver and routing assets to GCS
-5. load `raw.comtrade_fact` plus the supporting Comtrade dimensions and route tables into BigQuery
-6. publish Brent silver assets to GCS
-7. load `raw.brent_daily` and `raw.brent_monthly` into BigQuery
-8. publish events silver parquet assets to GCS
-9. load `raw.dim_event`, `raw.bridge_event_month_chokepoint_core`, and `raw.bridge_event_month_maritime_region` into BigQuery
-10. point dbt at either DuckDB or BigQuery via `--target`
+- which countries are exposed to specific maritime chokepoints
+- how trade flows changed around shocks such as the Red Sea attacks or Panama Canal drought
+- how commodity dependence, oil prices, FX, and energy vulnerability add context to trade risk
+- where the data is strong, sparse, delayed, or too expensive to obtain in real time
 
-## First-Time GCP VM Setup
+In technical language: the baseline system runs on a GCP VM with Docker Compose, Bruin CLI orchestration, GCS, BigQuery, dbt, optional Cloud Run Jobs for bounded non-Comtrade refreshes, and Looker/BI-ready marts.
 
-Use this path for a fresh GCP project, or for a deliberate destroy/recreate test in a disposable project.
+Add your architecture and flow-chart screenshots near the sections marked `Image placeholder`.
 
-The setup has two phases:
+## Recommended Path
 
-1. local laptop bootstrap creates cloud infrastructure, pushes approved secrets to Secret Manager, copies the repo to the VM, renders `/etc/capstone/pipeline.env`, and starts Docker Compose
-2. VM bootstrap runs the full data pipeline in dependency order
+Use the VM path first.
 
-### 1. Prepare GCP auth and APIs
+The VM path is the operational baseline because it preserves:
 
-Use an isolated `gcloud` configuration so you do not accidentally deploy to the old project:
+- persistent disk state for large Comtrade extracts
+- retry/checkpoint files
+- local logs and manifests
+- Docker Compose runtime parity
+- shell wrappers that still contain useful compatibility logic
+- a safer recovery story for long-running data collection
 
-```bash
-gcloud auth login
-gcloud config configurations create capstone-new-account
-gcloud config configurations activate capstone-new-account
-gcloud config set account YOUR_EMAIL
-gcloud config set project NEW_PROJECT_ID
-gcloud auth application-default login
-gcloud auth application-default set-quota-project NEW_PROJECT_ID
+Cloud Run is additive. In the hybrid profile, it is used for bounded non-Comtrade scheduled refreshes. Comtrade stays on the VM because quota handling, large bronze state, and rerun recovery are more important than stateless elegance.
+
+Image placeholder: high-level VM-first architecture.
+
+## Architecture
+
+The pipeline shape is:
+
+```text
+Ingest -> Bronze files -> Silver parquet -> GCS -> BigQuery raw -> dbt marts -> BI/dashboard
 ```
 
-Enable the APIs Terraform and the VM runtime need:
+The main dataset families are:
+
+| Dataset | Role | Notes |
+| --- | --- | --- |
+| Comtrade | Core trade fact data | Reporter, partner, commodity, month, and flow. This is the backbone of the project. |
+| PortWatch | Chokepoint traffic signal | Used for maritime stress and event impact context. Coverage can be sparse. |
+| Brent / WTI | Oil price context | Pulled through FRED and used as a global macro signal. |
+| FX | Currency context | ECB monthly FX features used in macro marts. |
+| Events | Curated disruption layer | Manual event register converted into event-month-location bridges. |
+| World Bank Energy | Structural energy vulnerability | Annual country energy indicators broadcast to month grain for context. |
+
+The warehouse is not a pure in-database medallion layout. Bronze and silver live mainly as files; BigQuery `raw` is a landing layer for curated silver outputs; dbt creates staging, dimensions, facts, and marts.
+
+## External Setup Links
+
+Use these official pages when adding screenshots or guiding non-technical users through setup:
+
+- GCP project creation: https://cloud.google.com/resource-manager/docs/creating-managing-projects
+- GCP API Library / enabling APIs: https://cloud.google.com/apis/docs/getting-started
+- FRED API key docs: https://fred.stlouisfed.org/docs/api/api_key.html
+- UN Comtrade developer portal: https://comtradedeveloper.un.org/apis
+- UN Comtrade Python package and metadata reference examples: https://github.com/uncomtrade/comtradeapicall
+- Cloud Run job execution and argument overrides: https://cloud.google.com/run/docs/execute/jobs
+
+## What You Need Before Setup
+
+For a first-time VM deployment, prepare:
+
+| Item | Where it comes from | Where it goes |
+| --- | --- | --- |
+| GCP project ID | GCP Console project selector | `infra/terraform/terraform.tfvars.json` as `project_id` |
+| GCP region/location | Your chosen deployment region | `terraform.tfvars.json` as `gcp_location`, `primary_region`, `primary_zone` |
+| GCS bucket name | Your chosen globally unique bucket name | `terraform.tfvars.json` as `gcs_bucket_name` |
+| FRED API key | FRED account API key page | `.env` as `FRED_API_KEY` |
+| Comtrade API keys | UN Comtrade developer portal | `.env` as `COMTRADE_API_KEY_DATA`, optional `_A`, `_B` |
+| Postgres runtime values | Chosen by project operator | `.env`, then Secret Manager and `/etc/capstone/pipeline.env` |
+| Runtime VM env | Rendered by bootstrap | `/etc/capstone/pipeline.env` on the VM |
+
+Do not commit real `.env` files or API keys.
+
+## GCP UI Setup For Non-Technical Users
+
+Image placeholder: GCP project creation screen.
+
+1. Open the Google Cloud Console.
+2. Open the project selector and choose `Create project`.
+3. Give the project a human-readable name.
+4. Choose a project ID carefully. GCP project IDs are globally unique and are difficult to change later.
+5. Link billing if the project asks for it. Compute Engine, BigQuery, Cloud Run, Artifact Registry, and logging can create costs.
+6. Open `APIs & Services -> Library`.
+7. Enable the baseline APIs:
 
 ```bash
 gcloud services enable \
@@ -50,24 +100,99 @@ gcloud services enable \
   bigquery.googleapis.com
 ```
 
-### 2. Fill local config and secrets
+For hybrid serverless, also enable:
 
-Create and edit Terraform inputs:
+```bash
+gcloud services enable \
+  run.googleapis.com \
+  cloudscheduler.googleapis.com \
+  artifactregistry.googleapis.com
+```
+
+The command-line setup is preferred once the project exists, because it is repeatable and less error-prone than clicking through every service.
+
+## API Keys
+
+### FRED
+
+Create or view a FRED key from the FRED API key page. Put it in `.env`:
+
+```bash
+FRED_API_KEY=your_fred_key_here
+```
+
+FRED is used for Brent and WTI oil price series. It keeps the project cheap, but it is not the same as paying for a low-latency real-time markets feed.
+
+### UN Comtrade
+
+Create a subscription key in the UN Comtrade developer portal. Put the primary key in:
+
+```bash
+COMTRADE_API_KEY_DATA=your_primary_comtrade_key
+```
+
+If you have additional valid keys, add:
+
+```bash
+COMTRADE_API_KEY_DATA_A=your_second_key
+COMTRADE_API_KEY_DATA_B=your_third_key
+```
+
+The extraction script can rotate through configured aliases when quota or throttling is encountered. This does not remove the quota problem; it only makes long runs easier to resume.
+
+## Secret Flow
+
+The project uses one secret propagation chain:
+
+```text
+local .env -> Google Secret Manager -> /etc/capstone/pipeline.env -> Docker runtime env
+```
+
+Rules:
+
+- `.env` is for local setup and seeding Secret Manager.
+- `/etc/capstone/pipeline.env` is the VM runtime file.
+- Secret Manager is the cloud source of truth for approved runtime secrets.
+- Do not create a second secret mechanism.
+- Do not put a service-account JSON key on the VM.
+
+The VM uses the attached GCP service account through metadata-based Application Default Credentials. In `pipeline.env`, keep:
+
+```bash
+GOOGLE_AUTH_MODE=vm_metadata
+GOOGLE_APPLICATION_CREDENTIALS=
+```
+
+## First-Time VM Setup
+
+Run this from your local machine.
+
+```bash
+gcloud auth login
+gcloud config configurations create capstone-new-account
+gcloud config configurations activate capstone-new-account
+gcloud config set account YOUR_EMAIL
+gcloud config set project NEW_PROJECT_ID
+gcloud auth application-default login
+gcloud auth application-default set-quota-project NEW_PROJECT_ID
+```
+
+Create Terraform inputs:
 
 ```bash
 make tfvars-init
 ```
 
-At minimum, set:
+Edit `infra/terraform/terraform.tfvars.json`. At minimum set:
 
 - `project_id`
 - `gcp_location`
 - `primary_region`
 - `primary_zone`
 - `gcs_bucket_name`
-- IAM member lists for your user/service accounts
+- IAM member lists for the human/operator accounts that need access
 
-For a Europe-first fresh VM, use:
+For the current Europe-first VM path, the important shape is:
 
 ```json
 {
@@ -84,45 +209,19 @@ For a Europe-first fresh VM, use:
 }
 ```
 
-Create `.env` and add the approved secret values that will seed Secret Manager:
+Create local `.env`:
 
 ```bash
 ./scripts/bootstrap_local.sh
 ```
 
-Fill these values in `.env`:
-
-- `FRED_API_KEY`
-- `COMTRADE_API_KEY_DATA`
-- `COMTRADE_API_KEY_DATA_A`
-- `COMTRADE_API_KEY_DATA_B`
-- `POSTGRES_USER`
-- `POSTGRES_PASSWORD`
-- `POSTGRES_DB`
-- `POSTGRES_SCHEMA`
-
-The VM does not need a local JSON key. Keep `GOOGLE_APPLICATION_CREDENTIALS=` empty for the VM path. GCP auth on the VM uses the attached service account through metadata ADC, while API/Postgres secrets are pulled from Secret Manager into `/etc/capstone/pipeline.env`.
-
-### 3. Create the VM and runtime stack
-
-From your laptop:
+Fill the required secret values in `.env`, then bootstrap the VM:
 
 ```bash
 make vm-bootstrap VM_BOOTSTRAP_ARGS="--reset-known-host --show-resolved"
 ```
 
-This command:
-
-- applies Terraform
-- syncs approved `.env` secrets to Secret Manager
-- resolves the VM external IP and Linux user
-- copies the current repo to `/var/lib/pipeline/capstone`
-- renders `/etc/capstone/pipeline.env` from Terraform config plus Secret Manager
-- starts/restarts `capstone-stack`
-
-The `--reset-known-host` flag is useful for destroy/recreate testing because recreated VMs can reuse an IP with a new SSH host key.
-
-### 4. Run the full first-time pipeline on the VM
+That command applies Terraform, syncs approved secrets to Secret Manager, copies the repo to the VM at `/var/lib/pipeline/capstone`, renders `/etc/capstone/pipeline.env`, and starts the Docker Compose stack.
 
 SSH to the VM:
 
@@ -130,36 +229,21 @@ SSH to the VM:
 gcloud compute ssh capstone-vm-eu --zone europe-west1-b
 ```
 
-Then run the full bootstrap sequence:
+Run the full first-time bootstrap:
 
 ```bash
 cd /var/lib/pipeline/capstone
 ./scripts/vm_batches/run_full_bootstrap.sh
 ```
 
-That script runs, in order:
+That runs:
 
-- non-Comtrade phase 1
-- non-Comtrade phase 2
-- Comtrade day 1 through day 6
-- World Bank energy after Comtrade day 6 has completed
+1. Non-Comtrade phase 1
+2. Non-Comtrade phase 2
+3. Comtrade day 1 through day 6
+4. World Bank energy after Comtrade has created the country dimension
 
-If a batch fails, resume the failed set instead of restarting everything:
-
-```bash
-cd /var/lib/pipeline/capstone
-./scripts/vm_batches/run_set.sh comtrade-day-2 --start-at-task silver
-```
-
-If you need to refresh VM secrets from Secret Manager before a rerun:
-
-```bash
-cd /var/lib/pipeline/capstone
-SYNC_SECRETS_BEFORE_RUN=true SECRET_PROJECT_ID=NEW_PROJECT_ID \
-./scripts/vm_batches/run_set.sh comtrade-day-2
-```
-
-### 5. Enable timers only after the first bootstrap succeeds
+Enable recurring timers only after the first bootstrap succeeds:
 
 ```bash
 sudo systemctl enable --now capstone-schedule-lane-incremental_daily.timer
@@ -169,163 +253,506 @@ sudo systemctl enable --now capstone-schedule-lane-yearly_refresh.timer
 systemctl list-timers 'capstone-schedule-lane-*'
 ```
 
-### Destroy/recreate smoke test
+## Command Context Headers
 
-Only use full destroy in a disposable project. It can delete Terraform-managed buckets, BigQuery datasets, secrets, VM disks, and runtime state.
+Use these context blocks before the run commands below.
 
-First set this in `infra/terraform/terraform.tfvars.json`:
+### Local Machine Header
 
-```json
-"allow_force_destroy": true
-```
-
-Then run:
+Use this for development, dry runs, or small manual runs from your laptop:
 
 ```bash
-make infra-destroy
-make vm-bootstrap VM_BOOTSTRAP_ARGS="--reset-known-host --show-resolved"
+cd /path/to/Capstone_monthly
+uv sync
+gcloud auth application-default login
+set -a
+source .env
+set +a
+export GOOGLE_AUTH_MODE=auto
+export EXECUTION_PROFILE="${EXECUTION_PROFILE:-all_vm}"
+export EXECUTION_RUNTIME="${EXECUTION_RUNTIME:-vm}"
+export BATCH_PLAN_PATH="${BATCH_PLAN_PATH:-ops/batch_plan.json}"
 ```
 
-SSH to the new VM and run:
+Then use the universal local batch command:
+
+```bash
+scripts/run_pipeline.sh dataset-batch DATASET_NAME BATCH_ID \
+  --trigger-type manual \
+  --bruin-pipeline-name local.manual.BATCH_ID
+```
+
+Local runs are useful for development. They are not recommended for full Comtrade bootstrap unless you intentionally want large local bronze and silver state on your laptop.
+
+### VM Repo Header
+
+Use this after SSHing to the VM:
+
+```bash
+cd /var/lib/pipeline/capstone
+```
+
+Preferred VM runs use wrapper scripts such as:
+
+```bash
+./scripts/vm_batches/run_set.sh comtrade-day-1
+```
+
+The wrapper starts the Docker stack if needed, initializes ops tables, injects `/etc/capstone/pipeline.env`, and runs the dataset batch inside the `pipeline` container.
+
+The universal VM batch command is:
+
+```bash
+sudo docker compose --env-file /etc/capstone/pipeline.env \
+  -f docker/docker-compose.yml \
+  exec -T pipeline \
+  scripts/run_pipeline.sh dataset-batch DATASET_NAME BATCH_ID \
+  --trigger-type manual \
+  --bruin-pipeline-name vm.manual.BATCH_ID
+```
+
+To resume from a failed step:
+
+```bash
+./scripts/vm_batches/run_set.sh comtrade-day-2 --start-at-task silver
+```
+
+or:
+
+```bash
+./scripts/vm_batches/run_set.sh comtrade-day-2 --start-at-step-order 3
+```
+
+### Cloud Run Header
+
+Use this from your local machine after hybrid Cloud Run resources exist:
+
+```bash
+export PROJECT_ID=your-gcp-project-id
+export REGION=europe-west1
+gcloud config set project "$PROJECT_ID"
+```
+
+Cloud Run Jobs already use `/workspace/scripts/run_serverless_batch.sh`. You can execute an existing job with its default args:
+
+```bash
+gcloud run jobs execute capstone-portwatch-weekly --region "$REGION" --wait
+```
+
+You can also override the args for a one-off non-Comtrade batch without changing the Terraform default:
+
+```bash
+gcloud run jobs execute capstone-portwatch-weekly \
+  --region "$REGION" \
+  --args=portwatch,portwatch_bootstrap_phase_1 \
+  --task-timeout=7200 \
+  --wait
+```
+
+Comtrade is intentionally not run this way.
+
+### Bruin Manual Header
+
+Bruin is used to expose pipeline stages and lineage. It does not replace the VM wrappers yet.
+
+Local validation:
+
+```bash
+bruin validate --fast --env default ./bruin/pipelines/portwatch_bootstrap_phase_1/pipeline.yml
+```
+
+Local run:
+
+```bash
+bruin run --environment default ./bruin/pipelines/portwatch_bootstrap_phase_1
+```
+
+Generic Bruin dataset batch run:
+
+```bash
+DATASET_NAME=portwatch BATCH_ID=portwatch_bootstrap_phase_1 \
+bruin run --environment default ./bruin/pipelines/dataset_batch
+```
+
+VM Bruin run through the orchestrator container:
+
+```bash
+sudo docker compose --env-file /etc/capstone/pipeline.env \
+  -f docker/docker-compose.yml \
+  exec -T \
+  -e DATASET_NAME=portwatch \
+  -e BATCH_ID=portwatch_bootstrap_phase_1 \
+  orchestrator \
+  bruin run --environment production --force ./bruin/pipelines/dataset_batch
+```
+
+If Bruin reports `no git repository found` inside the container, initialize a temporary git root in `/workspace` before the proof run:
+
+```bash
+sudo docker compose --env-file /etc/capstone/pipeline.env \
+  -f docker/docker-compose.yml \
+  exec -T orchestrator git init /workspace
+```
+
+## Scheduling Logic
+
+There are several scheduling layers.
+
+| Layer | Where it lives | What it does |
+| --- | --- | --- |
+| VM systemd timers | `infra/terraform/variables.tf` as `vm_schedule_lane_timers` | Defines timer cadence for `incremental_daily`, `weekly_refresh`, `monthly_refresh`, and `yearly_refresh`. |
+| VM timer service | `infra/terraform/templates/vm_startup.sh.tftpl` | Writes `capstone-schedule-lane@.service` and timer units on the VM. |
+| Batch queue | `warehouse/run_batch_queue.py` and `ops/batch_plan.json` | Selects batches by `schedule_lane`, dependencies, retry state, and execution profile. |
+| Hybrid Cloud Scheduler | `infra/terraform/serverless.tf` and `serverless_scheduled_batches` | Creates Cloud Scheduler jobs that execute Cloud Run Jobs for non-Comtrade refreshes. |
+| Runtime ownership | `ops/execution_profiles.json` | In `all_vm`, all datasets are VM-owned. In `hybrid_vm_serverless`, Comtrade is VM-owned and non-Comtrade refreshes are Cloud Run-owned. |
+
+Default VM timer cadence:
+
+| Schedule lane | Timer unit | Default cadence |
+| --- | --- | --- |
+| `incremental_daily` | `capstone-schedule-lane-incremental_daily.timer` | Daily at 06:00 UTC |
+| `weekly_refresh` | `capstone-schedule-lane-weekly_refresh.timer` | Monday at 06:15 UTC |
+| `monthly_refresh` | `capstone-schedule-lane-monthly_refresh.timer` | First day of month at 06:30 UTC |
+| `yearly_refresh` | `capstone-schedule-lane-yearly_refresh.timer` | January 1 at 06:45 UTC |
+
+Bootstrap lanes are normally manual. If you want bootstrap timers, add them explicitly to `vm_schedule_lane_timers` and re-apply Terraform.
+
+## Dataset Run Commands
+
+### Full VM Bootstrap
 
 ```bash
 cd /var/lib/pipeline/capstone
 ./scripts/vm_batches/run_full_bootstrap.sh
 ```
 
-For a VM-only reset that keeps bucket, datasets, and Secret Manager resources, prefer:
+Inspect the live VM container logs:
 
 ```bash
-make infra-destroy-vm
-make vm-bootstrap VM_BOOTSTRAP_ARGS="--reset-known-host --show-resolved"
+sudo docker compose --env-file /etc/capstone/pipeline.env \
+  -f docker/docker-compose.yml logs --tail=200 pipeline
 ```
 
-## Terraform-First Quick Start
+### Comtrade Runs
 
-Once you have filled in `infra/terraform/terraform.tfvars.json`, the intended flow is:
+Comtrade is VM-only. Do not run Comtrade on Cloud Run unless you deliberately redesign its state, quota, and recovery model.
+
+| Batch | VM manual run | VM log check | Serverless |
+| --- | --- | --- | --- |
+| `comtrade_bootstrap_day_1` | `./scripts/vm_batches/run_set.sh comtrade-day-1` | `tail -n 80 logs/comtrade/comtrade_history_day_1.log` | VM only |
+| `comtrade_bootstrap_day_2` | `./scripts/vm_batches/run_set.sh comtrade-day-2` | `tail -n 80 logs/comtrade/comtrade_history_day_2.log` | VM only |
+| `comtrade_bootstrap_day_3` | `./scripts/vm_batches/run_set.sh comtrade-day-3` | `tail -n 80 logs/comtrade/comtrade_history_day_3.log` | VM only |
+| `comtrade_bootstrap_day_4` | `./scripts/vm_batches/run_set.sh comtrade-day-4` | `tail -n 80 logs/comtrade/comtrade_history_day_4.log` | VM only |
+| `comtrade_bootstrap_day_5` | `./scripts/vm_batches/run_set.sh comtrade-day-5` | `tail -n 80 logs/comtrade/comtrade_history_day_5.log` | VM only |
+| `comtrade_bootstrap_day_6` | `./scripts/vm_batches/run_set.sh comtrade-day-6` | `tail -n 80 logs/comtrade/comtrade_history_day_6.log` | VM only |
+| `comtrade_monthly_refresh` | `sudo docker compose --env-file /etc/capstone/pipeline.env -f docker/docker-compose.yml exec -T pipeline scripts/run_pipeline.sh dataset-batch comtrade comtrade_monthly_refresh --trigger-type manual --bruin-pipeline-name vm.manual.comtrade_monthly_refresh` | `tail -n 80 logs/comtrade/comtrade_history_monthly_refresh.log` | VM only |
+
+Useful Comtrade manifest checks:
 
 ```bash
-make cloud-bootstrap
-make portwatch-refresh-cloud
-make comtrade-refresh-cloud
-make brent-refresh-cloud
-make events-refresh-cloud
+tail -n 20 logs/comtrade/comtrade_extract_manifest.jsonl
+tail -n 20 logs/comtrade/comtrade_silver_manifest.jsonl
+tail -n 20 logs/comtrade/load_comtrade_to_bigquery_manifest.jsonl
 ```
 
-Or, if you want to preview the cloud publish/load before writing anything:
+### Non-Comtrade VM And Cloud Run Commands
+
+For Cloud Run log checks, replace `PROJECT_ID` and `REGION` first:
 
 ```bash
-make cloud-bootstrap
-make portwatch-cloud-dry-run
-make comtrade-cloud-dry-run
-make brent-cloud-dry-run
-make events-cloud-dry-run
+export PROJECT_ID=your-gcp-project-id
+export REGION=europe-west1
 ```
 
-If you later want to tear the Terraform-managed cloud resources back down, set `"allow_force_destroy": true` in `infra/terraform/terraform.tfvars.json` and then run:
+| Batch | VM manual run | VM log check | Cloud Run manual run | Cloud Run log check |
+| --- | --- | --- | --- | --- |
+| `portwatch_bootstrap_phase_1` | `./scripts/vm_batches/run_set.sh noncomtrade-phase-1-portwatch` | `tail -n 80 logs/portwatch/portwatch_extract_phase_1.log` | `gcloud run jobs execute capstone-portwatch-weekly --region "$REGION" --args=portwatch,portwatch_bootstrap_phase_1 --task-timeout=7200 --wait` | `gcloud logging read 'resource.type="cloud_run_job" AND resource.labels.job_name="capstone-portwatch-weekly"' --project "$PROJECT_ID" --limit=50 --format="value(timestamp,textPayload)"` |
+| `brent_bootstrap_phase_1` | `./scripts/vm_batches/run_set.sh noncomtrade-phase-1-brent` | `tail -n 20 logs/brent/brent_extract_manifest.jsonl` | `gcloud run jobs execute capstone-brent-weekly --region "$REGION" --args=brent,brent_bootstrap_phase_1 --task-timeout=7200 --wait` | `gcloud logging read 'resource.type="cloud_run_job" AND resource.labels.job_name="capstone-brent-weekly"' --project "$PROJECT_ID" --limit=50 --format="value(timestamp,textPayload)"` |
+| `fx_bootstrap_phase_1` | `./scripts/vm_batches/run_set.sh noncomtrade-phase-1-fx` | `tail -n 20 logs/fx/fx_extract_manifest.jsonl` | `gcloud run jobs execute capstone-fx-weekly --region "$REGION" --args=fx,fx_bootstrap_phase_1 --task-timeout=7200 --wait` | `gcloud logging read 'resource.type="cloud_run_job" AND resource.labels.job_name="capstone-fx-weekly"' --project "$PROJECT_ID" --limit=50 --format="value(timestamp,textPayload)"` |
+| `events_bootstrap_phase_1` | `./scripts/vm_batches/run_set.sh noncomtrade-phase-1-events` | `tail -n 20 logs/events/events_silver_manifest.jsonl` | `gcloud run jobs execute capstone-events-incremental --region "$REGION" --args=events,events_bootstrap_phase_1 --task-timeout=7200 --wait` | `gcloud logging read 'resource.type="cloud_run_job" AND resource.labels.job_name="capstone-events-incremental"' --project "$PROJECT_ID" --limit=50 --format="value(timestamp,textPayload)"` |
+| `portwatch_bootstrap_phase_2` | `./scripts/vm_batches/run_set.sh noncomtrade-phase-2-portwatch` | `tail -n 80 logs/portwatch/portwatch_extract_phase_2.log` | `gcloud run jobs execute capstone-portwatch-weekly --region "$REGION" --args=portwatch,portwatch_bootstrap_phase_2 --task-timeout=7200 --wait` | `gcloud logging read 'resource.type="cloud_run_job" AND resource.labels.job_name="capstone-portwatch-weekly"' --project "$PROJECT_ID" --limit=50 --format="value(timestamp,textPayload)"` |
+| `brent_bootstrap_phase_2` | `./scripts/vm_batches/run_set.sh noncomtrade-phase-2-brent` | `tail -n 20 logs/brent/brent_extract_manifest.jsonl` | `gcloud run jobs execute capstone-brent-weekly --region "$REGION" --args=brent,brent_bootstrap_phase_2 --task-timeout=7200 --wait` | `gcloud logging read 'resource.type="cloud_run_job" AND resource.labels.job_name="capstone-brent-weekly"' --project "$PROJECT_ID" --limit=50 --format="value(timestamp,textPayload)"` |
+| `fx_bootstrap_phase_2` | `./scripts/vm_batches/run_set.sh noncomtrade-phase-2-fx` | `tail -n 20 logs/fx/fx_extract_manifest.jsonl` | `gcloud run jobs execute capstone-fx-weekly --region "$REGION" --args=fx,fx_bootstrap_phase_2 --task-timeout=7200 --wait` | `gcloud logging read 'resource.type="cloud_run_job" AND resource.labels.job_name="capstone-fx-weekly"' --project "$PROJECT_ID" --limit=50 --format="value(timestamp,textPayload)"` |
+| `events_bootstrap_phase_2` | `./scripts/vm_batches/run_set.sh noncomtrade-phase-2-events` | `tail -n 20 logs/events/events_silver_manifest.jsonl` | `gcloud run jobs execute capstone-events-incremental --region "$REGION" --args=events,events_bootstrap_phase_2 --task-timeout=7200 --wait` | `gcloud logging read 'resource.type="cloud_run_job" AND resource.labels.job_name="capstone-events-incremental"' --project "$PROJECT_ID" --limit=50 --format="value(timestamp,textPayload)"` |
+| `worldbank_energy_bootstrap_full` | `sudo docker compose --env-file /etc/capstone/pipeline.env -f docker/docker-compose.yml exec -T pipeline scripts/run_pipeline.sh dataset-batch worldbank_energy worldbank_energy_bootstrap_full --trigger-type manual --bruin-pipeline-name vm.manual.worldbank_energy_bootstrap_full` | `tail -n 20 logs/worldbank_energy/worldbank_energy_extract_manifest.jsonl` | `gcloud run jobs execute capstone-worldbank-energy-yearly --region "$REGION" --args=worldbank_energy,worldbank_energy_bootstrap_full --task-timeout=7200 --wait` | `gcloud logging read 'resource.type="cloud_run_job" AND resource.labels.job_name="capstone-worldbank-energy-yearly"' --project "$PROJECT_ID" --limit=50 --format="value(timestamp,textPayload)"` |
+| `portwatch_weekly_refresh` | `sudo docker compose --env-file /etc/capstone/pipeline.env -f docker/docker-compose.yml exec -T pipeline scripts/run_pipeline.sh dataset-batch portwatch portwatch_weekly_refresh --trigger-type manual --bruin-pipeline-name vm.manual.portwatch_weekly_refresh` | `tail -n 80 logs/portwatch/portwatch_extract_weekly_refresh.log` | `gcloud run jobs execute capstone-portwatch-weekly --region "$REGION" --args=portwatch,portwatch_weekly_refresh --wait` | `gcloud logging read 'resource.type="cloud_run_job" AND resource.labels.job_name="capstone-portwatch-weekly"' --project "$PROJECT_ID" --limit=50 --format="value(timestamp,textPayload)"` |
+| `brent_weekly_refresh` | `sudo docker compose --env-file /etc/capstone/pipeline.env -f docker/docker-compose.yml exec -T pipeline scripts/run_pipeline.sh dataset-batch brent brent_weekly_refresh --trigger-type manual --bruin-pipeline-name vm.manual.brent_weekly_refresh` | `tail -n 20 logs/brent/brent_extract_manifest.jsonl` | `gcloud run jobs execute capstone-brent-weekly --region "$REGION" --args=brent,brent_weekly_refresh --wait` | `gcloud logging read 'resource.type="cloud_run_job" AND resource.labels.job_name="capstone-brent-weekly"' --project "$PROJECT_ID" --limit=50 --format="value(timestamp,textPayload)"` |
+| `fx_weekly_refresh` | `sudo docker compose --env-file /etc/capstone/pipeline.env -f docker/docker-compose.yml exec -T pipeline scripts/run_pipeline.sh dataset-batch fx fx_weekly_refresh --trigger-type manual --bruin-pipeline-name vm.manual.fx_weekly_refresh` | `tail -n 20 logs/fx/fx_extract_manifest.jsonl` | `gcloud run jobs execute capstone-fx-weekly --region "$REGION" --args=fx,fx_weekly_refresh --wait` | `gcloud logging read 'resource.type="cloud_run_job" AND resource.labels.job_name="capstone-fx-weekly"' --project "$PROJECT_ID" --limit=50 --format="value(timestamp,textPayload)"` |
+| `events_incremental_recent` | `sudo docker compose --env-file /etc/capstone/pipeline.env -f docker/docker-compose.yml exec -T pipeline scripts/run_pipeline.sh dataset-batch events events_incremental_recent --trigger-type manual --bruin-pipeline-name vm.manual.events_incremental_recent` | `tail -n 20 logs/events/events_silver_manifest.jsonl` | `gcloud run jobs execute capstone-events-incremental --region "$REGION" --args=events,events_incremental_recent --wait` | `gcloud logging read 'resource.type="cloud_run_job" AND resource.labels.job_name="capstone-events-incremental"' --project "$PROJECT_ID" --limit=50 --format="value(timestamp,textPayload)"` |
+| `worldbank_energy_yearly_refresh` | `sudo docker compose --env-file /etc/capstone/pipeline.env -f docker/docker-compose.yml exec -T pipeline scripts/run_pipeline.sh dataset-batch worldbank_energy worldbank_energy_yearly_refresh --trigger-type manual --bruin-pipeline-name vm.manual.worldbank_energy_yearly_refresh` | `tail -n 20 logs/worldbank_energy/worldbank_energy_extract_manifest.jsonl` | `gcloud run jobs execute capstone-worldbank-energy-yearly --region "$REGION" --args=worldbank_energy,worldbank_energy_yearly_refresh --task-timeout=7200 --wait` | `gcloud logging read 'resource.type="cloud_run_job" AND resource.labels.job_name="capstone-worldbank-energy-yearly"' --project "$PROJECT_ID" --limit=50 --format="value(timestamp,textPayload)"` |
+
+Cloud Run jobs also upload best-effort local artifacts to GCS:
 
 ```bash
-make infra-destroy
+gcloud storage ls \
+  "gs://$GCS_BUCKET/${GCS_PREFIX:+$GCS_PREFIX/}metadata/serverless_runs/profile=hybrid_vm_serverless/"
 ```
 
-## Execution Profiles: VM Only vs Hybrid
+## Bruin CLI Usage
 
-The default execution profile is `all_vm`. It preserves the current VM-first baseline: systemd timers on the VM own all scheduled datasets, and existing VM batch wrappers continue to work.
+Bruin is used here for visibility and orchestration structure. It groups related assets into pipelines and lets you validate or run a pipeline/asset explicitly.
 
-The additive hybrid profile is `hybrid_vm_serverless`:
-
-- Comtrade stays on the VM.
-- PortWatch, Brent, FX, Events, and World Bank Energy scheduled refreshes run as Cloud Run Jobs.
-- GCS prefixes, BigQuery raw tables, dbt models, marts, and dashboard-facing outputs stay the same.
-- Cloud Run uses service-account ADC and Secret Manager env injection; no JSON key is required.
-
-Execution ownership lives in `ops/execution_profiles.json`. The VM queue runner reads `EXECUTION_PROFILE` and `EXECUTION_RUNTIME`; manual VM dataset wrappers still call the dataset batch runner directly for operator recovery.
-
-For a safe hybrid rollout:
+Useful commands:
 
 ```bash
-# 1. Prove all_vm remains the active baseline.
-terraform -chdir=infra/terraform plan -var='execution_profile=all_vm'
-
-# 2. Build/push the pipeline image for Cloud Run.
-export IMAGE_URI=REGION-docker.pkg.dev/PROJECT/REPOSITORY/capstone-pipeline:TAG
-gcloud auth configure-docker REGION-docker.pkg.dev
-docker buildx build --platform linux/amd64 -f docker/pipeline/Dockerfile -t "$IMAGE_URI" --push .
-
-# 3. Preview hybrid resources. Keep Scheduler paused for first rollout.
-terraform -chdir=infra/terraform plan \
-  -var='execution_profile=hybrid_vm_serverless' \
-  -var="serverless_container_image=$IMAGE_URI" \
-  -var='serverless_scheduler_paused=true'
+bruin environments list --config-file .bruin.yml
+bruin validate --fast ./bruin/pipelines/dataset_batch/pipeline.yml
+bruin validate --fast --env production ./bruin/pipelines/comtrade_bootstrap_day_1/pipeline.yml
+bruin run --environment production --force ./bruin/pipelines/comtrade_bootstrap_day_1
+bruin lineage ./bruin/pipelines/comtrade_bootstrap_day_1
 ```
 
-After applying hybrid infrastructure, render the VM env with `EXECUTION_PROFILE=hybrid_vm_serverless`, validate that VM scheduled queues skip serverless-owned non-Comtrade batches, execute one Cloud Run Job manually, then unpause Cloud Scheduler. The full checklist is in `docs/hybrid-vm-serverless-rollout-plan.md`.
+Current Bruin shape:
 
-## VM operations quick links
+- `bruin/pipelines/dataset_batch`: generic wrapper for one batch from `ops/batch_plan.json`
+- `bruin/pipelines/schedule_lane_queue`: generic wrapper for one schedule lane
+- `bruin/pipelines/monthly_refresh`: coarse wrapper
+- stage-level pipelines for Comtrade days, PortWatch phase 1, Brent phase 1, FX phase 1, and World Bank full bootstrap
 
-For VM runtime setup and operations, see `ops/vm/README.md`.
+Why Bruin is not the only runner yet:
 
-For out-of-schedule, on-demand batch set execution on the VM (including per-Comtrade-day scripts and non-Comtrade phase 1/2 scripts), see the "On-demand batch sets (outside schedule timers)" section in `ops/vm/README.md`.
+- shell wrappers still hold real VM compatibility behavior
+- secret rendering and Docker Compose startup remain VM-specific
+- Comtrade quota/retry/checkpoint behavior is Python-led
+- the existing batch runner owns restart flags and ops logging
 
-For the full local-edit -> git push -> VM pull -> docker rebuild -> manual run lifecycle, see the "End-to-end operator workflow: edit, push, pull, rebuild, run" section in `ops/vm/README.md`.
+The safe migration path is additive: expose more true stage boundaries in Bruin while keeping the VM wrappers available.
 
-Connection variable discovery (`VM_HOST`, `VM_USER`, `SSH_KEY_PATH`) is documented in the “How to find VM_HOST, VM_USER, and SSH_KEY_PATH” section in `ops/vm/README.md`.
+## Comtrade Metadata Setup
 
-Two helper scripts are available under `scripts/`:
+Comtrade metadata is not optional. The pipeline uses metadata to map reporter codes, partner codes, flow codes, HS commodity descriptions, transport modes, customs codes, and quantity units.
 
-- `scripts/vm_repo_sync.sh`: repository sync only (initialize/pull/update branch on VM)
-- `scripts/vm_api_insert.sh`: insert or update runtime API keys in `/etc/capstone/pipeline.env`
-
-Typical workflow from laptop:
+The metadata extractor is:
 
 ```bash
-scripts/vm_repo_sync.sh \
-  --vm-user chromazone \
-  --vm-host 104.199.42.249 \
-  --ssh-key-path "$HOME/.ssh/google_compute_engine" \
-  --vm-repo-dir /var/lib/pipeline/capstone \
-  --repo-url git@github.com:OWNER/REPO.git \
-  --branch cloud_migration
-
-scripts/vm_api_insert.sh \
-  --vm-user chromazone \
-  --vm-host 104.199.42.249 \
-  --ssh-key-path "$HOME/.ssh/google_compute_engine" \
-  --interactive-comtrade \
-  --interactive-fred \
-  --show-keys
+ingest/comtrade/un_comtrade_tools_metadata.py
 ```
 
-To pin the VM repo to a specific commit instead of latest branch head:
+It calls Comtrade reference endpoints under:
+
+```text
+https://comtradeapi.un.org/files/v1/app/reference
+```
+
+It writes to:
+
+| Runtime view | Path |
+| --- | --- |
+| Inside container | `/workspace/data/metadata/comtrade` |
+| On VM persistent disk | `/var/lib/pipeline/capstone/data/metadata/comtrade` |
+| In repo-relative local runs | `data/metadata/comtrade` |
+
+Run metadata locally:
 
 ```bash
-scripts/vm_repo_sync.sh \
-  --vm-user chromazone \
-  --vm-host 104.199.42.249 \
-  --ssh-key-path "$HOME/.ssh/google_compute_engine" \
-  --repo-url git@github.com:OWNER/REPO.git \
-  --branch cloud_migration \
-  --commit 0123abcd4567ef89deadbeefcafefeed12345678
+set -a
+source .env
+set +a
+uv run python ingest/comtrade/un_comtrade_tools_metadata.py
 ```
 
-## Warehouse shape
+Run metadata on the VM:
 
-The live warehouse is organized as:
+```bash
+cd /var/lib/pipeline/capstone
+sudo docker compose --env-file /etc/capstone/pipeline.env \
+  -f docker/docker-compose.yml \
+  exec -T pipeline \
+  scripts/run_pipeline.sh python ingest/comtrade/un_comtrade_tools_metadata.py
+```
 
-1. filesystem data assets in `data/bronze/*` and `data/silver/*`
-2. a `raw` landing schema loaded by `warehouse/bootstrap_silver_to_duckdb.sql`
-3. dbt staging models in `analytics_staging`
-4. dbt marts in `analytics_marts`
+Expected files include:
 
-This is not a strict in-database medallion layout. In practice:
+- `reporters.csv`
+- `partners.csv`
+- `flows.csv`
+- `hs_codes.csv`
+- `transport_modes.csv`
+- `customs_codes.csv`
+- `qty_units.csv`
+- `extraction_summary.json`
 
-- trade, routing, PortWatch, Brent, and event raw tables are loaded mostly from curated silver outputs
-- ECB FX raw tables are loaded from bronze CSV batches, while World Bank energy now lands through annual silver parquet partitions
-- `raw` is therefore a mixed landing layer, not a pure bronze mirror
+The silver builder requires at least `reporters.csv`, `partners.csv`, and `flows.csv`. Day 1 includes an explicit metadata step, and the silver path also has a precondition guard that bootstraps required metadata if it is missing.
 
-## Core model families
+## Why Comtrade Is Split Into Six Days
 
-### Trade and routing
+Comtrade is the hardest source in this project because the data is large, national reporting is uneven, and API quota is a real design constraint.
+
+The six bootstrap days are deliberate:
+
+| Day | Reporter group | Years | Commodities |
+| --- | --- | --- | --- |
+| Day 1 | Existing 16 reporters | 2020-2025 | Core food/energy commodities: `1001,1005,1006,1201,2709,2710` |
+| Day 2 | Existing 16 reporters | 2015-2019 | Same core commodities |
+| Day 3 | New 16 reporters | 2020-2025 | Same core commodities |
+| Day 4 | New 16 reporters | 2015-2019 | Same core commodities |
+| Day 5 | All 32 reporters | 2020-2026 | Extension commodities: `2711,3102,3105` |
+| Day 6 | All 32 reporters | 2015-2019 | Same extension commodities |
+
+The split exists for reliability:
+
+- recent years and older history can be retried separately
+- existing and new reporter groups can be proven separately
+- core commodities can be stabilized before extension commodities
+- failed quota windows do not force a full restart
+- logs and checkpoints stay interpretable
+
+The monthly history extractor compacts calls by sending:
+
+- one reporter at a time
+- up to four monthly periods in one request
+- all selected commodity codes in one comma-separated `cmdCode`
+- one flow at a time, usually `M` then `X`
+
+This gets more data out of each request while keeping the response small enough to retry and reason about. The public preview API has a small record cap, and subscription tiers still have query quotas or practical throttling limits. The project therefore treats API calls as scarce and keeps checkpoint files under `data/metadata/comtrade/state` and `logs/comtrade`.
+
+## Observability
+
+Observability is intentionally file-first. Logs should help diagnose a run, not become the reason the run fails.
+
+Important VM paths:
+
+| What | Path |
+| --- | --- |
+| VM runtime env | `/etc/capstone/pipeline.env` |
+| Repo on VM | `/var/lib/pipeline/capstone` |
+| Container workspace | `/workspace` |
+| Logs | `logs/<dataset>/...` |
+| Comtrade state | `data/metadata/comtrade/state/...` |
+| Serverless artifact uploads | `gs://BUCKET/PREFIX/metadata/serverless_runs/...` |
+| Ops Postgres | `capstone-postgres` container |
+| BigQuery ops mirror | raw ops tables, when enabled |
+
+VM checks:
+
+```bash
+cd /var/lib/pipeline/capstone
+sudo systemctl status capstone-stack --no-pager
+sudo docker compose --env-file /etc/capstone/pipeline.env -f docker/docker-compose.yml ps
+sudo docker compose --env-file /etc/capstone/pipeline.env -f docker/docker-compose.yml logs --tail=200 pipeline
+```
+
+Recent task logs:
+
+```bash
+find logs -maxdepth 3 -type f -mtime -1
+tail -n 20 logs/comtrade/comtrade_extract_manifest.jsonl
+tail -n 20 logs/portwatch/portwatch_extract_manifest.jsonl
+```
+
+Cloud Run checks:
+
+```bash
+gcloud run jobs executions list --job capstone-portwatch-weekly --region "$REGION"
+gcloud logging read 'resource.type="cloud_run_job" AND resource.labels.job_name="capstone-portwatch-weekly"' \
+  --project "$PROJECT_ID" \
+  --limit=50 \
+  --format="value(timestamp,textPayload)"
+```
+
+## VM Recovery Zone Fallback
+
+The Terraform contains a manual recovery scaffold for a fallback VM:
+
+- `fallback_zone`
+- `recovery_boot_disk_enabled`
+- `recovery_data_disk_enabled`
+- `recovery_vm_enabled`
+- `recovery_boot_source_snapshot`
+- `recovery_data_source_snapshot`
+
+This is not automatic failover. It is a controlled recovery option when the primary VM zone is unavailable, resource capacity is constrained, or the original VM cannot be started.
+
+This mattered during the project because a selected VM region/zone was not always available for the desired machine. The fallback design lets an operator restore boot and data snapshots into another zone, start a recovery VM, and keep using the same VM-first pipeline model without redesigning the data system during an outage.
+
+Basic recovery idea:
+
+1. Confirm recent boot and data snapshots exist.
+2. Set the recovery snapshot variables in `terraform.tfvars.json`.
+3. Enable the recovery boot disk, data disk, and VM flags.
+4. Apply Terraform.
+5. SSH to the recovery VM.
+6. Confirm `/var/lib/pipeline/capstone` and `/etc/capstone/pipeline.env`.
+7. Start `capstone-stack` and resume the failed batch from the safest step.
+
+Image placeholder: recovery VM and snapshot fallback diagram.
+
+## Data Availability Lessons
+
+The project deliberately stayed cheap, which shaped the architecture.
+
+Real-time macro, shipping, commodity, and geopolitical intelligence is expensive. Paid providers can offer cleaner feeds, faster updates, richer vessel data, and broader coverage. This project instead uses lower-cost sources such as Comtrade, PortWatch, FRED, ECB, World Bank, and a curated event register. That makes the project reproducible, but it also exposes real public-data limitations.
+
+Lessons learned:
+
+- Comtrade is official and valuable, but it is not real time. Some countries update late, some periods are missing, and wartime or disrupted periods can be sparse.
+- PortWatch is useful for chokepoint stress, but it does not always provide complete chokepoint information for every recent period. The pipeline therefore records null days and coverage gaps instead of pretending the signal is complete.
+- Macro data is easier to get cheaply at monthly, daily, or annual public-series grain than as a true real-time analytics feed.
+- World Bank energy data is annual, so the project broadcasts it to month grain only as structural context, not as a monthly measurement.
+- The cheapest reliable design is not "collect everything"; it is "collect enough, preserve lineage, and be honest about coverage."
+
+## Commodity Aggregation Lessons
+
+Commodity analysis needs careful grain discipline.
+
+Different HS levels and commodity groupings are not directly comparable just because they have similar names. For example:
+
+- `2709` crude oil and `2710` refined petroleum are related but not interchangeable.
+- `2711` petroleum gases is part of the energy story but behaves differently from crude and refined products.
+- `3102` nitrogenous fertilizers and `3105` mixed mineral or chemical fertilizers overlap conceptually, but they are not the same measurement.
+- Fertilizer value, nitrogen content, physical weight, and strategic importance can move differently.
+
+The project therefore keeps `cmd_code` in the canonical grain and uses commodity groups only as context. Aggregations are useful for dashboard storytelling, but they should not erase the fact that different commodities have different reporting quality, units, market behavior, and substitution logic.
+
+Where possible, compare:
+
+- the same HS code over time
+- the same reporter and partner structure
+- value with value, weight with weight, and quantity with quantity
+- aggregate groups only when the rollup is analytically justified
+
+The silver layer also carries rollup safety signals so downstream marts can avoid false comparability.
+
+## Events Layer
+
+The events layer was created because trade and traffic data alone do not explain why a disruption happened.
+
+The source file is:
+
+```text
+data/seed/events/events_seed.csv
+```
+
+The builder is:
+
+```bash
+uv run python ingest/events/events_silver.py
+```
+
+It creates:
+
+- `data/silver/events/dim_event.csv`
+- `data/silver/events/dim_event.parquet`
+- `data/silver/events/bridge_event_month_chokepoint_core.csv`
+- `data/silver/events/bridge_event_month_maritime_region.csv`
+- partitioned bridge parquet outputs under `data/silver/events/bridge_event_month_*`
+- `logs/events/events_silver.log`
+- `logs/events/events_silver_manifest.jsonl`
+
+The events are manually curated and then expanded into analytical bridges:
+
+- each event has an `event_id`
+- each event has start/end dates
+- lead, active, and lag windows are generated
+- event severity is weighted across those windows
+- events are linked to core chokepoints or broader maritime regions
+- dbt turns those files into `dim_event`, `bridge_event_month`, `bridge_event_chokepoint`, `bridge_event_region`, `bridge_event_location`, and `mart_event_impact`
+
+This adds an explanatory layer over the measured data. It lets the dashboard show that a trade movement or chokepoint stress signal occurred near a named event window, while still keeping the event register separate from the measured source data.
+
+## Warehouse Model Families
+
+Core trade and routing:
 
 - `stg_comtrade_trade_base`
 - `stg_comtrade_fact`
@@ -334,18 +761,17 @@ This is not a strict in-database medallion layout. In practice:
 - `fct_reporter_partner_commodity_hub_month`
 - `fct_reporter_partner_commodity_month_provenance`
 
-The canonical trade grain is reporter + partner + commodity + month + flow. The route fact preserves that grain, the hub fact expands it in an allocation-safe way, and the provenance fact stores canonical-grain lineage back to the analytical rows in `raw.comtrade_fact`.
+Dimensions:
 
-### Conformed staging dimensions
+- `dim_country`
+- `dim_time`
+- `dim_commodity`
+- `dim_trade_flow`
+- `dim_chokepoint`
+- `dim_event`
+- `dim_location`
 
-- `stg_dim_country`
-- `stg_dim_time`
-- `stg_dim_commodity`
-- `stg_dim_trade_flow`
-
-`stg_dim_time` is now generated in dbt from observed months across trade, PortWatch, Brent, FX, energy, and event sources, with configurable lead and lag buffers. It is no longer just a raw pass-through.
-
-### Exposure, macro, and energy marts
+Marts:
 
 - `mart_reporter_month_trade_summary`
 - `mart_reporter_commodity_month_trade_summary`
@@ -356,373 +782,96 @@ The canonical trade grain is reporter + partner + commodity + month + flow. The 
 - `mart_macro_monthly_features`
 - `mart_reporter_month_macro_features`
 - `mart_reporter_energy_vulnerability`
-
-### Event models
-
-- `stg_event_raw`
-- `stg_event_month_chokepoint`
-- `stg_event_month_region`
-- `stg_event_location`
-- `dim_event`
-- `dim_location`
-- `bridge_event_month`
-- `bridge_event_chokepoint`
-- `bridge_event_region`
-- `bridge_event_location`
 - `mart_event_impact`
 
-The event area materializes alongside the rest of the project under the same dbt-managed staging and marts schemas.
+Semantic/dashboard marts include:
 
-The current event silver contract is built by `ingest/events/events_silver.py` using this source precedence:
+- `mart_dashboard_global_trade_overview`
+- `mart_chokepoint_monthly_stress`
+- `mart_chokepoint_monthly_stress_detail`
+- `mart_chokepoint_monthly_hotspot_map`
+- `mart_reporter_partner_commodity_month_enriched`
+- `mart_reporter_month_exposure_map`
+- `mart_trade_month_coverage_status`
 
-- `--events-csv-path` CLI argument (when supplied)
-- `EVENTS_SEED_CSV_PATH` environment variable (when set)
-- `data/seed/events/events_seed.csv` (preferred durable location)
-- `data/bronze/events.csv` (legacy fallback)
+## Local DuckDB And dbt
 
-It then writes:
-
-- `logs/events/events_silver.log`
-- `logs/events/events_silver_manifest.jsonl`
-- `logs/events/publish_events_to_gcs.log`
-- `logs/events/publish_events_to_gcs_manifest.jsonl`
-- `logs/events/load_events_to_bigquery.log`
-- `logs/events/load_events_to_bigquery_manifest.jsonl`
-- `data/silver/events/dim_event.csv`
-- `data/silver/events/dim_event.parquet`
-- `data/silver/events/bridge_event_month_chokepoint_core.csv`
-- `data/silver/events/bridge_event_month_maritime_region.csv`
-- partitioned parquet bridge outputs under `data/silver/events/bridge_event_month_*`
-
-## Build and refresh
-
-### 1. Load raw tables into DuckDB
-
-Run from project root:
+For local analytics:
 
 ```bash
 make events-silver
 uv run python warehouse/load_silver_to_duckdb.py
+uv run dbt build --profiles-dir . --target duckdb_dev
 ```
 
-This creates or updates `warehouse/analytics.duckdb` and refreshes the `raw.*` tables.
-
-### 2. Build dbt models
-
-Install or sync dependencies if needed:
-
-```bash
-uv sync
-```
-
-Run a full build:
-
-```bash
-uv run dbt build --profiles-dir .
-```
-
-Or run targeted areas:
-
-```bash
-uv run dbt run --profiles-dir . --target duckdb_dev --select staging
-uv run dbt run --profiles-dir . --target duckdb_dev --select marts
-uv run dbt test --profiles-dir . --target duckdb_dev
-```
-
-### 3. Publish the PortWatch slice to GCS
-
-### 2a. Publish and load the events slice
-
-Preview the upload and BigQuery load plan:
-
-```bash
-make events-cloud-dry-run
-```
-
-Run the full events cloud slice:
-
-```bash
-make events-refresh-cloud
-```
-
-Or call the commands directly:
-
-```bash
-uv run python warehouse/publish_events_to_gcs.py
-uv run python warehouse/load_events_to_bigquery.py
-```
-
-Populate the cloud settings in one of two ways:
-
-- local `.env` copied from `.env.example`
-- `infra/terraform/terraform.tfvars.json` if you are using the Terraform scaffold
-
-For local development, prefer Application Default Credentials instead of a service-account key:
-
-```bash
-gcloud auth application-default login
-```
-
-Then publish the PortWatch assets:
-
-```bash
-uv run python warehouse/publish_portwatch_to_gcs.py --include-auxiliary
-```
-
-Preview the upload plan without calling GCS:
-
-```bash
-uv run python warehouse/publish_portwatch_to_gcs.py --include-auxiliary --dry-run
-```
-
-### 3a. Run the PortWatch extract with per-run logs
-
-The bronze extract now writes a rolling log and a JSONL manifest entry on every run:
-
-- `logs/portwatch/portwatch_extract.log`
-- `logs/portwatch/portwatch_extract_manifest.jsonl`
-
-Each manifest row captures:
-
-- requested start and end dates
-- selected chokepoints and derived region fields
-- processed dates, dates with rows, and null dates
-- per-day row counts and elapsed seconds
-- monthly row-count summaries
-- files written and total extracted rows
-- run duration and failure summary if the run errors
-
-Run it directly:
-
-```bash
-uv run python ingest/portwatch/portwatch_extract.py --start-date 2026-01-01 --end-date 2026-01-31
-```
-
-Or via `make`:
-
-```bash
-make portwatch-extract
-```
-
-### 4. Load PortWatch monthly into BigQuery
-
-After the canonical monthly silver partitions are in GCS:
-
-```bash
-uv run python warehouse/load_portwatch_to_bigquery.py
-```
-
-Preview the touched month partitions and GCS URIs first:
-
-```bash
-uv run python warehouse/load_portwatch_to_bigquery.py --dry-run
-```
-
-The loader replaces only the touched `month_start_date` partitions by default. Use `--append-only` only for controlled one-off loads.
-
-### 4a. Makefile workflow
-
-The repo now includes a root `Makefile` so the terraform-first flow is mostly two commands after you fill in the tfvars file:
-
-```bash
-make tfvars-init
-make cloud-bootstrap
-make portwatch-cloud-dry-run
-make portwatch-refresh-cloud
-make comtrade-cloud-dry-run
-make comtrade-refresh-cloud
-```
-
-Useful targets:
-
-- `make cloud-bootstrap`
-- `make infra-destroy`
-- `make portwatch-extract`
-- `make portwatch-cloud-dry-run`
-- `make portwatch-cloud`
-- `make portwatch-refresh-cloud`
-- `make comtrade-silver`
-- `make comtrade-routing`
-- `make comtrade-cloud-dry-run`
-- `make comtrade-cloud`
-- `make comtrade-refresh-cloud`
-- `make dbt-bigquery-debug`
-- `make dbt-bigquery-build`
-
-### 4b. Comtrade silver and routing
-
-The scripted Comtrade path now mirrors the repo's other vertical slices:
-
-- `ingest/comtrade/comtrade_silver.py` builds canonical month-level silver fact slices plus `dim_country`, `dim_time`, `dim_commodity`, and `dim_trade_flow`
-- `ingest/comtrade/comtrade_routing.py` executes the authoritative `05_comtrade_silver_enrichment_scenario_graph_routing_v4.ipynb` logic as a script and writes the routing outputs separately from the base silver fact
-- `warehouse/publish_comtrade_to_gcs.py` publishes Comtrade bronze, silver, routing, metadata, and per-run audit artifacts
-- `warehouse/load_comtrade_to_bigquery.py` loads `raw.comtrade_fact`, `raw.dim_country`, `raw.dim_time`, `raw.dim_commodity`, `raw.dim_trade_flow`, `raw.route_applicability`, and `raw.dim_trade_routes`
-
-The Comtrade fact is physically stored by month slice:
-
-- `data/silver/comtrade/comtrade_fact/year=YYYY/month=MM/reporter_iso3=ISO3/cmd_code=XXXX/flow_code=M/comtrade_fact.parquet`
-
-Within each slice the base-row dedupe grain keeps the operational fields that were needed to eliminate false duplicates:
-
-- `period`
-- `reporter_iso3`
-- `partner_iso3`
-- `flowCode`
-- `cmdCode`
-- `customsCode`
-- `motCode`
-- `partner2Code`
-
-The silver builder overwrites only touched slices and skips unchanged files by fingerprint, so reruns avoid unnecessary local rewrites, GCS uploads, and BigQuery reloads.
-
-Run the scripted silver builder directly:
-
-```bash
-uv run python ingest/comtrade/comtrade_silver.py --since-period 202401 --until-period 202412
-```
-
-Run the routing build with a local Natural Earth cache, or let it bootstrap that cache from GCS:
-
-```bash
-uv run python ingest/comtrade/comtrade_routing.py \
-  --natural-earth-path data/reference/geography/ne_110m_admin_0_countries.zip \
-  --natural-earth-gcs-uri gs://YOUR_BUCKET/reference/geography/ne_110m_admin_0_countries.zip
-```
-
-Each run writes rolling logs plus run-linked audit artifacts under `data/metadata/comtrade/ingest_reports/run_id=<run_id>/`.
-
-### 5. BigQuery dbt target
-
-The profile now supports both local DuckDB and BigQuery:
+For BigQuery dbt:
 
 ```bash
 uv run dbt debug --profiles-dir . --target bigquery_dev
 uv run dbt build --profiles-dir . --target bigquery_dev
 ```
 
-If you are using Terraform as the source of truth for names, you can generate `.env` from your Terraform vars file:
+If Terraform is your source of truth for names:
 
 ```bash
 python infra/terraform/render_dotenv.py > .env
 ```
 
-Or let the `Makefile` inject the Terraform-derived values directly for dbt:
+or:
 
 ```bash
 make dbt-bigquery-debug
 make dbt-bigquery-build
 ```
 
-Current limitation:
+## Streamlit Dashboard
 
-- The BigQuery profile is active and works for targeted validation runs such as selected marts.
-- Full-project BigQuery parity should still be treated as an ongoing migration task and validated model by model.
-
-## Useful dbt vars
-
-`stg_dim_time` supports buffered calendar generation:
-
-```bash
-uv run dbt run --profiles-dir . --select stg_dim_time --vars '{"dim_time_lag_months": 12, "dim_time_lead_months": 12}'
-```
-
-Default behavior already uses a 12-month lag and 12-month lead.
-
-## Current implementation notes
-
-- `canonical_grain_key` is carried through staged and fact trade models to support downstream lineage joins.
-- `fct_reporter_partner_commodity_month_provenance` is the canonical-grain provenance table for auditability and future ingest-log integration.
-- PortWatch exposure and event impact both use dbt-derived chokepoint stress signals: exposure marts consume the expanding `stress_index` family, while event impact consumes the expanding component z-scores exposed through `stg_chokepoint_stress_zscore`.
-- The event location layer now separates generic location semantics from chokepoint-only logic. Legacy raw event input still includes a column named `chokepoint_name` for some non-core locations.
-
-## Query examples
-
-```sql
--- canonical trade fact
-select *
-from analytics_marts.fct_reporter_partner_commodity_month
-order by trade_value_usd desc
-limit 20;
-
--- canonical-grain provenance for drill-back into source batches/files
-select *
-from analytics_marts.fct_reporter_partner_commodity_month_provenance
-order by raw_row_count desc
-limit 20;
-
--- reporter-level chokepoint exposure
-select *
-from analytics_marts.mart_reporter_month_chokepoint_exposure
-order by chokepoint_trade_exposure_ratio desc nulls last
-limit 20;
-
--- event impact with generic locations available through bridge tables
-select *
-from analytics_marts.mart_event_impact
-order by event_start_month desc
-limit 20;
-```
-
-## Streamlit dashboard
-
-The repository includes a production-minded Streamlit frontend under `app/` with five narrative pages:
+The repository includes a Streamlit frontend under `app/` with narrative pages for:
 
 - Executive Overview
 - Trade Dependence
-- Chokepoint Stress & Exposure
-- Events & Commodity Impact
+- Chokepoint Stress and Exposure
+- Events and Commodity Impact
 - Energy Vulnerability Context
 
-The app reads DuckDB in read-only mode, caches the connection with `st.cache_resource`, caches query results with `st.cache_data`, uses parameterised SQL throughout, and degrades gracefully when optional fact or event tables are missing.
-
-### Local run
-
-Install the frontend dependencies:
+Run locally:
 
 ```bash
 python -m pip install -r requirements-streamlit.txt
-```
-
-Or with `uv`:
-
-```bash
-uv venv
-source .venv/bin/activate
-uv pip install -r requirements-streamlit.txt
-```
-
-Run the dashboard from project root:
-
-```bash
 streamlit run app/streamlit_app.py
 ```
 
-If you want to point the app at a different DuckDB file, set `TRADE_DUCKDB_PATH` first:
-
-```bash
-export TRADE_DUCKDB_PATH=/path/to/analytics.duckdb
-streamlit run app/streamlit_app.py
-```
-
-### Docker run
-
-Build the image from project root:
+Run with Docker:
 
 ```bash
 docker build -f docker/streamlit/Dockerfile -t capstone-streamlit .
-```
-
-Run the container:
-
-```bash
 docker run --rm -p 8501:8501 capstone-streamlit
 ```
 
-Then open `http://localhost:8501`.
+Then open:
 
-### Dashboard notes
+```text
+http://localhost:8501
+```
 
-- Reporter filters are limited to the countries that actually appear in the trade marts.
-- The overview and dependence pages prioritise dbt marts and only fall back to lower-grain facts where the selected filters require that grain.
-- Chokepoint traffic stress comes from `analytics_staging.stg_portwatch_stress_metrics`, derived from the raw PortWatch monthly fact, so it covers fewer chokepoints than the exposure marts.
-- The events page uses true event bridge tables when available and falls back to commodity and traffic trends when they are not.
+## Delivery Checklist
+
+Before handing this repo to someone else:
+
+- confirm `README.md` has the correct project ID placeholders
+- add screenshots to the GCP setup sections
+- add your architecture flow charts
+- remove or rotate any accidental local secrets
+- confirm `.env` is not committed
+- confirm `infra/terraform/terraform.tfvars.json` does not contain private values you do not want to share
+- run `python -m json.tool ops/batch_plan.json`
+- run `bruin validate --fast ./bruin/pipelines/dataset_batch/pipeline.yml`
+- run `uv run dbt parse --profiles-dir . --target duckdb_dev`
+
+## Reflection
+
+The most important engineering lesson from this project is that reliability beat elegance almost every time.
+
+The VM stayed central because it made long-running Comtrade recovery understandable. Bruin was added gradually because the wrappers still contained real operating knowledge. Secret Manager became real infrastructure because environment drift across shell, systemd, Docker, Bruin, and Cloud Run was one of the easiest ways to break an otherwise correct pipeline.
+
+The data also taught architectural humility. Public data is powerful, but it is not always timely, complete, or comparable. A professional pipeline has to show missingness, preserve source lineage, and explain why a metric exists at a particular grain. That is why this project carries manifests, checkpoints, event bridges, commodity grain, and coverage tests instead of only producing final dashboard tables.

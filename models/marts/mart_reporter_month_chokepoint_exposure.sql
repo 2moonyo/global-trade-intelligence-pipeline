@@ -7,7 +7,7 @@ with route_fact as (
     period,
     year_month,
     trade_value_usd,
-    main_chokepoint as chokepoint_name,
+    {{ canonicalize_chokepoint_name('main_chokepoint') }} as chokepoint_name,
     route_applicability_status,
     is_maritime_routed
   from {{ ref('fct_reporter_partner_commodity_route_month') }}
@@ -30,7 +30,7 @@ reporter_month_chokepoint as (
     sum(rf.trade_value_usd) as chokepoint_trade_value_usd,
     count(distinct rf.partner_iso3) as route_pair_count
   from route_fact as rf
-  where rf.chokepoint_name is not null
+  where {{ clean_label_text('rf.chokepoint_name') }} is not null
     and coalesce(rf.is_maritime_routed, false)
   group by 1, 2, 3, 4
 ),

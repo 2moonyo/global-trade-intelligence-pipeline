@@ -1,9 +1,9 @@
 with route_chokepoints as (
   select distinct
-    {{ hash_text('lower(trim(main_chokepoint))') }} as chokepoint_id,
-    main_chokepoint as chokepoint_name
+    {{ canonical_chokepoint_id('main_chokepoint') }} as chokepoint_id,
+    {{ canonicalize_chokepoint_name('main_chokepoint') }} as chokepoint_name
   from {{ ref('fct_reporter_partner_commodity_route_month') }}
-  where main_chokepoint is not null
+  where {{ clean_label_text('main_chokepoint') }} is not null
 ),
 raw_chokepoints as (
   select
@@ -21,21 +21,21 @@ raw_chokepoints as (
 ),
 event_chokepoints as (
   select distinct
-    {{ hash_text('lower(trim(chokepoint_name))') }} as chokepoint_id,
-    chokepoint_name
+    {{ canonical_chokepoint_id('chokepoint_name') }} as chokepoint_id,
+    {{ canonicalize_chokepoint_name('chokepoint_name') }} as chokepoint_name
   from {{ ref('stg_chokepoint_bridge') }}
-  where chokepoint_name is not null
+  where {{ clean_label_text('chokepoint_name') }} is not null
 ),
 portwatch_chokepoints as (
   select distinct
-    chokepoint_id,
-    chokepoint_name,
+    {{ canonical_chokepoint_id('chokepoint_name') }} as chokepoint_id,
+    {{ canonicalize_chokepoint_name('chokepoint_name') }} as chokepoint_name,
     portwatch_source_chokepoint_id,
     tanker_share,
     container_share,
     dry_bulk_share
   from {{ ref('stg_portwatch_stress_metrics') }}
-  where chokepoint_name is not null
+  where {{ clean_label_text('chokepoint_name') }} is not null
 ),
 base as (
   select

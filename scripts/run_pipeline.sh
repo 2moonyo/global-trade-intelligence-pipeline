@@ -7,6 +7,9 @@ cd "${PROJECT_ROOT}"
 
 export PYTHONPATH="${PROJECT_ROOT}:${PYTHONPATH:-}"
 export UV_CACHE_DIR="${PROJECT_ROOT}/.uv-cache"
+export VIRTUAL_ENV="${VIRTUAL_ENV:-${PROJECT_ROOT}/.venv}"
+export UV_PROJECT_ENVIRONMENT="${UV_PROJECT_ENVIRONMENT:-${PROJECT_ROOT}/.venv}"
+export PATH="${VIRTUAL_ENV}/bin:${PATH}"
 
 source "${PROJECT_ROOT}/scripts/google_auth_env.sh"
 configure_google_auth --quiet
@@ -28,7 +31,7 @@ run_python() {
 }
 
 imports_check() {
-  python - <<'PY'
+  run_python - <<'PY'
 import duckdb
 import geopandas
 import pandas
@@ -44,7 +47,7 @@ PY
 }
 
 postgres_check() {
-  python - <<'PY'
+  run_python - <<'PY'
 import os
 import socket
 

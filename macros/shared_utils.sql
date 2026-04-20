@@ -126,6 +126,62 @@
   {% endif %}
 {%- endmacro %}
 
+{% macro clean_label_text(expression) -%}
+  {% if target.type == 'bigquery' %}
+    nullif(
+      trim(
+        regexp_replace(
+          regexp_replace({{ cast_string(expression) }}, r'[\t\r\n]+', ' '),
+          r' +',
+          ' '
+        )
+      ),
+      ''
+    )
+  {% else %}
+    nullif(
+      trim(
+        regexp_replace(
+          regexp_replace({{ cast_string(expression) }}, '[\t\r\n]+', ' ', 'g'),
+          ' +',
+          ' ',
+          'g'
+        )
+      ),
+      ''
+    )
+  {% endif %}
+{%- endmacro %}
+
+{% macro canonicalize_chokepoint_name(name_expr) -%}
+  {%- set cleaned_name = clean_label_text(name_expr) -%}
+  case
+    when {{ cleaned_name }} is null then null
+    when lower({{ cleaned_name }}) in ('hormuz', 'hormuz strait', 'strait of hormuz') then 'Strait of Hormuz'
+    when lower({{ cleaned_name }}) in (
+      'bab el-mandeb',
+      'bab el-mandeb strait',
+      'bab el mandeb',
+      'bab el mandeb strait',
+      'bab-el-mandeb',
+      'bab-el-mandeb strait'
+    ) then 'Bab el-Mandeb'
+    when lower({{ cleaned_name }}) in ('panama', 'panama canal') then 'Panama Canal'
+    when lower({{ cleaned_name }}) in ('malacca', 'malacca strait', 'strait of malacca') then 'Malacca Strait'
+    when lower({{ cleaned_name }}) in ('gibraltar', 'gibraltar strait', 'strait of gibraltar') then 'Gibraltar Strait'
+    when lower({{ cleaned_name }}) = 'suez' then 'Suez Canal'
+    when lower({{ cleaned_name }}) = 'suez canal' then 'Suez Canal'
+    when lower({{ cleaned_name }}) = 'cape of good hope' then 'Cape of Good Hope'
+    when lower({{ cleaned_name }}) = 'turkish straits' then 'Turkish Straits'
+    when lower({{ cleaned_name }}) = 'open sea' then 'Open Sea'
+    else {{ cleaned_name }}
+  end
+{%- endmacro %}
+
+{% macro canonical_chokepoint_id(name_expr) -%}
+  {{ hash_text("lower(" ~ canonicalize_chokepoint_name(name_expr) ~ ")") }}
+{%- endmacro %}
+
 {% macro geography_from_wkb(expression) -%}
   {% if target.type == 'bigquery' %}
     ST_GEOGFROMWKB({{ expression }})

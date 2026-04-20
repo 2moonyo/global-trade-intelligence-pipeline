@@ -7,7 +7,7 @@ with base as (
 
     select distinct
         event_id,
-        location_name as chokepoint_name,
+        {{ canonicalize_chokepoint_name('location_name') }} as chokepoint_name,
         link_role
     from {{ ref('stg_event_location') }}
     where location_type = 'chokepoint'
@@ -16,7 +16,7 @@ with base as (
 
 select
     event_id,
-    {{ hash_text('lower(trim(chokepoint_name))') }} as chokepoint_id,
+    {{ canonical_chokepoint_id('chokepoint_name') }} as chokepoint_id,
     chokepoint_name,
     link_role
 from base

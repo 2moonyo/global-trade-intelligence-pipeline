@@ -13,7 +13,7 @@ with exposed_trade as (
     net_weight_kg,
     gross_weight_kg,
     record_count,
-    main_chokepoint as chokepoint_name,
+    {{ canonicalize_chokepoint_name('main_chokepoint') }} as chokepoint_name,
     route_group,
     headline_exposure_group,
     route_confidence_score,
@@ -21,7 +21,7 @@ with exposed_trade as (
     used_transshipment_hub,
     hub_iso3
   from {{ ref('fct_reporter_partner_commodity_route_month') }}
-  where main_chokepoint is not null
+  where {{ clean_label_text('main_chokepoint') }} is not null
     and coalesce(is_maritime_routed, false)
 ),
 aggregated_trade as (

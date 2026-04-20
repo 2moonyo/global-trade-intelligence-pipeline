@@ -42,7 +42,7 @@ active_event_overlay as (
   -- Aggregate event rows before the join so monthly stress stays at month + chokepoint grain.
   select
     year_month,
-    {{ hash_text("lower(trim(chokepoint_name))") }} as chokepoint_id,
+    {{ canonical_chokepoint_id('chokepoint_name') }} as chokepoint_id,
     count(distinct case when is_event_active then event_id end) as active_event_count,
     max(case when is_event_active then severity_weight end) as max_active_event_severity,
     avg(case when is_event_active then severity_weight end) as avg_active_event_severity

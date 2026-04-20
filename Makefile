@@ -7,7 +7,7 @@ TFVARS_EXAMPLE := $(TF_DIR)/terraform.tfvars.json.example
 
 .DEFAULT_GOAL := help
 
-.PHONY: help tfvars-init check-tfvars deps-sync gcp-auth infra-init infra-plan infra-apply infra-destroy infra-destroy-vm vm-status vm-start vm-stop vm-delete-gcloud vm-delete-disk-gcloud vm-destroy-gcloud vm-bootstrap vm-env-print env-file env-print cloud-bootstrap portwatch-extract portwatch-silver portwatch-cloud-dry-run portwatch-cloud portwatch-cloud-dry-run-with-bronze portwatch-cloud-with-bronze portwatch-refresh-cloud comtrade-silver comtrade-routing comtrade-cloud-dry-run comtrade-cloud comtrade-cloud-dry-run-with-bronze comtrade-cloud-with-bronze comtrade-refresh-cloud brent-extract brent-silver brent-cloud-dry-run brent-cloud brent-cloud-dry-run-with-bronze brent-cloud-with-bronze brent-refresh-cloud fx-extract fx-silver fx-cloud-dry-run fx-cloud fx-cloud-dry-run-with-bronze fx-cloud-with-bronze fx-refresh-cloud events-silver events-cloud-dry-run events-cloud events-refresh-cloud dbt-bigquery-debug dbt-bigquery-build dbt-bigquery-docs-generate dbt-bigquery-docs-serve dbt-bigquery-docs-static
+.PHONY: help tfvars-init check-tfvars deps-sync gcp-auth infra-init infra-plan infra-apply infra-destroy infra-destroy-vm vm-status vm-start vm-stop vm-delete-gcloud vm-delete-disk-gcloud vm-destroy-gcloud vm-bootstrap vm-env-print env-file env-print cloud-bootstrap portwatch-extract portwatch-silver portwatch-cloud-dry-run portwatch-cloud portwatch-cloud-dry-run-with-bronze portwatch-cloud-with-bronze portwatch-refresh-cloud comtrade-silver comtrade-routing comtrade-cloud-dry-run comtrade-cloud comtrade-cloud-dry-run-with-bronze comtrade-cloud-with-bronze comtrade-refresh-cloud brent-extract brent-silver brent-cloud-dry-run brent-cloud brent-cloud-dry-run-with-bronze brent-cloud-with-bronze brent-refresh-cloud fx-extract fx-silver fx-cloud-dry-run fx-cloud fx-cloud-dry-run-with-bronze fx-cloud-with-bronze fx-refresh-cloud events-silver events-cloud-dry-run events-cloud events-refresh-cloud dbt-bigquery-debug dbt-bigquery-build dbt-bigquery-docs-generate dbt-bigquery-docs-serve dbt-bigquery-docs-static dbt-bigquery-docs-publish bruin-docs-publish
 .PHONY: portwatch-gcs-dry-run portwatch-gcs portwatch-gcs-dry-run-with-bronze portwatch-gcs-with-bronze
 .PHONY: comtrade-gcs-dry-run comtrade-gcs comtrade-gcs-dry-run-with-bronze comtrade-gcs-with-bronze
 .PHONY: brent-gcs-dry-run brent-gcs brent-gcs-dry-run-with-bronze brent-gcs-with-bronze
@@ -93,7 +93,9 @@ help:
 		"make dbt-bigquery-build      Run dbt build with env vars derived from Terraform." \
 		"make dbt-bigquery-docs-generate Generate dbt docs artifacts into target/." \
 		"make dbt-bigquery-docs-serve    Serve dbt docs locally." \
-		"make dbt-bigquery-docs-static   Generate a portable static dbt docs HTML file."
+		"make dbt-bigquery-docs-static   Generate a portable static dbt docs HTML file." \
+		"make dbt-bigquery-docs-publish  Generate and copy the dbt docs bundle to docs/dbt/." \
+		"make bruin-docs-publish         Generate Bruin validation and lineage JSON under docs/bruin/."
 
 tfvars-init:
 	@if [[ -f "$(TFVARS)" ]]; then \
@@ -363,6 +365,28 @@ dbt-bigquery-docs-serve: check-tfvars
 	UV_CACHE_DIR="$(PROJECT_ROOT)/.uv-cache" uv run dbt docs serve --profiles-dir . --target bigquery_dev
 
 dbt-bigquery-docs-static: check-tfvars
-	@eval "$$(python $(TF_DIR)/render_dotenv.py --format export)"; \
-	UV_CACHE_DIR="$(PROJECT_ROOT)/.uv-cache" uv run dbt docs generate --profiles-dir . --target bigquery_dev --static; \
-	echo "Static docs written to target/static_index.html"
+	@eval "$$(python $(TF_DIR)/render_dotenv.py --format export)" && \
+	UV_CACHE_DIR="$(PROJECT_ROOT)/.uv-cache" uv run dbt docs generate --profiles-dir . --target bigquery_dev --static
+	@echo "Static docs written to target/static_index.html"
+
+dbt-bigquery-docs-publish: check-tfvars
+	@mkdir -p docs/dbt
+	@eval "$$(python $(TF_DIR)/render_dotenv.py --format export)" && \
+	UV_CACHE_DIR="$(PROJECT_ROOT)/.uv-cache" uv run dbt docs generate --profiles-dir . --target bigquery_dev --static
+	@for file in catalog.json graph.gpickle graph_summary.json manifest.json perf_info.json run_results.json semantic_manifest.json static_index.html; do \
+		if [[ -f "target/$$file" ]]; then cp "target/$$file" "docs/dbt/$$file"; fi; \
+	done
+	@if [[ -f target/index.html ]]; then cp target/index.html docs/dbt/dbt_app_index.html; fi
+	@cp target/static_index.html docs/dbt/index.html
+	@LC_ALL=C LANG=C PROJECT_ROOT="$(PROJECT_ROOT)" perl -0pi -e 's/\Q$$ENV{PROJECT_ROOT}\E/./g' docs/dbt/*.json docs/dbt/*.html
+	@echo "Repo dbt docs bundle written to docs/dbt/."
+
+bruin-docs-publish:
+	@mkdir -p docs/bruin/lineage
+	@bruin validate --fast --exclude-warnings --output json bruin/pipelines > docs/bruin/validation.json
+	@find bruin/pipelines -path '*/assets/*' -type f \( -name '*.py' -o -name '*.sql' \) -print | while read -r asset; do \
+		rel="$${asset#bruin/pipelines/}"; \
+		out="docs/bruin/lineage/$${rel//\//__}.json"; \
+		bruin lineage --full --output json "$$asset" | jq --arg root "$(PROJECT_ROOT)/" 'walk(if type == "object" and has("path") and (.path | type == "string") then .path |= sub($$root; "") else . end)' > "$$out"; \
+	done
+	@echo "Repo Bruin validation and lineage artifacts written to docs/bruin/."

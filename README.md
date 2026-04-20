@@ -11,7 +11,158 @@ In plain language: the project collects public and API-based data, stores it in 
 
 In technical language: the baseline system runs on a GCP VM with Docker Compose, Bruin CLI orchestration, GCS, BigQuery, dbt, optional Cloud Run Jobs for bounded non-Comtrade refreshes, and Looker/BI-ready marts.
 
-Add your architecture and flow-chart screenshots near the sections marked `Image placeholder`.
+![Executive data flow diagram](<docs/ER Diagrams and flow/1.Capstone_Executive_Data_Flow-Executive Flow.drawio.png>)
+
+## TL;DR Quick VM Setup
+
+Use this path when you want the fastest repeatable route from a new GCP project to a running VM pipeline.
+
+Prerequisites on your laptop:
+
+- Google Cloud SDK with `gcloud`
+- Terraform
+- `make`
+- `uv`
+- a GCP project with billing enabled
+- FRED and UN Comtrade API keys
+
+### 1. Create The GCP Project Context
+
+Create or select a GCP project, then authenticate locally:
+
+```bash
+gcloud auth login
+gcloud config configurations create capstone-vm
+gcloud config configurations activate capstone-vm
+gcloud config set account YOUR_EMAIL
+gcloud config set project YOUR_GCP_PROJECT_ID
+gcloud auth application-default login
+gcloud auth application-default set-quota-project YOUR_GCP_PROJECT_ID
+```
+
+Enable the baseline APIs:
+
+```bash
+gcloud services enable \
+  serviceusage.googleapis.com \
+  compute.googleapis.com \
+  iam.googleapis.com \
+  secretmanager.googleapis.com \
+  storage.googleapis.com \
+  bigquery.googleapis.com
+```
+
+### 2. Create Terraform Inputs
+
+Generate the editable Terraform values file:
+
+```bash
+make tfvars-init
+```
+
+Edit `infra/terraform/terraform.tfvars.json` and set at least:
+
+- `project_id`
+- `gcp_location`
+- `primary_region`
+- `primary_zone`
+- `gcs_bucket_name`
+- IAM member lists for the human/operator accounts that need access
+
+For the current VM-first baseline, keep:
+
+```json
+{
+  "execution_profile": "all_vm",
+  "legacy_compute_vm_enabled": false,
+  "primary_compute_vm_enabled": true,
+  "primary_boot_restore_from_snapshot": false,
+  "primary_data_restore_from_snapshot": false,
+  "recovery_boot_disk_enabled": false,
+  "recovery_data_disk_enabled": false,
+  "recovery_vm_enabled": false
+}
+```
+
+### 3. Create `.env` And Fill Secrets
+
+Create local runtime files and `.env`:
+
+```bash
+./scripts/bootstrap_local.sh
+```
+
+Fill the required values in `.env`:
+
+```bash
+FRED_API_KEY=your_fred_key
+COMTRADE_API_KEY_DATA=your_primary_comtrade_key
+COMTRADE_API_KEY_DATA_A=
+COMTRADE_API_KEY_DATA_B=
+POSTGRES_USER=capstone
+POSTGRES_PASSWORD=choose_a_password
+POSTGRES_DB=capstone
+EXECUTION_PROFILE=all_vm
+EXECUTION_RUNTIME=vm
+```
+
+Do not commit `.env` or real API keys. The bootstrap path uses this file only to seed the approved secret flow into Google Secret Manager and the VM runtime env.
+
+### 4. Run The Simple VM Bootstrap
+
+From your laptop:
+
+```bash
+make vm-bootstrap VM_BOOTSTRAP_ARGS="--reset-known-host --show-resolved"
+```
+
+`make vm-bootstrap` is the simple wrapper around `scripts/vm_bootstrap.sh`. That command:
+
+- applies Terraform
+- syncs approved `.env` secrets to Google Secret Manager
+- copies the repo to `/var/lib/pipeline/capstone` on the VM
+- renders `/etc/capstone/pipeline.env`
+- starts the Docker Compose stack through `capstone-stack`
+
+### 5. Trigger The VM Pipeline Scripts
+
+SSH to the VM and run the full first-time bootstrap:
+
+```bash
+gcloud compute ssh capstone-vm-eu --zone europe-west1-b
+cd /var/lib/pipeline/capstone
+./scripts/vm_batches/run_full_bootstrap.sh
+```
+
+If you want to run the same sequence step by step, use:
+
+```bash
+cd /var/lib/pipeline/capstone
+./scripts/vm_batches/run_noncomtrade_phase_1_all.sh
+./scripts/vm_batches/run_noncomtrade_phase_2_all.sh
+./scripts/vm_batches/run_comtrade_all_days.sh
+sudo docker compose --env-file /etc/capstone/pipeline.env \
+  -f docker/docker-compose.yml \
+  exec -T pipeline scripts/run_pipeline.sh country-trade-and-energy
+```
+
+Check the stack and recent logs:
+
+```bash
+sudo docker compose --env-file /etc/capstone/pipeline.env -f docker/docker-compose.yml ps
+tail -n 20 logs/comtrade/comtrade_extract_manifest.jsonl
+tail -n 20 logs/portwatch/portwatch_extract_manifest.jsonl
+```
+
+After the bootstrap succeeds, enable recurring timers:
+
+```bash
+sudo systemctl enable --now capstone-schedule-lane-incremental_daily.timer
+sudo systemctl enable --now capstone-schedule-lane-weekly_refresh.timer
+sudo systemctl enable --now capstone-schedule-lane-monthly_refresh.timer
+sudo systemctl enable --now capstone-schedule-lane-yearly_refresh.timer
+systemctl list-timers 'capstone-schedule-lane-*'
+```
 
 ## Recommended Path
 
@@ -28,7 +179,7 @@ The VM path is the operational baseline because it preserves:
 
 Cloud Run is additive. In the hybrid profile, it is used for bounded non-Comtrade scheduled refreshes. Comtrade stays on the VM because quota handling, large bronze state, and rerun recovery are more important than stateless elegance.
 
-Image placeholder: high-level VM-first architecture.
+![VM internal architecture diagram](<docs/ER Diagrams and flow/3.Capstone_Executive_Data_Flow-VM_Internal Architecture.drawio.png>)
 
 ## Architecture
 
@@ -53,7 +204,7 @@ The warehouse is not a pure in-database medallion layout. Bronze and silver live
 
 ## External Setup Links
 
-Use these official pages when adding screenshots or guiding non-technical users through setup:
+Use these official pages for setup details:
 
 - GCP project creation: https://cloud.google.com/resource-manager/docs/creating-managing-projects
 - GCP API Library / enabling APIs: https://cloud.google.com/apis/docs/getting-started
@@ -79,8 +230,6 @@ For a first-time VM deployment, prepare:
 Do not commit real `.env` files or API keys.
 
 ## GCP UI Setup For Non-Technical Users
-
-Image placeholder: GCP project creation screen.
 
 1. Open the Google Cloud Console.
 2. Open the project selector and choose `Create project`.
@@ -772,8 +921,6 @@ Basic recovery idea:
 6. Confirm `/var/lib/pipeline/capstone` and `/etc/capstone/pipeline.env`.
 7. Start `capstone-stack` and resume the failed batch from the safest step.
 
-Image placeholder: recovery VM and snapshot fallback diagram.
-
 ## Data Availability Lessons
 
 The project deliberately stayed cheap, which shaped the architecture.
@@ -879,19 +1026,77 @@ Marts:
 - `mart_macro_monthly_features`
 - `mart_reporter_month_macro_features`
 - `mart_reporter_energy_vulnerability`
-- `mart_reporter_structural_vulnerability`
 - `mart_event_impact`
 
 Semantic/dashboard marts include:
 
 - `mart_dashboard_global_trade_overview`
+- `mart_chokepoint_daily_signal`
+- `mart_global_daily_market_signal`
 - `mart_chokepoint_monthly_stress`
+- `mart_global_monthly_system_stress_summary`
 - `mart_chokepoint_monthly_stress_detail`
 - `mart_chokepoint_monthly_hotspot_map`
+- `mart_executive_monthly_system_snapshot`
 - `mart_reporter_partner_commodity_month_enriched`
 - `mart_reporter_month_exposure_map`
 - `mart_reporter_structural_vulnerability`
 - `mart_trade_month_coverage_status`
+
+## Dashboard Setup
+
+Dashboard flow:
+
+```text
+Repo dbt models -> BigQuery analytics dataset -> Looker Studio data sources -> dashboard pages
+```
+
+First make sure the dbt marts exist in BigQuery:
+
+```bash
+uv run dbt build --profiles-dir . --target bigquery_dev
+```
+
+If you are operating from the VM, run dbt through the existing runtime stack after the bootstrap has loaded raw BigQuery tables:
+
+```bash
+cd /var/lib/pipeline/capstone
+sudo docker compose --env-file /etc/capstone/pipeline.env \
+  -f docker/docker-compose.yml \
+  exec -T dbt dbt build --profiles-dir . --target bigquery_dev
+```
+
+In Looker Studio:
+
+1. Create a new report.
+2. Choose `Add data` -> `BigQuery`.
+3. Select your GCP project.
+4. Select the dbt analytics dataset, usually `analytics` unless `DBT_BIGQUERY_DATASET` was changed.
+5. Add one data source per semantic mart you want to use.
+6. Keep joins/blends minimal. Prefer the semantic marts because they already encode the dashboard grain.
+
+Recommended dashboard wiring:
+
+| Dashboard page | Primary marts | Typical visuals |
+| --- | --- | --- |
+| Executive overview | `mart_dashboard_global_trade_overview`, `mart_executive_monthly_system_snapshot`, `mart_trade_month_coverage_status` | Scorecards, reporter trends, reporting completeness, latest complete month status |
+| Chokepoint operations | `mart_chokepoint_daily_signal`, `mart_chokepoint_monthly_stress`, `mart_chokepoint_monthly_stress_detail`, `mart_chokepoint_monthly_hotspot_map` | Daily throughput trends, stress tables, chokepoint map, rolling signal charts |
+| Trade exposure | `mart_reporter_partner_commodity_month_enriched`, `mart_reporter_month_exposure_map`, `mart_trade_exposure` | Reporter/partner/commodity drilldowns, country exposure map, top routes and commodities |
+| Macro and system stress | `mart_global_daily_market_signal`, `mart_global_monthly_system_stress_summary`, `mart_macro_monthly_features`, `mart_reporter_month_macro_features` | Brent/FX context, global stress trend, macro scorecards |
+| Structural vulnerability | `mart_reporter_structural_vulnerability` | Energy vulnerability scatter, supplier concentration table, event exposure bars, risk-band filters |
+
+Suggested report controls:
+
+- date range control using `month_start_date`
+- reporter/country filter using `reporter_country_name`
+- commodity filter using `cmd_code` or `commodity_name`
+- chokepoint filter using `chokepoint_name`
+- risk filter using `risk_band`
+
+For map charts, use the semantic marts that already expose map-ready geography:
+
+- `mart_reporter_month_exposure_map` for country-level exposure maps
+- `mart_chokepoint_monthly_hotspot_map` for chokepoint maps
 
 ## BigQuery dbt
 
@@ -915,13 +1120,45 @@ make dbt-bigquery-debug
 make dbt-bigquery-build
 ```
 
+### dbt Documentation
+
+A portable dbt docs HTML snapshot is available in the repo at [docs/dbt/index.html](docs/dbt/index.html).
+
+The repo copy under `docs/dbt/` also carries the generated dbt metadata files used by the docs site, including `manifest.json`, `catalog.json`, `run_results.json`, `graph_summary.json`, `semantic_manifest.json`, and the static HTML bundle.
+
+To regenerate the local docs artifacts under ignored `target/`:
+
+```bash
+make dbt-bigquery-docs-static
+```
+
+To refresh the repo-visible dbt docs bundle:
+
+```bash
+make dbt-bigquery-docs-publish
+```
+
+Both commands use the BigQuery profile and Terraform-derived environment, so run them from a machine or VM with Google Application Default Credentials available.
+
+### Bruin Documentation Artifacts
+
+Bruin does not generate a static documentation site in the same way dbt does. The useful repo artifacts are validation output and per-asset lineage JSON:
+
+```bash
+make bruin-docs-publish
+```
+
+That writes:
+
+- `docs/bruin/validation.json`
+- `docs/bruin/lineage/*.json`
+
+The lineage files are generated from `bruin lineage --full --output json` and use repo-relative paths so they can travel with the project.
+
 ## Delivery Checklist
 
-Before handing this repo to someone else:
+Before sharing or operating this repo in a new environment:
 
-- confirm `README.md` has the correct project ID placeholders
-- add screenshots to the GCP setup sections
-- add your architecture flow charts
 - remove or rotate any accidental local secrets
 - confirm `.env` is not committed
 - confirm `infra/terraform/terraform.tfvars.json` does not contain private values you do not want to share

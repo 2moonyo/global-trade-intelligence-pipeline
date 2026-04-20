@@ -828,7 +828,7 @@
       "max_attempts": 3,
       "retry_backoff_seconds": 60,
       "planned_partition_count": 36,
-      "planned_window_start": "2020-01",
+      "planned_window_start": "2015-01",
       "planned_window_end": "2022-12",
       "steps": [
         {
@@ -845,7 +845,7 @@
             "python",
             "warehouse/publish_events_to_gcs.py",
             "--since-year-month",
-            "2020-01",
+            "2015-01",
             "--until-year-month",
             "2022-12"
           ],
@@ -857,7 +857,7 @@
             "python",
             "warehouse/load_events_to_bigquery.py",
             "--since-year-month",
-            "2020-01",
+            "2015-01",
             "--until-year-month",
             "2022-12"
           ],

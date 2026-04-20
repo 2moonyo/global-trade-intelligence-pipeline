@@ -20,22 +20,28 @@ check_db.py
 !.github/
 !.github/workflows/
 !.github/workflows/bruin-validate.yml
-/.codex/*
-/.codex
 /.vscode/*
 /.idea/*
 deep*.md
 /warehouse/end-*.md
 *.zip
 
-# Ignore markdown docs except README files
+# Keep only the public Markdown surfaces in Git.
 *.md
-!README.md
-!**/README.md
-!docs/agent-worklog.md
-!docs/bruin-refactor-plan.md
-!docs/hybrid-vm-serverless-rollout-plan.md
-!docs/chokepoint-canonicalization-worklog.md
+*.MD
+!/README.md
+!docs/
+!docs/contracts/
+!docs/contracts/*.md
+!docs/bruin/
+!docs/bruin/**
+!docs/dbt/
+!docs/dbt/**
+docs/ER Diagrams and flow/projects/
+
+# Office documents stay local.
+*.docx
+*.DOCX
 
 # Secrets and backups
 .env.bak
@@ -64,16 +70,15 @@ override.tf.json
 /app
 /runtime
 
-# Handover and dashboard state docs
+# Local planning and dashboard state docs
 /INFRA_INVENTORY.md
 /DASHBOARD_STATUS.md
 /DASHBOARD_FIELD_MAP.md
-/CODEX_HANDOVER_PROMPT.md
 /ARCHITECTURE.md
 /PROJECT_STATE.md
 /Run_Instruction.MD
 
-.bruin.yml
+
 .env
 deploy_option_a_git_pull.sh
 check_hub_integrity.py
@@ -81,3 +86,4 @@ NEXT_STEPS.md
 .DS_Store
 notebooks/
 .github/workflows/
+/Documentation/

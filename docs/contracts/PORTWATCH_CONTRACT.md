@@ -6,9 +6,11 @@ See also:
 
 ## Status
 
-- Implemented locally end to end
-- First dataset provisioned for GCS and BigQuery
-- Current Streamlit consumer exists
+- Bronze ingest is scripted through `ingest/portwatch/portwatch_extract.py`
+- Canonical daily and monthly silver parquet partitions are implemented through `ingest/portwatch/portwatch_silver.py`
+- GCS publish is implemented in `warehouse/publish_portwatch_to_gcs.py`
+- BigQuery raw landing is implemented for both daily and monthly PortWatch tables
+- dbt staging, stress marts, map marts, and daily/monthly semantic marts consume PortWatch data
 
 ## Source Systems
 
@@ -17,37 +19,38 @@ See also:
 
 ## Purpose
 
-- Provide canonical monthly chokepoint traffic to feed stress modelling, trade exposure, and event-impact analysis
-- Act as the first cloud-ready vertical slice
+- Provide canonical daily and monthly chokepoint traffic signals
+- Feed stress modelling, trade exposure, event overlay, and BI-ready chokepoint map/reporting surfaces
 
 ## Lifecycle By Phase
 
 | Phase | Current implemented asset | Grain | Partitioning | Canonical path or table | Notes |
 | --- | --- | --- | --- | --- | --- |
 | Lookup metadata | `chokepoints_lookup` | one row per `portid` | none | `data/metadata/portwatch/chokepoints_lookup.parquet` | Saved during extract runs; also publishable to GCS. |
-| Bronze local | `portwatch_daily` | one row per `date` x `portid` | `year=YYYY/month=MM/day=DD` | `data/bronze/portwatch/year=YYYY/month=MM/day=DD/portwatch_chokepoints_daily.parquet` | Append-only daily extract written by `ingest/portwatch/portwatch_extract.py`. |
-| Silver legacy local | `mart_portwatch_chokepoint_stress_monthly` | one row per `year_month` x `chokepoint_name` | `year=YYYY/month=MM` | `data/silver/portwatch/mart_portwatch_chokepoint_stress_monthly/year=YYYY/month=MM/portwatch_chokepoint_stress_monthly.parquet` | Retained for local compatibility. |
-| Silver canonical local | `portwatch_monthly` | one row per `month_start_date` x `chokepoint_id` | `year=YYYY/month=MM` | `data/silver/portwatch/portwatch_monthly/year=YYYY/month=MM/portwatch_monthly.parquet` | This is the contractual monthly asset for the cloud path. |
-| Silver auxiliary local | `portwatch_chokepoint_stress_monthly_all` | one row per `month_start_date` x `chokepoint_id` | none | `data/silver/portwatch/portwatch_chokepoint_stress_monthly_all.parquet` | Combined monthly table still used by local DuckDB bootstrap. |
+| Bronze local | `portwatch_daily` | one row per `date` x `portid` | `year=YYYY/month=MM/day=DD` | `data/bronze/portwatch/year=YYYY/month=MM/day=DD/portwatch_chokepoints_daily.parquet` | Append-only daily extract written by the extractor. |
+| Silver daily | `portwatch_daily` | one row per `date_day` x `chokepoint_id` | `year=YYYY/month=MM` | `data/silver/portwatch/portwatch_daily/year=YYYY/month=MM/portwatch_daily.parquet` | Canonical daily cloud asset. |
+| Silver monthly | `portwatch_monthly` | one row per `month_start_date` x `chokepoint_id` | `year=YYYY/month=MM` | `data/silver/portwatch/portwatch_monthly/year=YYYY/month=MM/portwatch_monthly.parquet` | Canonical monthly cloud asset. |
+| Silver legacy local | `mart_portwatch_chokepoint_stress_monthly` | one row per `year_month` x `chokepoint_name` | `year=YYYY/month=MM` | `data/silver/portwatch/mart_portwatch_chokepoint_stress_monthly/year=YYYY/month=MM/portwatch_chokepoint_stress_monthly.parquet` | Retained for compatibility. |
+| Silver auxiliary local | `portwatch_chokepoint_stress_monthly_all` | one row per `month_start_date` x `chokepoint_id` | none | `data/silver/portwatch/portwatch_chokepoint_stress_monthly_all.parquet` | Consolidated compatibility snapshot. |
 | Silver auxiliary local | `portwatch_month_chokepoint_scaffold` | one row per `month_start_date` x `chokepoint_id` | none | `data/silver/portwatch/portwatch_month_chokepoint_scaffold.parquet` | Makes coverage gaps explicit. |
 | Silver dimensions | `dim_portwatch_chokepoint`, `dim_month` | dimension-specific | none | `data/silver/portwatch/dimensions/*.parquet` | Descriptive joins and QA support. |
-| GCS publish | metadata, bronze, silver, dimensions, scaffold | same as source asset | preserved from local shape | `gs://<bucket>/<prefix>/...` | Implemented in `warehouse/publish_portwatch_to_gcs.py`. |
-| DuckDB raw landing | `raw.portwatch_monthly` | one row per `month_start_date` x `chokepoint_id` | DuckDB table | `raw.portwatch_monthly` | Loaded today from `data/silver/portwatch/portwatch_chokepoint_stress_monthly_all.parquet`. |
-| BigQuery raw landing | `raw.portwatch_monthly` | one row per `month_start_date` x `chokepoint_id` | partition by `month_start_date`, cluster by `chokepoint_id` | `raw.portwatch_monthly` | Implemented in `warehouse/load_portwatch_to_bigquery.py`. |
-| dbt staging | `stg_portwatch_stress_metrics`, `stg_chokepoint_stress_zscore` | model-specific | dbt-managed | analytics schemas | Canonical home of derived stress metrics. |
-| dbt marts | `mart_reporter_month_chokepoint_exposure`, `mart_trade_exposure`, `mart_event_impact`, `mart_reporter_month_chokepoint_exposure_with_brent` | model-specific | dbt-managed | analytics schemas | PortWatch is joined to trade, events, and Brent context here. |
-| Dashboard | Streamlit pages 1, 3, and 4 | reporter-month or event grain | page-level query filters | `app/` | Current implemented consumer. |
-| Target BI | Looker Studio | page-specific | query BigQuery/dbt models | future | Intended cloud serving target, not the current local implementation. |
+| GCS publish | metadata, bronze, daily silver, monthly silver, dimensions, scaffold | same as source asset | preserved from local shape | `gs://<bucket>/<prefix>/...` | Checksum-aware publish with month filters. |
+| BigQuery raw landing | `raw.portwatch_daily`, `raw.portwatch_monthly` | table-specific | daily partitioned by `date_day`; monthly partitioned by `month_start_date`; both clustered by `chokepoint_id` | `raw.portwatch_daily`, `raw.portwatch_monthly` | Replaces touched month partitions by default and tracks load state. |
+| dbt staging | `stg_portwatch_daily`, `stg_portwatch_stress_metrics`, `stg_chokepoint_stress_zscore` | model-specific | dbt-managed | analytics staging schema | Canonical home of daily and monthly derived stress metrics. |
+| dbt marts | exposure, stress, daily signal, monthly signal, and map marts | model-specific | dbt-managed | analytics marts schema | PortWatch is joined to trade, events, geography, and Brent context. |
+| Semantic marts | daily and monthly chokepoint/market marts | day, month, or latest-map grain | dbt-managed | analytics marts schema | Current BI-facing PortWatch surfaces. |
 
 ## Primary Business Keys And Refresh Strategy
 
 | Asset | Primary key | Current refresh pattern | Rebuild strategy |
 | --- | --- | --- | --- |
-| `portwatch_daily` | `date`, `portid` | daily or historical date-window rerun | write one bronze day partition at a time |
-| `portwatch_monthly` | `month_start_date`, `chokepoint_id` | rerun after bronze refresh | replace only touched month partitions |
+| bronze `portwatch_daily` | `date`, `portid` | daily or historical date-window rerun | write one bronze day partition at a time |
+| silver `portwatch_daily` | `date_day`, `chokepoint_id` | rerun after bronze refresh | replace touched month partitions |
+| silver `portwatch_monthly` | `month_start_date`, `chokepoint_id` | rerun after bronze refresh | replace touched month partitions |
 | `portwatch_month_chokepoint_scaffold` | `month_start_date`, `chokepoint_id` | same as monthly fact | recompute requested month range |
-| DuckDB `raw.portwatch_monthly` | `month_start_date`, `chokepoint_id` | local bootstrap reload | full table replace is current local behavior |
-| BigQuery `raw.portwatch_monthly` | `month_start_date`, `chokepoint_id` | same run as cloud publish/load | delete touched partitions then append selected months |
+| BigQuery `raw.portwatch_daily` | `date_day`, `chokepoint_id` | same run as cloud publish/load | delete touched month partitions then append selected months |
+| BigQuery `raw.portwatch_monthly` | `month_start_date`, `chokepoint_id` | same run as cloud publish/load | delete touched month partitions then append selected months |
+| `stg_portwatch_daily` | `date_day`, `chokepoint_id` | dbt rebuild | daily calendar scaffold and rolling metrics |
 | `stg_portwatch_stress_metrics` | `month_start_date`, `chokepoint_id` | dbt rebuild | expanding and rolling metrics recompute forward from the earliest affected month |
 
 ## Minimum Required Columns
@@ -61,17 +64,46 @@ Bronze `portwatch_daily`:
 - `capacity` numeric not null
 - `year`, `month`, `day` partition fields not null
 
-Silver and landing `portwatch_monthly`:
+Silver and raw `portwatch_daily`:
 
-- `month_start_date` date not null
-- `year_month` string not null
-- `year`, `month` not null
-- `chokepoint_id` string not null
-- `chokepoint_name` string not null
-- `avg_n_total`, `avg_capacity` numeric not null
-- `max_n_total`, `max_capacity` numeric not null
-- `days_observed` integer not null
-- `tanker_share`, `container_share`, `dry_bulk_share` numeric nullable only when the denominator is absent
+- `date_day`
+- `year_month`
+- `year`
+- `month`
+- `day`
+- `chokepoint_id`
+- `chokepoint_name`
+- `n_total`
+- `capacity`
+- `n_tanker`
+- `n_container`
+- `n_dry_bulk`
+- `capacity_tanker`
+- `capacity_container`
+- `capacity_dry_bulk`
+
+Silver and raw `portwatch_monthly`:
+
+- `month_start_date`
+- `year_month`
+- `year`
+- `month`
+- `chokepoint_id`
+- `chokepoint_name`
+- `avg_n_total`
+- `max_n_total`
+- `avg_capacity`
+- `max_capacity`
+- `avg_n_tanker`
+- `avg_n_container`
+- `avg_n_dry_bulk`
+- `avg_capacity_tanker`
+- `avg_capacity_container`
+- `avg_capacity_dry_bulk`
+- `days_observed`
+- `tanker_share`
+- `container_share`
+- `dry_bulk_share`
 
 Scaffold:
 
@@ -126,30 +158,35 @@ stress_index_weighted_rolling_6m =
   stress_index_rolling_6m * (1.0 + 0.5 * priority_vessel_share)
 ```
 
+Daily signal logic lives in `stg_portwatch_daily`, `mart_chokepoint_daily_signal`, and `mart_global_daily_market_signal`. It exposes daily rolling windows, alert bands, and system-level daily coverage without changing the monthly stress contract.
+
 Justification:
 
 - count captures congestion and intensity of vessel movements
 - capacity captures throughput scale
 - vessel size captures whether observed stress is being driven by changing ship mix
 - the weighted variant biases attention toward the economically dominant vessel class for a chokepoint without discarding total traffic
-- using expanding prior-month baselines avoids look-ahead bias in event windows and dashboard interpretation
+- using prior-window baselines avoids look-ahead bias in event windows and dashboard interpretation
 
 ## Current Operational Logging
 
 Implemented logs and manifests exist for:
 
 - extract: `logs/portwatch/portwatch_extract.log`, `logs/portwatch/portwatch_extract_manifest.jsonl`
-- silver: `logs/portwatch/portwatch_silver.log` and `logs/portwatch/portwatch_silver_manifest.jsonl`
-- GCS publish: `logs/portwatch/publish_portwatch_to_gcs.log` and `logs/portwatch/publish_portwatch_to_gcs_manifest.jsonl`
-- BigQuery load: `logs/portwatch/load_portwatch_to_bigquery.log` and `logs/portwatch/load_portwatch_to_bigquery_manifest.jsonl`
+- silver: `logs/portwatch/portwatch_silver.log`, `logs/portwatch/portwatch_silver_manifest.jsonl`
+- GCS publish: `logs/portwatch/publish_portwatch_to_gcs.log`, `logs/portwatch/publish_portwatch_to_gcs_manifest.jsonl`
+- BigQuery load: `logs/portwatch/load_portwatch_to_bigquery.log`, `logs/portwatch/load_portwatch_to_bigquery_manifest.jsonl`
 
 ## Downstream Use
 
-- Executive Overview uses the reporter exposure mart derived from PortWatch stress.
-- Chokepoint Stress & Exposure uses `analytics_staging.stg_portwatch_stress_metrics` directly plus the reporter exposure mart.
-- Events & Commodity Impact uses PortWatch z-scores through `stg_chokepoint_stress_zscore` and `mart_event_impact`.
+- `mart_chokepoint_daily_signal` exposes daily chokepoint operations.
+- `mart_global_daily_market_signal` combines daily PortWatch signals with Brent daily context.
+- `mart_chokepoint_monthly_stress`, `mart_chokepoint_monthly_stress_detail`, and `mart_global_monthly_system_stress_summary` expose monthly stress.
+- `mart_reporter_month_chokepoint_exposure` and `mart_trade_exposure` join trade exposure to PortWatch stress.
+- `mart_chokepoint_monthly_hotspot_map` exposes latest-month chokepoint map points and exposure context.
+- `mart_reporter_partner_commodity_month_enriched` repeats relevant PortWatch stress context at drilldown grain.
 
 ## Known Gaps
 
-- Local DuckDB bootstrap still points to the combined compatibility file `portwatch_chokepoint_stress_monthly_all.parquet`, not directly to the canonical partitioned `portwatch_monthly` folder.
-- PortWatch is the only dataset that has been provisioned through GCS and BigQuery so far.
+- Some compatibility files remain for older local workflows, but the current dbt raw contract is BigQuery `raw.portwatch_daily` and `raw.portwatch_monthly`.
+- PortWatch source coverage can be sparse or delayed; semantic marts expose coverage fields rather than hiding missingness.

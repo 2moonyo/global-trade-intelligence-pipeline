@@ -51,7 +51,7 @@ def _strict_bigquery_mirror() -> bool:
 
 def _normalize_manifest_task_status(status: str) -> str:
     normalized = status.strip().lower()
-    if normalized in {"loaded", "planned"}:
+    if normalized in {"loaded", "planned", "success"}:
         return "completed"
     if normalized.startswith("no_op_"):
         return "completed"

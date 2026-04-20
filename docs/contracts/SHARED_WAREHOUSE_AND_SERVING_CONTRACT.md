@@ -2,22 +2,20 @@
 
 ## Scope And Current Reality
 
-This contract describes the shared behavior of the repository that applies across datasets.
+This contract describes the shared behavior that applies across datasets.
 
-It intentionally distinguishes between:
+The active baseline is VM-first:
 
-- the implemented local stack:
-  - source files and APIs
-  - `data/bronze/*` and `data/silver/*`
-  - DuckDB `raw.*`
-  - dbt staging and marts
-  - Streamlit dashboard under `app/`
-- the first cloud slice:
-  - implemented for PortWatch and extended to additional slices such as Comtrade, Brent, and events ingestion paths
-  - bronze and silver published to GCS where those dataset pipelines exist
-  - BigQuery landing tables in `raw.*`
-  - dbt BigQuery target available as `bigquery_dev`
-  - future BI target is Looker Studio
+1. source APIs or curated seed files
+2. append-only or rerunnable bronze files under `data/bronze/*`
+3. typed silver parquet or CSV assets under `data/silver/*`
+4. optional metadata and run artifacts under `data/metadata/*` and `logs/*`
+5. checksum-aware GCS publish where the dataset has a cloud path
+6. BigQuery `raw.*` landing tables
+7. dbt staging, dimensions, facts, marts, and semantic/dashboard marts
+8. Looker Studio or equivalent BI querying BigQuery dbt outputs
+
+The VM, persistent disk, shell wrappers, Bruin assets, and `ops/batch_plan.json` remain operationally important. Serverless is future/additive context and is not the baseline contract.
 
 ## Active Environment Contract
 
@@ -26,100 +24,113 @@ The current verified dbt runtime environment is:
 | Concern | Current contract |
 | --- | --- |
 | dbt profile | `capstone_monthly` |
-| default local target | `duckdb_dev` |
-| warehouse validation target | `bigquery_dev` |
-| local warehouse file | `warehouse/analytics.duckdb` |
-| local DuckDB base schema | `analytics` |
-| dbt staging schema | `analytics_staging` |
-| dbt marts schema | `analytics_marts` |
+| active target | `bigquery_dev` |
+| authentication | Google OAuth locally or VM metadata auth on GCP |
+| raw dataset | `raw` by default, from `GCP_BIGQUERY_RAW_DATASET` when set |
+| analytics dataset base | `analytics` by default, from `DBT_BIGQUERY_DATASET` or `GCP_BIGQUERY_ANALYTICS_DATASET` when set |
+| dbt staging schema | `<analytics_dataset>_staging` |
+| dbt marts schema | `<analytics_dataset>_marts` |
 | dbt model materialization defaults | staging = `view`, marts = `table` |
 
-Important current truths for environment handling:
+Important environment truths:
 
-- `profiles.yml` sets `duckdb_dev` as the default target for local development.
-- `bigquery_dev` is the explicit target for cloud-side dbt validation and dashboard-serving preparation.
-- dbt model schemas are currently controlled centrally by `dbt_project.yml`, not by per-folder custom schema macros.
-- The canonical semantic layer reset has started in `models/marts/semantics` with `mart_dashboard_global_trade_overview` as the first new dashboard mart.
+- `profiles.yml` currently defines only the BigQuery target.
+- `scripts/run_dbt.sh` sets `DBT_PROFILES_DIR` to the repo root and runs `--target ${DBT_TARGET:-bigquery_dev}`.
+- Runtime configuration flows through `.env`, `/etc/capstone/pipeline.env`, Secret Manager, and VM/container env injection. Do not add competing secret sources.
+- BigQuery raw tables are loaded by dataset-specific `warehouse/load_*_to_bigquery.py` scripts.
+- Operational Postgres logging is optional in principle; local manifests and BigQuery/raw ops mirrors are the durable audit path.
 
 ## Architecture Reality
 
-The live warehouse is not a strict medallion-in-database design. It is:
+The warehouse is not a strict in-database medallion design. Bronze and silver live primarily as files. BigQuery `raw` is a landing layer for curated silver outputs, not a pure mirror of every bronze file.
 
-1. source APIs or curated/manual files
-2. bronze and silver files on local disk
-3. DuckDB `raw` landing tables loaded from those files
-4. dbt staging models
-5. dbt marts
-6. Streamlit pages reading those marts and selected staging models
+Current raw source tables declared in dbt:
 
-Important current truths:
+- trade and routing: `comtrade_fact`, `dim_country`, `dim_time`, `dim_commodity`, `dim_trade_flow`, `dim_chokepoint`, `dim_country_ports`, `route_applicability`, `dim_trade_routes`
+- events: `dim_event`, `bridge_event_month_chokepoint_core`, `bridge_event_month_maritime_region`
+- PortWatch: `portwatch_daily`, `portwatch_monthly`
+- macro and energy: `brent_daily`, `brent_monthly`, `ecb_fx_eu_monthly`, `energy_vulnerability`
+- operations mirror: `ops_pipeline_run`, `ops_task_run`, `ops_task_artifact`, `ops_partition_checkpoint`, `ops_retry_registry`
 
-- `raw` is a mixed landing layer, not a pure bronze mirror.
-- PortWatch has the most mature cloud slice, but the repo also contains BigQuery-oriented publish/load paths for Comtrade, Brent, and events.
-- Local analytics and local app serving still center on DuckDB.
-- Events are currently owner-curated data assets in `data/silver/events/*`; there is no standardized bronze ingest job for them yet.
-- The current dashboard is Streamlit, not Looker Studio. Looker Studio is the target cloud BI pattern, not the current local serving layer.
+Each dataset contract names the canonical local asset, GCS prefix, BigQuery raw table, and dbt surface for that dataset.
 
 ## Cross-Source Canonical Rules
 
-- `year_month` in `YYYY-MM` format is the primary cross-source analytical month key.
+- `year_month` in `YYYY-MM` format is the primary human-readable analytical month key.
 - `period` in `YYYYMM` integer form is the canonical monthly warehouse key for many trade and time joins.
 - `month_start_date` is the preferred physical monthly date key when a real date column exists.
 - ISO3 is the preferred country join key wherever a true country grain exists.
+- `is_country_group` and `is_country_map_eligible` distinguish country groups from mappable countries in downstream marts.
+- Chokepoint ids must use the shared canonical chokepoint mapping before hashing or joining.
 - Derived analytical metrics belong in dbt unless there is a strong operational reason to materialize them earlier.
-- Re-runnable and idempotent behavior matters more than minimizing file count at this project stage.
+- Rerunnable and idempotent behavior matters more than minimizing file count at this project stage.
 
 ## Serving Layer Contract
 
-### Current Local Dashboard
+### BigQuery And BI
 
-The implemented dashboard contract is the Streamlit app under `app/`, backed by DuckDB `warehouse/analytics.duckdb`.
+The active serving path is:
 
-| Streamlit page | Primary models used | Purpose |
+```text
+BigQuery raw -> dbt staging/dimensions/facts/marts -> dbt semantic marts -> Looker Studio or equivalent BI
+```
+
+The generated dbt documentation snapshot is available at `docs/dbt/index.html` and can be refreshed with:
+
+```bash
+make dbt-bigquery-docs-publish
+```
+
+### Core Analytical Marts
+
+The core marts are reusable analytical surfaces and are not necessarily final dashboard grains:
+
+- `fct_reporter_partner_commodity_month`
+- `fct_reporter_partner_commodity_month_provenance`
+- `fct_reporter_partner_commodity_month_lineage_detail`
+- `fct_reporter_partner_commodity_route_month`
+- `fct_reporter_partner_commodity_hub_month`
+- `mart_reporter_month_trade_summary`
+- `mart_reporter_commodity_month_trade_summary`
+- `mart_trade_exposure`
+- `mart_reporter_month_chokepoint_exposure`
+- `mart_reporter_month_chokepoint_exposure_with_brent`
+- `mart_hub_dependency_month`
+- `mart_macro_monthly_features`
+- `mart_reporter_month_macro_features`
+- `mart_reporter_energy_vulnerability`
+- `mart_event_impact`
+- `mart_pipeline_progress`
+
+### Semantic Dashboard Marts
+
+The Looker-facing semantic layer lives under `models/marts/semantics`.
+
+| Semantic mart | Grain | Primary use |
 | --- | --- | --- |
-| Executive Overview | `analytics_marts.mart_reporter_month_trade_summary`, `analytics_marts.mart_reporter_month_chokepoint_exposure` | High-level trade scale, exposure context, and source freshness. |
-| Trade Dependence | `analytics_marts.fct_reporter_partner_commodity_month` | Bilateral corridor, commodity dependence, and partner concentration analysis. |
-| Chokepoint Stress & Exposure | `analytics_staging.stg_portwatch_stress_metrics`, `analytics_marts.mart_reporter_month_chokepoint_exposure`, optional `analytics_marts.fct_reporter_partner_commodity_route_month` | Traffic stress, reporter exposure, and route-level evidence. |
-| Events & Commodity Impact | `analytics_marts.dim_event`, `analytics_marts.bridge_event_month`, `analytics_marts.bridge_event_chokepoint`, `analytics_marts.mart_event_impact`, `analytics_staging.stg_portwatch_stress_metrics`, `analytics_marts.fct_reporter_partner_commodity_month` | Event windows, affected chokepoints, commodity movement, and impact evidence. |
-| Energy Vulnerability Context | `analytics_marts.mart_reporter_energy_vulnerability`, `analytics_marts.mart_reporter_commodity_month_trade_summary`, `analytics_marts.mart_trade_exposure` | Structural energy dependence overlaid with trade scale and chokepoint exposure. |
+| `mart_dashboard_global_trade_overview` | reporter country x month | Page 1 overview scorecards, trends, reporter ranking, and completeness messaging |
+| `mart_trade_month_coverage_status` | month | Trade data coverage and latest complete month status |
+| `mart_executive_monthly_system_snapshot` | month | Executive system snapshot over monthly chokepoint stress and coverage |
+| `mart_chokepoint_daily_signal` | day x chokepoint | Daily chokepoint operations and alert bands |
+| `mart_global_daily_market_signal` | day | Daily system-level chokepoint and Brent market signal |
+| `mart_chokepoint_monthly_stress` | month x chokepoint | Monthly chokepoint stress, event overlay, and freshness |
+| `mart_global_monthly_system_stress_summary` | month | System-level monthly PortWatch coverage and stress |
+| `mart_chokepoint_monthly_stress_detail` | month x chokepoint | Drilldown stress bands and ranks |
+| `mart_chokepoint_monthly_hotspot_map` | latest month x chokepoint | Chokepoint map points with stress and exposure context |
+| `mart_reporter_partner_commodity_month_enriched` | reporter x partner x commodity x month x chokepoint/context | Trade exposure drilldown table |
+| `mart_reporter_month_exposure_map` | latest month x eligible reporter country | Country map exposure snapshot |
+| `mart_reporter_structural_vulnerability` | reporter x month | Page 5 structural vulnerability and concentration story |
 
-### Current Semantic Dashboard Contract
+Semantic marts should be business-readable, grain-explicit, and BI-friendly:
 
-The semantic presentation layer is being rebuilt under `models/marts/semantics` for Looker Studio.
-
-Current implemented semantic mart:
-
-| Semantic mart | Grain | Current purpose |
-| --- | --- | --- |
-| `analytics_marts.mart_dashboard_global_trade_overview` | one row per reporter country per month across a full reporter-month coverage grid | Page 1 overview scorecards, monthly trend line, top reporter ranking, and completeness or missingness messaging |
-
-This semantic layer is intended to be dashboard-facing and business-readable:
-
-- country names should remain standardized and human-readable
-- compact labels such as `8.24B`, `645.00M`, and `1.40T` are allowed alongside raw numeric fields
-- Looker Studio should require minimal custom SQL
-- semantic marts should be updated incrementally, one mart at a time, with matching tests and explicit grain documentation
-- completeness fields repeated at month grain are intentional so Looker Studio scorecards can use `MAX` without blending
-
-### Target Cloud Serving Pattern
-
-The intended cloud serving pattern is:
-
-- bronze and silver in GCS
-- landing tables in BigQuery
-- dbt on BigQuery
-- BI in Looker Studio
-
-Today, only PortWatch has concrete repo support for that path.
-
-Current implementation note:
-
-- `bigquery_dev` is a real, usable target for targeted dbt validation.
-- Full-project parity across all models is still a migration effort and should not be assumed from a single successful targeted build.
+- human-readable names should be present beside ids
+- map marts should expose mappable flags and stable geography fields
+- completeness and latest-period fields may be repeated intentionally for BI scorecards
+- Looker Studio should not need custom SQL to recover the intended grain
 
 ## Cross-Source Computed Models And Justification
 
-## Canonical Time, Country, And Commodity Dimensions
+## Canonical Time, Country, Commodity, And Geography Dimensions
 
 `stg_dim_time`:
 
@@ -127,15 +138,21 @@ Current implementation note:
 - intentionally acts as a conformed monthly spine
 - avoids coupling the warehouse to a single raw time table
 
-Justification:
+`stg_dim_country` and `dim_country`:
 
-- no single source covers every month used in the full analytical graph
-- event lead and lag windows need time coverage beyond the trade-only range
+- are rooted in curated Comtrade country assets
+- canonicalize known labels and ISO3 edge cases
+- expose group and map-eligibility flags for dashboards
 
-`stg_dim_country` and `stg_dim_commodity`:
+`stg_dim_commodity` and `dim_commodity`:
 
-- are currently rooted in the curated Comtrade dimension assets
-- act as conformed dimensions reused across trade, macro, energy, and dashboard joins
+- are rooted in Comtrade commodity metadata and observed fact commodities
+- preserve HS code detail so dashboard aggregation does not erase source grain
+
+`stg_dim_chokepoint` and `dim_chokepoint`:
+
+- canonicalize chokepoint names before deriving ids
+- retain numeric coordinates and BigQuery geography fields for map marts
 
 ## Reporter Summary Marts
 
@@ -153,7 +170,7 @@ Justification:
 Justification:
 
 - these marts are cheap to query
-- they give the dashboard a stable, interpretable summary layer
+- they give dashboards a stable summary layer
 - they prevent repeated heavy scans of the canonical fact for common overview questions
 
 ## Reporter Chokepoint Exposure Marts
@@ -175,9 +192,9 @@ Justification:
 Justification:
 
 - separates structural trade dependence from traffic stress and event overlay
-- lets the dashboard mix risk signals without re-deriving them page by page
+- lets dashboards mix risk signals without re-deriving them page by page
 
-## Macro And Energy Context Marts
+## Macro, Energy, And Structural Context Marts
 
 `mart_macro_monthly_features`:
 
@@ -187,15 +204,18 @@ Justification:
 `mart_reporter_month_macro_features`:
 
 - grain: `reporter_iso3 + period + fx_currency_code`
-- joins reporter-month trade summaries to:
-  - Brent monthly
-  - FX monthly
-  - annual energy indicators broadcast by reporter and year
+- joins reporter-month trade summaries to Brent monthly, FX monthly, and annual energy indicators broadcast by reporter and year
+
+`mart_reporter_structural_vulnerability`:
+
+- grain: `reporter_iso3 + month_start_date`
+- combines annual energy vulnerability, monthly chokepoint exposure, historical event exposure, trade scale, supplier concentration, and top commodity concentration
 
 Justification:
 
-- these marts keep macro context separate from core trade exposure logic
-- annual energy values are intentionally broadcast to month grain because no true monthly series exists in the source
+- macro context stays separate from core trade exposure logic
+- annual energy values are intentionally broadcast to month grain because no true monthly source exists
+- Page 5 structural risk stays at reporter-month grain by aggregating all lower-grain inputs before joining
 
 ## Event Impact Mart
 
@@ -228,28 +248,30 @@ The highest-value blocking checks by layer are:
 | --- | --- |
 | Bronze | partition-path consistency, required identifiers, parseable dates, non-empty extracts where a successful job is expected |
 | Silver | uniqueness at declared grain, stable typing, join-key preservation, explicit handling of missing coverage |
-| Raw landing | expected table existence, expected schema, expected date grain, no silent duplication from repeated loads |
+| GCS publish | checksum-aware skipping, expected prefix shape, required source path presence |
+| BigQuery raw landing | expected table existence, expected schema, expected date grain, no silent duplication from repeated loads |
 | dbt staging | key not-null checks, unique grain checks, canonical code normalization |
 | dbt marts | grain tests, allocation integrity for hub routing, event bridge deduplication, reporter exposure sanity |
-| Dashboard | graceful degradation when optional marts are absent, truthful empty states instead of silent fallback distortion |
+| Semantic marts | one documented dashboard grain, BI-readable labels, map eligibility, latest-period fields |
 
-## Migration Notes
+## Migration And Hardening Notes
 
-To move the remaining datasets toward the PortWatch pattern, the next desired state is:
+The next desired state is not a new architecture. It is hardening the current VM-first cloud path:
 
-1. define a canonical silver contract for each dataset
-2. add a repeatable publish-to-GCS step
-3. add BigQuery landing tables dataset by dataset
-4. keep dbt-derived metrics in dbt unless there is a clear cost or latency reason not to
-5. preserve the current Streamlit dashboard until the BigQuery and Looker path is complete enough to replace it
+1. keep the VM persistent disk and runtime env stable
+2. keep every dataset on explicit bronze -> silver -> GCS -> BigQuery -> dbt steps
+3. keep Bruin assets aligned with real stage-level work while preserving shell wrappers
+4. make logging durable without making optional sinks block successful data runs
+5. add tests around grain, map eligibility, source coverage, and BigQuery load idempotency
+6. preserve Looker-facing semantic marts as the preferred BI contract
 
-Current migration maturity by dataset:
+Current maturity by dataset:
 
-| Dataset | Local contract maturity | Cloud maturity |
+| Dataset | Local silver maturity | BigQuery maturity |
 | --- | --- | --- |
-| PortWatch | high | high relative to the repo; first working vertical slice |
-| Comtrade | high locally | low |
-| Brent | medium | low |
-| FX | medium | low |
-| World Bank energy | medium-high | low |
-| Events | medium locally, but manually curated | low |
+| Comtrade | high, operationally complex | implemented, with partitioned fact loads and fixed route/dimension loads |
+| PortWatch | high | implemented for daily and monthly raw tables |
+| Brent | high | implemented for daily and monthly raw tables |
+| FX | high for monthly silver | implemented for monthly raw table |
+| World Bank energy | high for annual silver | implemented for annual raw table |
+| Events | high for curated generated silver | implemented for event dimension and monthly bridge tables |

@@ -30,6 +30,8 @@ deep*.md
 *.md
 *.MD
 !/README.md
+!infra/terraform/README.md
+!ops/vm/README.md
 !docs/
 !docs/contracts/
 !docs/contracts/*.md
@@ -63,6 +65,7 @@ override.tf.json
 *_override.tf.json
 /infra/terraform/.terraform/
 /infra/terraform/terraform.tfvars.json
+/infra/terraform/terraform.tfvars*.json
 /infra/terraform/*.tfplan
 
 /.secrets

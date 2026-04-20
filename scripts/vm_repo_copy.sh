@@ -138,7 +138,7 @@ echo "Copying local repo contents to ${REMOTE}:${VM_REPO_DIR} ..."
     .
 ) | ssh "${SSH_OPTS[@]}" "${REMOTE}" "tar -xf - -C '${VM_REPO_DIR}'"
 
-EVENTS_SEED_PATH="data/seed/events/events_seed.csv"
+EVENTS_SEED_PATH="data/seed/events/events_seed_extended_2015.csv"
 if [[ -f "${LOCAL_PROJECT_ROOT}/${EVENTS_SEED_PATH}" ]]; then
   echo "Copying required seed file ${EVENTS_SEED_PATH} ..."
   (

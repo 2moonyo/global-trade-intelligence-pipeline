@@ -24,7 +24,7 @@ Serverless execution is additive. It does not move Comtrade, does not introduce 
 - [x] Add Cloud Run Job wrapper script that reuses existing dataset-batch execution.
 - [x] Add serverless preflight checks for runtime ownership, Events seed availability, and World Bank `dim_country` hydration.
 - [x] Add best-effort upload of serverless logs/manifests to `metadata/serverless_runs/...`.
-- [x] Include only `data/seed/events/events_seed.csv` in the pipeline image from the otherwise ignored `data/` tree.
+- [x] Include only `data/seed/events/events_seed_extended_2015.csv` in the pipeline image from the otherwise ignored `data/` tree.
 - [x] Add additive Terraform resources for Cloud Run Jobs, Cloud Scheduler, service accounts, IAM, and env/secret injection.
 - [x] Add docs and operator instructions for `all_vm`, `hybrid_vm_serverless`, validation, and rollback.
 
@@ -34,7 +34,7 @@ Serverless execution is additive. It does not move Comtrade, does not introduce 
 - PortWatch: Cloud Run in hybrid mode runs existing extract -> silver -> publish GCS -> BigQuery load -> dbt build batch commands.
 - Brent: Cloud Run in hybrid mode injects `FRED_API_KEY` from Secret Manager and runs existing extract -> silver -> publish/load -> dbt.
 - FX: Cloud Run in hybrid mode runs existing ECB extract -> silver -> publish/load -> dbt.
-- Events: Cloud Run image includes the existing seed CSV and runs existing silver -> publish/load -> dbt.
+- Events: Cloud Run image includes the canonical extended 2015+ seed CSV and runs existing silver -> publish/load -> dbt.
 - World Bank Energy: Cloud Run preflight hydrates `data/silver/comtrade/dimensions/dim_country.parquet` from the existing Comtrade GCS contract, falling back to `raw.dim_country` in BigQuery, then runs the existing World Bank batch.
 
 ## Terraform Rollout
@@ -113,6 +113,6 @@ Confirm that raw tables remain the tables listed in `models/sources/silver_sourc
 
 - Duplicate scheduling: controlled by VM queue profile filtering and initially paused Cloud Scheduler jobs.
 - Postgres coupling: Cloud Run sets `OPS_POSTGRES_ENABLED=false`; BigQuery ops mirror remains enabled.
-- Events seed availability: Docker image includes only the approved seed CSV from `data/`.
+- Events seed availability: Docker image includes only the approved extended 2015+ seed CSV from `data/`.
 - World Bank dependency on Comtrade countries: preflight hydrates `dim_country.parquet` from existing Comtrade outputs.
 - dbt concurrency: schedules are staggered and can remain paused during rollout.

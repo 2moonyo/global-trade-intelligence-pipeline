@@ -1302,6 +1302,130 @@ models:
                 quote: false
                 values: [true, false]
 
+  - name: mart_reporter_structural_vulnerability
+    description: Page 5 semantic mart at one row per reporter and month, combining annual energy vulnerability, monthly chokepoint exposure, historical event exposure, trade scale, and supplier/import concentration for executive structural-risk storytelling.
+    columns:
+      - name: reporter_iso3
+        description: ISO3 code of the reporting country. Aggregate/group geographies are excluded upstream.
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_country')
+                field: iso3
+
+      - name: reporter_name
+        description: Business-readable reporter country name used for scatter labels, tables, and scorecards.
+        tests:
+          - not_null
+
+      - name: month_start_date
+        description: First calendar day of the month; primary date field for Looker Studio controls.
+        tests:
+          - not_null
+
+      - name: period
+        description: Integer month key in YYYYMM format.
+        tests:
+          - not_null
+
+      - name: year_month
+        description: Canonical month key in YYYY-MM format.
+        tests:
+          - not_null
+
+      - name: total_trade_value_usd
+        description: Reporter total monthly trade value in USD, suitable for scatter bubble size.
+
+      - name: total_import_value_usd
+        description: Reporter total monthly import value in USD.
+
+      - name: energy_import_pct
+        description: World Bank dependency-on-imported-energy indicator broadcast from annual reporter-year data to reporter-month grain. Net exporters can be negative.
+
+      - name: renewable_share_pct
+        description: World Bank renewable energy share percentage, broadcast from annual reporter-year data.
+
+      - name: fossil_share_pct
+        description: Fossil electricity share percentage, using reported fossil share when available and otherwise the bounded sum of oil, gas, and coal electricity shares.
+
+      - name: chokepoint_exposure_pct
+        description: Percent of reporter monthly trade value exposed to modeled chokepoint routes after aggregating reporter-month-chokepoint rows.
+
+      - name: chokepoint_exposed_trade_value_usd
+        description: Reporter monthly trade value in USD exposed to modeled chokepoint routes.
+
+      - name: exposed_chokepoint_count
+        description: Count of distinct chokepoints carrying exposed reporter trade in the month.
+
+      - name: historical_event_count
+        description: Cumulative count of distinct active disruption events historically linked to the reporter through exposed chokepoints as of the selected month.
+
+      - name: avg_event_severity
+        description: Average severity weight across historical reporter-linked events as of the selected month.
+
+      - name: max_event_severity
+        description: Maximum severity weight across historical reporter-linked events as of the selected month.
+
+      - name: most_recent_event_date
+        description: Most recent event start date among historical reporter-linked events as of the selected month.
+
+      - name: top_supplier_iso3
+        description: ISO3 code for the reporter's largest country supplier by monthly import value.
+
+      - name: top_supplier_name
+        description: Business-readable name for the reporter's largest country supplier by monthly import value.
+
+      - name: top_supplier_share_pct
+        description: Percent of country-supplier import value represented by the top supplier.
+
+      - name: supplier_concentration_pct
+        description: Import concentration percentage currently equal to top supplier share; kept as a business-facing dependency measure.
+
+      - name: top_commodity_code
+        description: Top imported commodity code for the reporter-month.
+
+      - name: top_commodity_name
+        description: Business-readable top imported commodity name for the reporter-month.
+
+      - name: top_commodity_import_share_pct
+        description: Percent of total reporter imports represented by the top imported commodity.
+
+      - name: structural_risk_score
+        description: Weighted 0-100 structural vulnerability score combining energy import dependence, chokepoint exposure, renewable gap, fossil dependence, supplier concentration, and event history.
+
+      - name: risk_band
+        description: Display band for structural_risk_score.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['Critical', 'High', 'Medium', 'Lower']
+
+      - name: structural_vulnerability_input_status
+        description: Diagnostic label showing whether core Page 5 inputs are complete for the reporter-month.
+
+      - name: structural_risk_rank_in_month
+        description: Rank of reporter structural vulnerability score inside the month; use 1 for highest-risk scorecards.
+
+      - name: is_highest_structural_risk_reporter
+        description: True for the reporter with the highest structural risk score in the month.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                quote: false
+                values: [true, false]
+
+      - name: latest_month_flag
+        description: True when the row belongs to the latest available month in the mart.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                quote: false
+                values: [true, false]
+
   - name: mart_chokepoint_monthly_hotspot_map
     description: One-row-per-chokepoint semantic mart for the supporting Page 4 point map, combining each chokepoint's latest available stress snapshot, display-safe stress labels, aggregated exposure counts, latitude/longitude, and geography point.
     columns:

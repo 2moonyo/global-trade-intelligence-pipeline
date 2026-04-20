@@ -33,6 +33,13 @@ CORE_CHOKEPOINTS = [
     "Suez Canal",
 ]
 
+GLOBAL_MARITIME_CHOKEPOINTS = [
+    *CORE_CHOKEPOINTS,
+    "Gibraltar Strait",
+    "Malacca Strait",
+    "Turkish Straits",
+]
+
 EVENT_BLUEPRINTS: dict[str, dict[str, Any]] = {
     "ECO_001": {
         "event_type": "economic_policy",
@@ -57,6 +64,12 @@ EVENT_BLUEPRINTS: dict[str, dict[str, Any]] = {
         "event_scope": "trade_policy_regulatory",
         "source_class": "policy_regulatory",
         "base_severity": 0.60,
+    },
+    "ECO_005": {
+        "event_type": "economic_policy",
+        "event_scope": "trade_policy_regulatory",
+        "source_class": "policy_regulatory",
+        "base_severity": 0.65,
     },
     "EVT_001": {
         "event_type": "systemic_global",
@@ -137,6 +150,145 @@ EVENT_BLUEPRINTS: dict[str, dict[str, Any]] = {
             {"locations": ["US East Coast"], "link_role": "secondary_spillover", "phase_scope": "all"},
         ],
     },
+    "EVT_014": {
+        "event_type": "physical_port_disruption",
+        "event_scope": "regional_port_disruption",
+        "source_class": "maritime_disruption",
+        "base_severity": 0.65,
+        "region_links": [
+            {"locations": ["Bohai Rim Ports"], "link_role": "primary_disruption", "phase_scope": "all"},
+            {"locations": ["North China"], "link_role": "secondary_spillover", "phase_scope": "all"},
+        ],
+    },
+    "EVT_015": {
+        "event_type": "shipping_network_failure",
+        "event_scope": "systemic_macro_disruption",
+        "source_class": "maritime_disruption",
+        "base_severity": 0.80,
+        "global_event_flag": True,
+        "core_links": [
+            {"locations": GLOBAL_MARITIME_CHOKEPOINTS, "link_role": "systemic_spillover", "phase_scope": "all"}
+        ],
+        "region_links": [
+            {"locations": ["Global Container Network"], "link_role": "primary_disruption", "phase_scope": "all"},
+            {
+                "locations": ["Trans-Pacific and Asia-Europe"],
+                "link_role": "secondary_spillover",
+                "phase_scope": "all",
+            },
+        ],
+    },
+    "EVT_016": {
+        "event_type": "physical_port_disruption",
+        "event_scope": "regional_port_disruption",
+        "source_class": "maritime_disruption",
+        "base_severity": 0.70,
+        "region_links": [
+            {"locations": ["US Gulf Coast"], "link_role": "primary_disruption", "phase_scope": "all"},
+            {"locations": ["Port of Houston"], "link_role": "secondary_spillover", "phase_scope": "all"},
+        ],
+    },
+    "EVT_017": {
+        "event_type": "inland_transport_disruption",
+        "event_scope": "regional_transport_disruption",
+        "source_class": "maritime_disruption",
+        "base_severity": 0.65,
+        "region_links": [
+            {"locations": ["Rhine River"], "link_role": "primary_disruption", "phase_scope": "all"},
+            {
+                "locations": ["Germany and Northwest Europe"],
+                "link_role": "secondary_spillover",
+                "phase_scope": "all",
+            },
+        ],
+    },
+    "EVT_018": {
+        "event_type": "energy_transport_disruption",
+        "event_scope": "regional_energy_disruption",
+        "source_class": "energy_transport",
+        "base_severity": 0.70,
+        "region_links": [
+            {"locations": ["Druzhba Pipeline"], "link_role": "primary_disruption", "phase_scope": "all"},
+            {
+                "locations": ["Central and Eastern Europe"],
+                "link_role": "secondary_spillover",
+                "phase_scope": "all",
+            },
+        ],
+    },
+    "EVT_019": {
+        "event_type": "physical_port_disruption",
+        "event_scope": "container_port_disruption",
+        "source_class": "maritime_disruption",
+        "base_severity": 0.75,
+        "core_links": [
+            {
+                "locations": ["Malacca Strait", "Suez Canal", "Panama Canal"],
+                "link_role": "container_lane_spillover",
+                "phase_scope": "active_and_lag",
+            }
+        ],
+        "region_links": [
+            {"locations": ["Yantian Port"], "link_role": "primary_disruption", "phase_scope": "all"},
+            {"locations": ["South China"], "link_role": "secondary_spillover", "phase_scope": "all"},
+        ],
+    },
+    "EVT_020": {
+        "event_type": "physical_port_disruption",
+        "event_scope": "container_port_disruption",
+        "source_class": "maritime_disruption",
+        "base_severity": 0.70,
+        "core_links": [
+            {
+                "locations": ["Malacca Strait", "Suez Canal", "Panama Canal"],
+                "link_role": "container_lane_spillover",
+                "phase_scope": "active_and_lag",
+            }
+        ],
+        "region_links": [
+            {"locations": ["Ningbo-Zhoushan Port"], "link_role": "primary_disruption", "phase_scope": "all"},
+            {"locations": ["East China"], "link_role": "secondary_spillover", "phase_scope": "all"},
+        ],
+    },
+    "EVT_021": {
+        "event_type": "physical_port_disruption",
+        "event_scope": "container_port_disruption",
+        "source_class": "maritime_disruption",
+        "base_severity": 0.80,
+        "core_links": [
+            {
+                "locations": ["Malacca Strait", "Suez Canal", "Panama Canal"],
+                "link_role": "container_lane_spillover",
+                "phase_scope": "active_and_lag",
+            }
+        ],
+        "region_links": [
+            {"locations": ["Shanghai Port"], "link_role": "primary_disruption", "phase_scope": "all"},
+            {"locations": ["Yangtze Delta"], "link_role": "secondary_spillover", "phase_scope": "all"},
+        ],
+    },
+    "EVT_022": {
+        "event_type": "geopolitical",
+        "event_scope": "chokepoint_disruption",
+        "source_class": "maritime_disruption",
+        "base_severity": 0.85,
+        "core_links": [{"locations": ["Turkish Straits"], "link_role": "primary_disruption", "phase_scope": "all"}],
+        "region_links": [
+            {"locations": ["Black Sea"], "link_role": "primary_disruption", "phase_scope": "all"},
+            {"locations": ["Ukrainian Ports"], "link_role": "secondary_spillover", "phase_scope": "all"},
+        ],
+    },
+    "EVT_023": {
+        "event_type": "geopolitical",
+        "event_scope": "chokepoint_disruption",
+        "source_class": "maritime_disruption",
+        "base_severity": 0.80,
+        "core_links": [{"locations": ["Turkish Straits"], "link_role": "primary_disruption", "phase_scope": "all"}],
+        "region_links": [
+            {"locations": ["Black Sea"], "link_role": "primary_disruption", "phase_scope": "all"},
+            {"locations": ["Turkish Straits"], "link_role": "secondary_spillover", "phase_scope": "all"},
+        ],
+    },
 }
 
 BRONZE_TO_SILVER_COLUMNS = {
@@ -168,14 +320,13 @@ BRIDGE_COLUMNS = [
     "link_role",
 ]
 
-DEFAULT_EVENTS_SEED_PATH = PROJECT_ROOT / "data" / "seed" / "events" / "events_seed.csv"
-LEGACY_EVENTS_BRONZE_PATH = PROJECT_ROOT / "data" / "bronze" / "events.csv"
+CANONICAL_EVENTS_SEED_FILENAME = "events_seed_extended_2015.csv"
+DEFAULT_EVENTS_SEED_PATH = PROJECT_ROOT / "data" / "seed" / "events" / CANONICAL_EVENTS_SEED_FILENAME
 
 
 @dataclass(frozen=True)
 class EventsSilverConfig:
     events_seed_path: Path = DEFAULT_EVENTS_SEED_PATH
-    legacy_bronze_path: Path = LEGACY_EVENTS_BRONZE_PATH
     source_path_override: Path | None = None
     silver_root: Path = PROJECT_ROOT / "data" / "silver" / "events"
     dim_event_csv_path: Path = PROJECT_ROOT / "data" / "silver" / "events" / "dim_event.csv"
@@ -206,11 +357,16 @@ def resolve_events_source_path(config: EventsSilverConfig, logger) -> Path:
         candidates.append(config.source_path_override)
     if env_override:
         candidates.append(Path(env_override).expanduser())
-    candidates.extend([config.events_seed_path, config.legacy_bronze_path])
+    candidates.append(config.events_seed_path)
 
     for candidate in candidates:
         resolved = candidate.resolve()
         if resolved.exists():
+            if resolved.name != CANONICAL_EVENTS_SEED_FILENAME:
+                raise ValueError(
+                    "Events must be initialized from the canonical extended seed "
+                    f"{CANONICAL_EVENTS_SEED_FILENAME}; got {resolved}."
+                )
             logger.info("Using events seed CSV from %s", resolved)
             return resolved
 
@@ -218,7 +374,7 @@ def resolve_events_source_path(config: EventsSilverConfig, logger) -> Path:
     raise FileNotFoundError(
         "Events source CSV was not found in any supported location:\n"
         f"{candidate_text}\n"
-        "Provide --events-csv-path, set EVENTS_SEED_CSV_PATH, or place the file at "
+        "Provide --events-csv-path, set EVENTS_SEED_CSV_PATH, or place the canonical file at "
         f"{config.events_seed_path.resolve()}"
     )
 
@@ -564,8 +720,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--events-csv-path",
         help=(
-            "Optional source events CSV path. If omitted, the loader checks "
-            "EVENTS_SEED_CSV_PATH, then data/seed/events/events_seed.csv, then data/bronze/events.csv."
+            "Optional canonical source events CSV path. If omitted, the loader checks "
+            "EVENTS_SEED_CSV_PATH, then data/seed/events/events_seed_extended_2015.csv."
         ),
     )
     parser.add_argument(

@@ -20,7 +20,7 @@ from ingest.common.run_artifacts import json_ready
 from warehouse.execution_profiles import current_runtime, runtime_for_dataset
 
 DIM_COUNTRY_LOCAL_PATH = PROJECT_ROOT / "data" / "silver" / "comtrade" / "dimensions" / "dim_country.parquet"
-EVENTS_SEED_PATH = PROJECT_ROOT / "data" / "seed" / "events" / "events_seed.csv"
+EVENTS_SEED_PATH = PROJECT_ROOT / "data" / "seed" / "events" / "events_seed_extended_2015.csv"
 
 
 def _utc_now_iso() -> str:

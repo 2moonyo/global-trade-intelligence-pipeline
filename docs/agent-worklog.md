@@ -1248,3 +1248,60 @@
 - [done] `UV_CACHE_DIR=/tmp/uv-cache uv run dbt --no-version-check compile --profiles-dir . --target bigquery_dev --no-populate-cache --no-introspect --empty --select ...` passed for the changed country/chokepoint staging, dimensions, and semantic marts.
 - [done] `git diff --check` passed.
 - [blocked] Live `dbt test` was not run locally because BigQuery OAuth/network access is unavailable in the sandbox; tests were added/compiled for execution on the VM/BigQuery environment.
+
+## 2026-04-20 - Page 5 Structural Vulnerability Mart and Canonical Event Seed
+
+### objective
+- Replace active event seed usage with `data/seed/events/events_seed_extended_2015.csv` and build a Page 5 semantic mart named `mart_reporter_structural_vulnerability`.
+
+### constraints
+- [in progress] Preserve the VM-first GCS -> BigQuery -> dbt pipeline and existing serverless non-Comtrade paths.
+- [in progress] Keep Pages 1-4 marts stable and add Page 5 as a new semantic layer.
+- [in progress] Maintain strict one-row-per-reporter-month grain by aggregating event, exposure, supplier, and commodity inputs before joining.
+- [in progress] Do not build Page 5 around maps or daily Brent pulse logic.
+- [done] Bruin MCP/tooling availability checked; this task is dbt/Python/runtime-path focused and does not require Bruin pipeline topology changes.
+
+### inspection summary
+- [done] Active event seed references point to `data/seed/events/events_seed.csv` in `ingest/events/events_silver.py`, `warehouse/serverless_preflight.py`, `docker/pipeline/Dockerfile`, `.dockerignore`, `.gitignore`, `scripts/vm_repo_copy.sh`, `Makefile`, `README.md`, and `docs/hybrid-vm-serverless-rollout-plan.md`.
+- [done] Event lineage is Python seed -> `data/silver/events/*` -> GCS silver -> BigQuery `raw.dim_event`, `raw.bridge_event_month_chokepoint_core`, `raw.bridge_event_month_maritime_region` -> dbt staging events -> event dimensions/bridges and exposure overlays.
+- [done] The new seed has 24 event rows from 2015 onward; current `EVENT_BLUEPRINTS` covers only the earlier 13 rows, so newer events need explicit bridge metadata where useful.
+- [done] Energy lineage is `raw.energy_vulnerability` -> `stg_energy_vulnerability` -> `mart_reporter_energy_vulnerability`, with annual indicators broadcastable by reporter + year.
+- [done] Chokepoint exposure lineage is `mart_reporter_month_chokepoint_exposure`, already reporter-month-chokepoint grain with event severity overlay from `stg_chokepoint_bridge`.
+- [done] Trade scale lineage is `mart_reporter_month_trade_summary`; supplier/import concentration can be derived from `fct_reporter_partner_commodity_month` and dimensions.
+- [done] Existing Page 5 docs mark the page as unfinished; no final structural vulnerability semantic mart exists.
+
+### implementation plan
+- [done] Make `data/seed/events/events_seed_extended_2015.csv` the tracked, copied, and preflight-checked canonical events seed; remove active references to the older event seed.
+- [done] Update `ingest/events/events_silver.py` default source/help text and add bridge blueprints for the added 2015+ events where event-to-chokepoint context is defensible.
+- [done] Add `models/marts/semantics/mart_reporter_structural_vulnerability.sql` at reporter + month grain using pre-aggregated trade scale, energy profile, chokepoint exposure, historical event exposure, supplier concentration, and top commodity inputs.
+- [done] Add schema documentation and tests for unique reporter-month grain, not-null keys, percentage bounds, and accepted `risk_band` values.
+- [done] Update dashboard docs with Page 5 purpose, fields, supported chart wiring, assumptions, and gaps.
+- [done] Validate Python syntax, dbt parse/compile, focused tests where local credentials permit, and `git diff --check`.
+
+### join strategy and duplication controls
+- [done] Trade scale is already one row per reporter-month.
+- [done] Energy indicators will be pivoted to one row per reporter-year, then broadcast to months by reporter + year.
+- [done] Chokepoint exposure will be aggregated from reporter-month-chokepoint to reporter-month before joining.
+- [done] Events will be deduplicated to reporter-event before cumulative reporter-month history is joined.
+- [done] Supplier and commodity concentration will rank one top supplier and one top import commodity per reporter-month before joining.
+
+### Page 5 chart support plan
+- [done] Hero scatter: `energy_import_pct`, `chokepoint_exposure_pct`, `total_import_value_usd` or `total_trade_value_usd`, `renewable_share_pct`, `reporter_name`.
+- [done] Event exposure bar: `historical_event_count`, `avg_event_severity`, `max_event_severity`, `most_recent_event_date`.
+- [done] Energy mix stacked bar: `renewable_share_pct`, `fossil_share_pct`, `energy_import_pct`.
+- [done] Supplier/import concentration table: `top_supplier_name`, `top_supplier_share_pct`, `top_commodity_code`, `top_commodity_name`, `total_import_value_usd`, `supplier_concentration_pct`, `risk_band`.
+- [done] Scorecards: month-ranked fields such as structural risk rank plus max/min metric fields derivable from the mart.
+
+### progress update
+- [done] Updated `.gitignore`, `.dockerignore`, `docker/pipeline/Dockerfile`, `warehouse/serverless_preflight.py`, `scripts/vm_repo_copy.sh`, `Makefile`, `README.md`, and `docs/hybrid-vm-serverless-rollout-plan.md` to use the extended 2015+ events seed.
+- [done] Removed the tracked older event seed file from the active repo contract and made `data/seed/events/events_seed_extended_2015.csv` trackable.
+- [done] Updated `ingest/events/events_silver.py` so default source resolution uses the canonical extended seed, no longer falls back to `data/bronze/events.csv`, and rejects noncanonical seed filenames.
+- [done] Added explicit event silver blueprints for `ECO_005` and `EVT_014` through `EVT_023`; regional-only disruptions remain regional, while systemic/container/Black Sea events get defensible chokepoint links for downstream reporter exposure logic.
+- [done] Validation so far: `python -m py_compile ingest/events/events_silver.py warehouse/serverless_preflight.py` passed; `bash -n scripts/vm_repo_copy.sh` passed.
+- [done] Added `mart_reporter_structural_vulnerability` under semantic marts with one-row-per-reporter-month grain, latest-month flag, month rankings, structural risk score, risk band, data-availability flags, and Looker-ready measures.
+- [done] Added custom dbt tests for Page 5 mart grain, required keys, and bounded dashboard percentages.
+- [done] Updated `models/marts/semantics/schema.yml`, `README.md`, `DASHBOARD_FIELD_MAP.md`, and `DASHBOARD_STATUS.md` for the Page 5 semantic contract.
+- [done] Validation so far: `dbt compile --empty --select mart_reporter_structural_vulnerability` passed locally with dummy BigQuery env vars.
+- [done] Ran `python ingest/events/events_silver.py --as-of-date 2026-03-31`; it used the canonical extended seed and produced 24 events, 409 core bridge rows, and 249 regional bridge rows.
+- [done] Final local validation passed: `dbt parse`, `dbt compile --empty --select mart_reporter_structural_vulnerability ...`, `dbt ls --select mart_reporter_structural_vulnerability+ --resource-type test`, `python -m py_compile ingest/events/events_silver.py warehouse/serverless_preflight.py`, `bash -n scripts/vm_repo_copy.sh`, and `git diff --check`.
+- [blocked] Live BigQuery `dbt test` was not run locally because warehouse credentials/network are not available in the sandbox; tests are parsed/selected and should be run on the VM/BigQuery runtime.

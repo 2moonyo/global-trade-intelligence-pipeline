@@ -817,7 +817,7 @@ The events layer was created because trade and traffic data alone do not explain
 The source file is:
 
 ```text
-data/seed/events/events_seed.csv
+data/seed/events/events_seed_extended_2015.csv
 ```
 
 The builder is:
@@ -879,6 +879,7 @@ Marts:
 - `mart_macro_monthly_features`
 - `mart_reporter_month_macro_features`
 - `mart_reporter_energy_vulnerability`
+- `mart_reporter_structural_vulnerability`
 - `mart_event_impact`
 
 Semantic/dashboard marts include:
@@ -889,6 +890,7 @@ Semantic/dashboard marts include:
 - `mart_chokepoint_monthly_hotspot_map`
 - `mart_reporter_partner_commodity_month_enriched`
 - `mart_reporter_month_exposure_map`
+- `mart_reporter_structural_vulnerability`
 - `mart_trade_month_coverage_status`
 
 ## BigQuery dbt

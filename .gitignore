@@ -7,7 +7,7 @@ __pycache__
 /data/seed/*
 !/data/seed/events/
 /data/seed/events/*
-!/data/seed/events/events_seed.csv
+!/data/seed/events/events_seed_extended_2015.csv
 .idea
 *.pyc
 *.pyo

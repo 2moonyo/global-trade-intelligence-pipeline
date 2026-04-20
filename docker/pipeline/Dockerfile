@@ -38,7 +38,7 @@ COPY macros ./macros
 COPY models ./models
 COPY ops ./ops
 RUN mkdir -p ./data/seed/events
-COPY data/seed/events/events_seed.csv ./data/seed/events/events_seed.csv
+COPY data/seed/events/events_seed_extended_2015.csv ./data/seed/events/events_seed_extended_2015.csv
 COPY tests ./tests
 COPY warehouse ./warehouse
 COPY scripts ./scripts

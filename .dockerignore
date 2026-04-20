@@ -16,7 +16,7 @@ data/*
 data/seed/*
 !data/seed/events/
 data/seed/events/*
-!data/seed/events/events_seed.csv
+!data/seed/events/events_seed_extended_2015.csv
 logs
 target
 dbt_packages

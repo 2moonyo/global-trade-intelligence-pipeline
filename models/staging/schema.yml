@@ -370,7 +370,7 @@ models:
         description: True when the commodity is classified as industrial-related.
 
   - name: stg_dim_country
-    description: Country dimension with region tags and analytical membership flags.
+    description: Country dimension with canonical ISO3/name cleanup, region tags, analytical membership flags, and country-map eligibility.
     columns:
       - name: country_code
         description: Numeric country code used by the source system.
@@ -380,7 +380,7 @@ models:
 
 
       - name: country_name
-        description: Display name of the country.
+        description: Canonical display name of the country for BI labels and Looker Studio country geography.
 
       - name: region
         description: Source-provided geographic region.
@@ -396,6 +396,12 @@ models:
 
       - name: is_oecd
         description: True when the country is part of the OECD.
+
+      - name: is_country_group
+        description: True when the row is an aggregate, group, world, or special geography bucket rather than a renderable country.
+
+      - name: is_country_map_eligible
+        description: True when the row is a canonical country suitable for Looker Studio Geo Country rendering.
 
   - name: stg_dim_time
     description: >
@@ -478,6 +484,9 @@ models:
       - name: zone_of_influence_geog
         description: BigQuery geography created from the chokepoint zone-of-influence WKB when the target is BigQuery.
 
+      - name: geo_point
+        description: BigQuery point geography created from longitude and latitude for GIS usage while preserving the numeric coordinates.
+
   - name: stg_dim_country_ports
     description: Routing-backed port staging model carrying selected country ports and point geography for map joins.
     columns:
@@ -516,6 +525,9 @@ models:
 
       - name: port_point_geog
         description: BigQuery geography created from the port point WKB when the target is BigQuery.
+
+      - name: geo_point
+        description: BigQuery point geography created from longitude and latitude for GIS usage while preserving the numeric coordinates.
 
   - name: stg_dim_trade_route_geography
     description: Route-level staging model that converts exported route WKB into BigQuery geography without changing the canonical routing outputs.

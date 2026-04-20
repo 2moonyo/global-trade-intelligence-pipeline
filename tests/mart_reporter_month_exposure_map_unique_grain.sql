@@ -1,7 +1,6 @@
 select
-  month_start_date,
   reporter_iso3,
   count(*) as row_count
 from {{ ref('mart_reporter_month_exposure_map') }}
-group by 1, 2
+group by 1
 having count(*) > 1

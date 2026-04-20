@@ -54,7 +54,7 @@ services:
     healthcheck:
       test:
         - CMD-SHELL
-        - python -c "import pandas, pyarrow, duckdb, geopandas, pyproj, shapely, searoute; import google.cloud.storage, google.cloud.bigquery"
+        - python -c "import pandas, pyarrow, geopandas, pyproj, shapely, searoute; import google.cloud.storage, google.cloud.bigquery"
       interval: 30s
       timeout: 10s
       retries: 3

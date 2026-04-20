@@ -3,8 +3,8 @@
 
 with exposed_trade as (
   select
-    reporter_iso3,
-    partner_iso3,
+    {{ canonical_country_iso3('reporter_iso3') }} as reporter_iso3,
+    {{ canonical_country_iso3('partner_iso3') }} as partner_iso3,
     cmd_code,
     period,
     year_month,
@@ -19,7 +19,7 @@ with exposed_trade as (
     route_confidence_score,
     route_applicability_status,
     used_transshipment_hub,
-    hub_iso3
+    {{ canonical_country_iso3('hub_iso3') }} as hub_iso3
   from {{ ref('fct_reporter_partner_commodity_route_month') }}
   where {{ clean_label_text('main_chokepoint') }} is not null
     and coalesce(is_maritime_routed, false)
@@ -102,6 +102,7 @@ select
   rc.continent as reporter_continent,
   rc.is_eu as reporter_is_eu,
   rc.is_oecd as reporter_is_oecd,
+  rc.is_country_map_eligible as reporter_is_country_map_eligible,
   a.partner_iso3,
   pc.country_name as partner_country_name,
   pc.region as partner_region,
@@ -109,6 +110,7 @@ select
   pc.continent as partner_continent,
   pc.is_eu as partner_is_eu,
   pc.is_oecd as partner_is_oecd,
+  pc.is_country_map_eligible as partner_is_country_map_eligible,
   a.cmd_code,
   co.commodity_name,
   co.commodity_group,

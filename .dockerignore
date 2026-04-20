@@ -10,7 +10,6 @@ __pycache__
 *.pyd
 *.log
 *.zip
-*.duckdb
 
 data/*
 !data/seed/
@@ -26,10 +25,8 @@ runtime
 
 Documentation
 notebooks
-docker/streamlit
 Archive.zip
 Project_2903.zip
 Routing marts.zip
 models.zip
-warehouse/analytics.duckdb
 warehouse/*.zip

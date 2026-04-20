@@ -1,6 +1,6 @@
 select
-  {{ hash_text("upper(trim(coalesce(iso3, ''))) || '|' || lower(trim(coalesce(port_name, '')))") }} as port_id,
-  upper(trim({{ cast_string('iso3') }})) as iso3,
+  {{ hash_text(canonical_country_iso3('iso3') ~ " || '|' || lower(trim(coalesce(port_name, '')))") }} as port_id,
+  {{ canonical_country_iso3('iso3') }} as iso3,
   {{ cast_string('port_name') }} as port_name,
   {{ cast_float('longitude') }} as longitude,
   {{ cast_float('latitude') }} as latitude,
@@ -17,5 +17,10 @@ select
   {{ cast_float('port_score') }} as port_score,
   {{ cast_int('port_rank') }} as port_rank,
   port_point_wkb,
-  {{ geography_from_wkb('port_point_wkb') }} as port_point_geog
+  {{ geography_from_wkb('port_point_wkb') }} as port_point_geog,
+  case
+    when {{ cast_float('longitude') }} is not null and {{ cast_float('latitude') }} is not null
+      then {{ geography_point(cast_float('longitude'), cast_float('latitude')) }}
+    else null
+  end as geo_point
 from {{ source('raw', 'dim_country_ports') }}

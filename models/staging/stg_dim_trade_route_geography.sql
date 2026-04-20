@@ -1,17 +1,17 @@
 select
   {{ hash_text(
-      "upper(trim(coalesce(reporter_iso3, ''))) || '|' || "
-      "upper(trim(coalesce(partner_iso3, ''))) || '|' || "
-      "upper(trim(coalesce(partner2_iso3, ''))) || '|' || "
+      "coalesce(" ~ canonical_country_iso3('reporter_iso3') ~ ", '') || '|' || "
+      "coalesce(" ~ canonical_country_iso3('partner_iso3') ~ ", '') || '|' || "
+      "coalesce(" ~ canonical_country_iso3('partner2_iso3') ~ ", '') || '|' || "
       "lower(trim(coalesce(route_scenario, '')))"
     ) }} as trade_route_id,
-  upper(trim({{ cast_string('reporter_iso3') }})) as reporter_iso3,
-  upper(trim({{ cast_string('partner_iso3') }})) as partner_iso3,
-  nullif(upper(trim({{ cast_string('partner2_iso3') }})), '') as partner2_iso3,
+  {{ canonical_country_iso3('reporter_iso3') }} as reporter_iso3,
+  {{ canonical_country_iso3('partner_iso3') }} as partner_iso3,
+  {{ canonical_country_iso3('partner2_iso3') }} as partner2_iso3,
   {{ cast_string('reporter_port') }} as reporter_port,
   {{ cast_string('partner_port') }} as partner_port,
-  nullif(upper(trim({{ cast_string('reporter_gateway_iso3') }})), '') as reporter_gateway_iso3,
-  nullif(upper(trim({{ cast_string('partner_gateway_iso3') }})), '') as partner_gateway_iso3,
+  {{ canonical_country_iso3('reporter_gateway_iso3') }} as reporter_gateway_iso3,
+  {{ canonical_country_iso3('partner_gateway_iso3') }} as partner_gateway_iso3,
   {{ cast_string('reporter_basin') }} as reporter_basin,
   {{ cast_string('partner_basin') }} as partner_basin,
   {{ canonicalize_chokepoint_name('first_chokepoint') }} as first_chokepoint,
@@ -34,7 +34,7 @@ select
   {{ cast_float('sea_distance_forced_km') }} as sea_distance_forced_km,
   cast(used_transshipment_hub as boolean) as used_transshipment_hub,
   {{ cast_string('hub_port') }} as hub_port,
-  nullif(upper(trim({{ cast_string('hub_iso3') }})), '') as hub_iso3,
+  {{ canonical_country_iso3('hub_iso3') }} as hub_iso3,
   {{ cast_string('hub_basin') }} as hub_basin,
   route_path_wkb,
   {{ geography_from_wkb('route_path_wkb') }} as route_path_geog

@@ -16,7 +16,8 @@ raw_chokepoints as (
     chokepoint_point_wkb,
     zone_of_influence_wkb,
     chokepoint_point_geog,
-    zone_of_influence_geog
+    zone_of_influence_geog,
+    geo_point
   from {{ ref('stg_dim_chokepoint') }}
 ),
 event_chokepoints as (
@@ -68,6 +69,7 @@ select
   rc.zone_of_influence_wkb,
   rc.chokepoint_point_geog,
   rc.zone_of_influence_geog,
+  rc.geo_point,
   b.portwatch_source_chokepoint_id,
   b.latest_tanker_share,
   b.latest_container_share,

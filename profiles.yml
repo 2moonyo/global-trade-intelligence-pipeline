@@ -1,11 +1,6 @@
 capstone_monthly:
-  target: duckdb_dev
+  target: bigquery_dev
   outputs:
-    duckdb_dev:
-      type: duckdb
-      path: warehouse/analytics.duckdb
-      schema: analytics
-      threads: 1
     bigquery_dev:
       type: bigquery
       method: oauth

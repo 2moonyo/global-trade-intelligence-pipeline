@@ -117,6 +117,44 @@ REQUIRED_METADATA_FILENAMES = (
     "flows.csv",
 )
 
+COUNTRY_ISO3_OVERRIDES = {
+    "ROM": "ROU",
+    "UK": "GBR",
+    "US": "USA",
+    "SA": "ZAF",
+    "CN": "CHN",
+}
+
+COUNTRY_NAME_OVERRIDES_BY_ISO3 = {
+    "BEL": "Belgium",
+    "FRA": "France",
+    "ZAF": "South Africa",
+    "CHN": "China",
+    "USA": "United States",
+    "RUS": "Russia",
+    "TUR": "Turkey",
+    "ROU": "Romania",
+    "NLD": "Netherlands",
+    "EGY": "Egypt",
+}
+
+COUNTRY_NAME_OVERRIDES_BY_KEY = {
+    "turkiye": "Turkey",
+    "türkiye": "Turkey",
+    "turkie": "Turkey",
+    "turkish republic": "Turkey",
+    "russian federation": "Russia",
+    "u.s.a.": "United States",
+    "usa": "United States",
+    "united states of america": "United States",
+    "holland": "Netherlands",
+    "republic of south africa": "South Africa",
+    "metropolitan france": "France",
+}
+
+NULL_LIKE_LABELS = {"", "NULL", "N/A", "NA", "NONE", "UNKNOWN", "UNK", "NAN"}
+COUNTRY_AGGREGATE_ISO3_CODES = {"A79", "E19", "F19", "S19", "W00", "WLD", "X1", "XX", "_X", "EUR"}
+
 COMTRADE_API_KEY_ALIASES = (
     "COMTRADE_API_KEY_DATA",
     "COMTRADE_API_KEY_DATA_A",
@@ -759,49 +797,83 @@ def load_full_fact_dataset(fact_root: Path) -> pd.DataFrame:
     return pd.concat((pd.read_parquet(path) for path in fact_files), ignore_index=True)
 
 
+def normalize_country_iso3(series: pd.Series) -> pd.Series:
+    normalized = series.astype("string").str.strip().str.upper()
+    normalized = normalized.replace({label: pd.NA for label in NULL_LIKE_LABELS})
+    return normalized.replace(COUNTRY_ISO3_OVERRIDES)
+
+
+def _country_name_key(value: object) -> str:
+    if pd.isna(value):
+        return ""
+    return re.sub(r"\s+", " ", str(value).strip()).casefold()
+
+
+def canonical_country_name(value: object, iso3: object) -> object:
+    iso3_text = None if pd.isna(iso3) else str(iso3).strip().upper()
+    if iso3_text in COUNTRY_NAME_OVERRIDES_BY_ISO3:
+        return COUNTRY_NAME_OVERRIDES_BY_ISO3[iso3_text]
+
+    key = _country_name_key(value)
+    if key.upper() in NULL_LIKE_LABELS:
+        return pd.NA
+    return COUNTRY_NAME_OVERRIDES_BY_KEY.get(key, str(value).strip() if not pd.isna(value) else pd.NA)
+
+
 def build_dim_country(fact_df: pd.DataFrame, metadata_root: Path) -> pd.DataFrame:
     reporters_meta = pd.read_csv(metadata_root / "reporters.csv")
     partners_meta = pd.read_csv(metadata_root / "partners.csv")
 
-    def normalize_iso3(series: pd.Series) -> pd.Series:
-        return series.astype("string").str.strip().str.upper().replace({"": pd.NA, "NAN": pd.NA})
-
     country_meta = pd.concat(
         [
-            reporters_meta[["reporterCode", "reporterCodeIsoAlpha3", "text"]].rename(
+            reporters_meta[
+                ["reporterCode", "reporterCodeIsoAlpha3", "reporterDesc", "isGroup", "entryExpiredDate"]
+            ].rename(
                 columns={
                     "reporterCode": "country_code",
                     "reporterCodeIsoAlpha3": "iso3",
-                    "text": "country_name",
+                    "reporterDesc": "country_name",
+                    "isGroup": "is_group",
+                    "entryExpiredDate": "entry_expired_date",
                 }
-            ),
-            partners_meta[["PartnerCode", "PartnerCodeIsoAlpha3", "text"]].rename(
+            ).assign(source_priority=0),
+            partners_meta[
+                ["PartnerCode", "PartnerCodeIsoAlpha3", "PartnerDesc", "isGroup", "entryExpiredDate"]
+            ].rename(
                 columns={
                     "PartnerCode": "country_code",
                     "PartnerCodeIsoAlpha3": "iso3",
-                    "text": "country_name",
+                    "PartnerDesc": "country_name",
+                    "isGroup": "is_group",
+                    "entryExpiredDate": "entry_expired_date",
                 }
-            ),
+            ).assign(source_priority=1),
         ],
         ignore_index=True,
     )
 
-    country_meta["iso3"] = normalize_iso3(country_meta["iso3"])
+    country_meta["iso3"] = normalize_country_iso3(country_meta["iso3"])
     country_meta = country_meta.dropna(subset=["iso3", "country_name"]).copy()
-    country_meta["country_name"] = country_meta["country_name"].astype("string").str.strip()
+    country_meta["country_name"] = [
+        canonical_country_name(country_name, iso3)
+        for country_name, iso3 in zip(country_meta["country_name"], country_meta["iso3"], strict=False)
+    ]
+    country_meta = country_meta.dropna(subset=["country_name"]).copy()
+    country_meta["entry_expired_date"] = pd.to_datetime(country_meta["entry_expired_date"], errors="coerce")
+    country_meta["is_expired"] = country_meta["entry_expired_date"].notna()
+    country_meta["is_group"] = country_meta["is_group"].fillna(False).astype(bool)
 
     iso3_universe = (
         pd.concat([fact_df["reporter_iso3"], fact_df["partner_iso3"]], ignore_index=True)
         .dropna()
-        .astype("string")
-        .str.strip()
-        .str.upper()
+        .pipe(normalize_country_iso3)
+        .dropna()
         .drop_duplicates()
     )
 
     dim_country = (
         country_meta.loc[country_meta["iso3"].isin(iso3_universe)]
-        .sort_values(["iso3", "country_code"])
+        .sort_values(["iso3", "is_expired", "source_priority", "is_group", "country_code"])
         .drop_duplicates(subset=["iso3"], keep="first")
         .reset_index(drop=True)
     )
@@ -817,21 +889,27 @@ def build_dim_country(fact_df: pd.DataFrame, metadata_root: Path) -> pd.DataFram
         ],
         ignore_index=True,
     ).dropna()
-    name_fallback["iso3"] = normalize_iso3(name_fallback["iso3"])
-    name_fallback = name_fallback.dropna(subset=["iso3"]).drop_duplicates(subset=["iso3"], keep="first")
+    name_fallback["iso3"] = normalize_country_iso3(name_fallback["iso3"])
+    name_fallback["country_name"] = [
+        canonical_country_name(country_name, iso3)
+        for country_name, iso3 in zip(name_fallback["country_name"], name_fallback["iso3"], strict=False)
+    ]
+    name_fallback = name_fallback.dropna(subset=["iso3", "country_name"]).drop_duplicates(subset=["iso3"], keep="first")
 
     missing_iso3 = sorted(set(iso3_universe) - set(dim_country["iso3"]))
     if missing_iso3:
         missing_df = name_fallback.loc[name_fallback["iso3"].isin(missing_iso3), ["iso3", "country_name"]].copy()
         missing_df["country_code"] = pd.NA
+        missing_df["is_group"] = missing_df["iso3"].isin(COUNTRY_AGGREGATE_ISO3_CODES)
         dim_country = pd.concat(
-            [dim_country, missing_df[["country_code", "iso3", "country_name"]]],
+            [dim_country, missing_df[["country_code", "iso3", "country_name", "is_group"]]],
             ignore_index=True,
         )
 
     cc = coco.CountryConverter()
-    custom_group_codes = {"A79", "E19", "F19", "S19", "W00", "X1", "XX", "_X", "EUR"}
-    valid_iso3_mask = dim_country["iso3"].str.fullmatch(r"[A-Z]{3}") & ~dim_country["iso3"].isin(custom_group_codes)
+    valid_iso3_mask = dim_country["iso3"].str.fullmatch(r"[A-Z]{3}") & ~dim_country["iso3"].isin(
+        COUNTRY_AGGREGATE_ISO3_CODES
+    )
 
     for column_name in ["subregion", "continent", "region"]:
         dim_country[column_name] = pd.NA
@@ -854,7 +932,7 @@ def build_dim_country(fact_df: pd.DataFrame, metadata_root: Path) -> pd.DataFram
     cc_membership["ISO3"] = cc_membership["ISO3"].astype("string").str.strip().str.upper()
     membership_map = cc_membership.rename(columns={"ISO3": "iso3", "EU": "_cc_eu", "OECD": "_cc_oecd"})
     dim_country = dim_country.merge(membership_map, on="iso3", how="left")
-    dim_country["is_eu"] = dim_country["_cc_eu"].astype("string").str.strip().str.upper().eq("EU")
+    dim_country["is_eu"] = dim_country["_cc_eu"].astype("string").str.strip().str.upper().eq("EU").fillna(False)
     dim_country["is_oecd"] = dim_country["_cc_oecd"].notna()
 
     group_overrides = {
@@ -874,11 +952,31 @@ def build_dim_country(fact_df: pd.DataFrame, metadata_root: Path) -> pd.DataFram
             for column_name, value in values.items():
                 dim_country.loc[mask, column_name] = value
 
+    dim_country["is_group"] = dim_country["is_group"].fillna(False) | dim_country["iso3"].isin(
+        COUNTRY_AGGREGATE_ISO3_CODES
+    )
+    dim_country["is_country_map_eligible"] = (
+        dim_country["iso3"].str.fullmatch(r"[A-Z]{3}")
+        & ~dim_country["is_group"]
+        & ~dim_country["iso3"].isin(COUNTRY_AGGREGATE_ISO3_CODES)
+        & dim_country["country_code"].fillna(-1).ne(0)
+    )
     dim_country.loc[dim_country["iso3"].eq("EUR"), "is_eu"] = True
-    dim_country.loc[dim_country["iso3"].isin(custom_group_codes), "is_oecd"] = False
+    dim_country.loc[dim_country["iso3"].isin(COUNTRY_AGGREGATE_ISO3_CODES), "is_oecd"] = False
 
     return dim_country[
-        ["country_code", "iso3", "country_name", "region", "subregion", "continent", "is_eu", "is_oecd"]
+        [
+            "country_code",
+            "iso3",
+            "country_name",
+            "region",
+            "subregion",
+            "continent",
+            "is_eu",
+            "is_oecd",
+            "is_group",
+            "is_country_map_eligible",
+        ]
     ].sort_values("iso3").reset_index(drop=True)
 
 

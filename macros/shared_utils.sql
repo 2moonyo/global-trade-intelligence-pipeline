@@ -153,6 +153,46 @@
   {% endif %}
 {%- endmacro %}
 
+{% macro canonical_country_iso3(expression) -%}
+  {%- set cleaned_code = clean_label_text(expression) -%}
+  case
+    when {{ cleaned_code }} is null then null
+    when upper({{ cleaned_code }}) in ('NULL', 'N/A', 'NA', 'NONE', 'UNKNOWN', 'UNK', 'NAN') then null
+    when upper({{ cleaned_code }}) = 'ROM' then 'ROU'
+    when upper({{ cleaned_code }}) = 'UK' then 'GBR'
+    when upper({{ cleaned_code }}) = 'US' then 'USA'
+    when upper({{ cleaned_code }}) = 'SA' then 'ZAF'
+    when upper({{ cleaned_code }}) = 'CN' then 'CHN'
+    else upper({{ cleaned_code }})
+  end
+{%- endmacro %}
+
+{% macro canonical_country_name(name_expr, iso3_expr='null') -%}
+  {%- set cleaned_name = clean_label_text(name_expr) -%}
+  {%- set canonical_iso3 = canonical_country_iso3(iso3_expr) -%}
+  case
+    when {{ canonical_iso3 }} = 'BEL' then 'Belgium'
+    when {{ canonical_iso3 }} = 'FRA' then 'France'
+    when {{ canonical_iso3 }} = 'ZAF' then 'South Africa'
+    when {{ canonical_iso3 }} = 'CHN' then 'China'
+    when {{ canonical_iso3 }} = 'USA' then 'United States'
+    when {{ canonical_iso3 }} = 'RUS' then 'Russia'
+    when {{ canonical_iso3 }} = 'TUR' then 'Turkey'
+    when {{ canonical_iso3 }} = 'ROU' then 'Romania'
+    when {{ canonical_iso3 }} = 'NLD' then 'Netherlands'
+    when {{ canonical_iso3 }} = 'EGY' then 'Egypt'
+    when {{ cleaned_name }} is null then null
+    when upper({{ cleaned_name }}) in ('NULL', 'N/A', 'NA', 'NONE', 'UNKNOWN', 'UNK', 'NAN') then null
+    when lower({{ cleaned_name }}) in ('turkiye', 'türkiye', 'turkie', 'turkish republic') then 'Turkey'
+    when lower({{ cleaned_name }}) = 'russian federation' then 'Russia'
+    when lower({{ cleaned_name }}) in ('u.s.a.', 'usa', 'united states of america') then 'United States'
+    when lower({{ cleaned_name }}) = 'holland' then 'Netherlands'
+    when lower({{ cleaned_name }}) = 'republic of south africa' then 'South Africa'
+    when lower({{ cleaned_name }}) = 'metropolitan france' then 'France'
+    else {{ cleaned_name }}
+  end
+{%- endmacro %}
+
 {% macro canonicalize_chokepoint_name(name_expr) -%}
   {%- set cleaned_name = clean_label_text(name_expr) -%}
   case
@@ -185,6 +225,14 @@
 {% macro geography_from_wkb(expression) -%}
   {% if target.type == 'bigquery' %}
     ST_GEOGFROMWKB({{ expression }})
+  {% else %}
+    null
+  {% endif %}
+{%- endmacro %}
+
+{% macro geography_point(longitude_expr, latitude_expr) -%}
+  {% if target.type == 'bigquery' %}
+    ST_GEOGPOINT({{ longitude_expr }}, {{ latitude_expr }})
   {% else %}
     null
   {% endif %}

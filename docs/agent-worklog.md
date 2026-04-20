@@ -54,6 +54,8 @@
 	- Outcome:
 	  1. done: Reworked `README.md` into a deliverable operator guide with plain-English and technical setup paths.
 	  2. done: Added local, VM, Cloud Run, and Bruin command headers, explicit dataset run commands, matching log inspection commands, scheduling locations, Comtrade metadata/batching rationale, observability, VM recovery fallback, data availability lessons, commodity aggregation lessons, and events-layer explanation.
+	- Follow-up update:
+	  1. 2026-04-20: Added README guidance for placing the repo on the VM persistent disk, copying local changes to `/var/lib/pipeline/capstone`, pulling pushed Git changes with `scripts/vm_repo_sync.sh`, and restarting `capstone-stack` so runtime containers rebuild from the updated source.
 
 1. Chokepoint canonical naming and geo join fix (2026-04-20)
 	- Objective: Fix semantic geo mart coordinate loss caused by independent name-hash chokepoint_id derivations across raw dim, PortWatch, events, and route-derived marts.
@@ -1163,3 +1165,86 @@
 - Serverless World Bank energy guidance (2026-04-20): User asked how to process World Bank energy 2015-current through serverless. Finding: `bruin/pipelines/worldbank_energy_bootstrap_full` and `ops/batch_plan.json` already encode `worldbank_energy_bootstrap_full` as 2015-2026, which is current for 2026-04-20. However the provided Bruin command runs inside the VM orchestrator container, not actual Cloud Run. Existing Terraform Cloud Run job is `capstone-worldbank-energy-yearly`, mapped to `worldbank_energy_yearly_refresh` only (start 2026). Safest actual Cloud Run one-off is to temporarily update that job args to `worldbank_energy worldbank_energy_bootstrap_full`, execute it with `--wait`, then restore args to `worldbank_energy worldbank_energy_yearly_refresh`. Caveat: Cloud Run image may be older than local recovery patches unless rebuilt/pushed.
 - Cloud Run verification (2026-04-20): Confirmed actual non-VM Cloud Run Job `capstone-worldbank-energy-yearly` exists in `europe-west1`. It uses image `europe-west1-docker.pkg.dev/global-insights-capstone/capstone/capstone-pipeline:hybrid-8394738-20260419171613`, command `/workspace/scripts/run_serverless_batch.sh`, args `worldbank_energy worldbank_energy_yearly_refresh`, timeout `7200`, and service account `capstone-serverless-runtime@global-insights-capstone.iam.gserviceaccount.com`. To run 2015-current serverlessly without VM orchestrator, update that job's args to `worldbank_energy worldbank_energy_bootstrap_full`, execute with `gcloud run jobs execute --wait`, then restore args to yearly refresh.
 - Cloud Run IAM recovery action (2026-04-20): Granted project-level `roles/bigquery.admin` to Cloud Run runtime service account `capstone-serverless-runtime@global-insights-capstone.iam.gserviceaccount.com` on `global-insights-capstone`, matching the temporary recovery permission given to the VM runtime service account. This is needed because actual serverless jobs do not run as the VM `capstone-pipeline` service account and otherwise may fail dbt dataset/table creation for `analytics_staging`/`analytics_marts`.
+
+## 2026-04-20 - Remove DuckDB and Streamlit Local Artifacts
+
+### objective
+- Remove obsolete DuckDB and Streamlit dependencies/configuration/docs from the active repo path while preserving the VM-first BigQuery/dbt pipeline and operational Docker files.
+
+### constraints
+- [done] Keep changes incremental and avoid disrupting downstream BigQuery/dbt data contracts.
+- [done] Remove Streamlit-specific app/container artifacts, not the VM pipeline/orchestrator Docker setup.
+- [done] Remove DuckDB from dependency/runtime checks and local helper scripts.
+
+### plan
+- [done] Scan repo references to DuckDB and Streamlit outside generated/cache directories.
+- [done] Patch dependency files, dbt profile, README instructions, shell health/import checks, and World Bank helper code.
+- [done] Delete obsolete Streamlit and DuckDB-only helper artifacts.
+- [done] Refresh lockfile if possible and validate syntax/search results.
+
+### progress update
+- [done] Removed direct DuckDB/Streamlit dependencies from `pyproject.toml`, `requirements.txt`, and `profiles.yml`; default dbt target is now `bigquery_dev`.
+- [done] Removed Harlequin because it was the remaining indirect DuckDB dependency in `uv.lock`.
+- [done] Removed Streamlit source/docs/container artifacts under `app/`, `docker/streamlit`, `requirements-streamlit.txt`, and `Documentation/streamlit docs`.
+- [done] Removed DuckDB-only local helpers under `warehouse/load_silver_to_duckdb.py` and `warehouse/bootstrap_silver_to_duckdb.sql`, plus the generated `warehouse/analytics.duckdb` local artifact.
+- [done] Converted the World Bank energy local lookup helpers from DuckDB reads to parquet/CSV reads with pandas/stdlib CSV.
+- [done] Validation passed: `python -m py_compile ingest/world_bank/worldbank_energy.py`, `bash -n scripts/run_pipeline.sh`, `bash -n scripts/vm_repo_copy.sh`, `git diff --check`, `uv lock`, `uv sync --frozen`, and `dbt parse --profiles-dir . --target bigquery_dev` with dummy parse env vars.
+- [done] Active dependency/config/code search for DuckDB, Streamlit, and Harlequin is clean. Remaining text matches are historical worklog entries only.
+
+## 2026-04-20 - Looker Geography Semantic Mart QA
+
+### objective
+- Audit and standardise country/chokepoint geography fields feeding Looker Studio map visuals, especially `mart_reporter_month_exposure_map`, `mart_chokepoint_monthly_hotspot_map`, and `mart_reporter_partner_commodity_month_enriched`.
+
+### constraints
+- [in progress] Preserve VM-first BigQuery/dbt baseline and do not rebuild or rewrite working marts.
+- [in progress] Keep map marts separate from detail marts: exposure map for country rendering, hotspot map for chokepoint rendering, enriched mart for tables/breakdowns.
+- [in progress] Exclude aggregate/group geography from country map marts while preserving detail marts where analytically useful.
+- [in progress] Preserve latitude/longitude floats and add `geo_point` for future GIS usage.
+
+### audit findings
+- [done] `mart_reporter_month_exposure_map` currently has one row per `month_start_date + reporter_iso3`, which duplicates country rows for Looker map rendering.
+- [done] `mart_chokepoint_monthly_hotspot_map` currently has one row per `month_start_date + chokepoint_id`, which duplicates chokepoint rows for point-map rendering.
+- [done] Country labels in local silver `dim_country` include non-canonical Looker-risk labels: `FRA = Metropolitan France`, `TUR = Türkiye`, `RUS = Russian Federation`, and `USA = United States of America`.
+- [done] Aggregate/group geography exists in the country dimension and facts, including `EUR = European Union`, `W00 = World`, and other special buckets (`A79`, `E19`, `F19`, `S19`, `X1`, `XX`, `_X`).
+- [done] Chokepoint name canonicalization already exists in shared dbt macros and upstream joins; this task should extend geo output and grain checks rather than redo that earlier work.
+- [done] Bruin MCP/tooling availability was checked; this task is dbt/SQL-focused and does not require Bruin asset changes.
+
+### plan
+- [done] Add central country ISO/name canonicalization in the silver country builder and dbt country dimension.
+- [done] Add country map eligibility flags to `dim_country` and use them to exclude aggregate geography from country map marts.
+- [done] Convert `mart_reporter_month_exposure_map` to a one-row-per-country latest-available snapshot for map rendering.
+- [done] Convert `mart_chokepoint_monthly_hotspot_map` to a one-row-per-chokepoint latest-available snapshot and add `geo_point`.
+- [done] Add/update dbt tests for map grain, aggregate exclusion, canonical country sample, and chokepoint coordinate/point completeness.
+
+### files changed
+- [done] `macros/shared_utils.sql` - added country ISO/name canonicalization and `ST_GEOGPOINT` helper macro.
+- [done] `ingest/comtrade/comtrade_silver.py` - made `dim_country` prefer reporter metadata, canonical names, ISO3 corrections, group flags, and map eligibility.
+- [done] `models/staging/stg_dim_country.sql` - canonicalized country names/ISO3 and added map eligibility flags without depending on new raw columns.
+- [done] `models/marts/dimensions/dim_country.sql` - deduplicated canonical ISO3 rows and exposed eligibility flags.
+- [done] `models/staging/stg_comtrade_trade_base.sql`, `models/staging/stg_route_applicability.sql`, `models/staging/stg_dim_country_ports.sql`, `models/staging/stg_dim_trade_route_geography.sql`, `models/marts/fct_reporter_partner_commodity_route_month.sql`, `models/marts/fct_reporter_partner_commodity_hub_month.sql` - applied consistent ISO3 cleanup where country codes enter route/trade logic.
+- [done] `models/staging/stg_dim_chokepoint.sql`, `models/marts/dimensions/dim_chokepoint.sql` - added `geo_point` while preserving latitude/longitude and existing WKB geography fields.
+- [done] `models/marts/semantics/mart_reporter_month_exposure_map.sql` - changed map output to one row per eligible country using latest available reporter snapshot.
+- [done] `models/marts/semantics/mart_chokepoint_monthly_hotspot_map.sql` - changed map output to one row per chokepoint using latest available chokepoint snapshot and added `geo_point`.
+- [done] `models/marts/semantics/mart_reporter_partner_commodity_month_enriched.sql` - kept detail grain and added canonical ISO handling plus map-eligibility flags for reporter/partner filters.
+
+### files inspected
+- [done] `docs/agent-worklog.md`
+- [done] `data/metadata/comtrade/reporters.csv`
+- [done] `data/metadata/comtrade/partners.csv`
+- [done] `data/silver/comtrade/dimensions/dim_country.parquet`
+- [done] `ingest/comtrade/comtrade_silver.py`
+- [done] `models/staging/stg_dim_country.sql`
+- [done] `models/marts/dimensions/dim_country.sql`
+- [done] `models/marts/semantics/mart_reporter_month_exposure_map.sql`
+- [done] `models/marts/semantics/mart_chokepoint_monthly_hotspot_map.sql`
+- [done] `models/marts/semantics/mart_reporter_partner_commodity_month_enriched.sql`
+- [done] `models/marts/semantics/schema.yml`
+- [done] Existing map/detail grain tests under `tests/`
+
+### validation notes
+- [done] `python -m py_compile ingest/comtrade/comtrade_silver.py` passed.
+- [done] `UV_CACHE_DIR=/tmp/uv-cache uv run dbt --no-version-check parse --profiles-dir . --target bigquery_dev` passed with dummy BigQuery env vars.
+- [done] `UV_CACHE_DIR=/tmp/uv-cache uv run dbt --no-version-check compile --profiles-dir . --target bigquery_dev --no-populate-cache --no-introspect --empty --select ...` passed for the changed country/chokepoint staging, dimensions, and semantic marts.
+- [done] `git diff --check` passed.
+- [blocked] Live `dbt test` was not run locally because BigQuery OAuth/network access is unavailable in the sandbox; tests were added/compiled for execution on the VM/BigQuery environment.

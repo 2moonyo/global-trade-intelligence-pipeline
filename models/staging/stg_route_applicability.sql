@@ -1,7 +1,7 @@
 select
-  upper(trim(reporter_iso3)) as reporter_iso3,
-  upper(trim(partner_iso3)) as partner_iso3,
-  upper(trim(partner2_iso3)) as partner2_iso3,
+  {{ canonical_country_iso3('reporter_iso3') }} as reporter_iso3,
+  {{ canonical_country_iso3('partner_iso3') }} as partner_iso3,
+  {{ canonical_country_iso3('partner2_iso3') }} as partner2_iso3,
   {{ cast_int('row_count') }} as row_count,
   {{ cast_float('trade_value_usd') }} as trade_value_usd,
   cast(has_sea as boolean) as has_sea,

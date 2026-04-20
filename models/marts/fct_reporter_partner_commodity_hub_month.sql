@@ -1,7 +1,7 @@
 with route_candidates as (
   select
-    upper(trim(reporter_iso3)) as reporter_iso3,
-    upper(trim(partner_iso3)) as partner_iso3,
+    {{ canonical_country_iso3('reporter_iso3') }} as reporter_iso3,
+    {{ canonical_country_iso3('partner_iso3') }} as partner_iso3,
     {{ canonicalize_chokepoint_name('main_chokepoint') }} as main_chokepoint,
     route_status,
     route_confidence,
@@ -11,9 +11,9 @@ with route_candidates as (
     route_scenario,
     used_transshipment_hub,
     hub_port,
-    hub_iso3,
+    {{ canonical_country_iso3('hub_iso3') }} as hub_iso3,
     row_number() over (
-      partition by upper(trim(reporter_iso3)), upper(trim(partner_iso3))
+      partition by {{ canonical_country_iso3('reporter_iso3') }}, {{ canonical_country_iso3('partner_iso3') }}
       order by
         case
           when lower(trim(route_scenario)) = 'default_shortest' then 0

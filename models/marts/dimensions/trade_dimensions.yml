@@ -8,7 +8,11 @@ models:
         description: "ISO3 code for the country."
         tests: [not_null, unique]
       - name: country_name
-        description: "Business-readable country name."
+        description: "Canonical business-readable country name for BI display and Looker Studio country geography."
+      - name: is_country_group
+        description: "True when the row is an aggregate, group, world, or special geography bucket rather than a renderable country."
+      - name: is_country_map_eligible
+        description: "True when the row is a canonical country suitable for Looker Studio Geo Country rendering."
 
   - name: dim_time
     description: "Conformed month dimension for all trade, macro, energy, and event marts."
@@ -61,3 +65,5 @@ models:
         description: "BigQuery geography generated from the chokepoint centroid WKB."
       - name: zone_of_influence_geog
         description: "BigQuery geography generated from the zone-of-influence WKB."
+      - name: geo_point
+        description: "BigQuery point geography generated from longitude and latitude for GIS usage."

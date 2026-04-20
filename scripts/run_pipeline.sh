@@ -32,7 +32,6 @@ run_python() {
 
 imports_check() {
   run_python - <<'PY'
-import duckdb
 import geopandas
 import pandas
 import pyarrow

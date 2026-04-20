@@ -1100,6 +1100,9 @@ models:
       - name: reporter_country_name
         description: Standardized reporter country name for table labels and filters.
 
+      - name: reporter_is_country_map_eligible
+        description: True when the reporter is a canonical country suitable for country-map filters; detail rows are still retained when false upstream.
+
       - name: partner_iso3
         description: ISO3 code of the partner country.
         tests:
@@ -1111,6 +1114,9 @@ models:
 
       - name: partner_country_name
         description: Standardized partner country name for partner-context visuals and filters.
+
+      - name: partner_is_country_map_eligible
+        description: True when the partner is a canonical country suitable for country-map filters; detail rows are still retained when false upstream.
 
       - name: cmd_code
         description: Commodity code at the conformed commodity grain.
@@ -1225,7 +1231,7 @@ models:
                 values: [true, false]
 
   - name: mart_reporter_month_exposure_map
-    description: Monthly one-row-per-reporter semantic mart for the primary Page 4 country map, combining country geography with explicit chokepoint exposure, confidence-aware exposure, and top-chokepoint tooltip fields.
+    description: One-row-per-country semantic mart for the primary Page 4 country map, combining canonical country geography with each reporter's latest available chokepoint exposure snapshot.
     columns:
       - name: reporter_iso3
         description: ISO3 code of the reporting country used directly in Looker Studio geo charts.
@@ -1242,7 +1248,7 @@ models:
           - not_null
 
       - name: month_start_date
-        description: First calendar day of the month for date range controls.
+        description: First calendar day of the reporter's selected latest available exposure snapshot.
         tests:
           - not_null
 
@@ -1288,7 +1294,7 @@ models:
         description: Share of reporter monthly trade value represented by the top exposed chokepoint.
 
       - name: latest_month_flag
-        description: True when the row belongs to the latest available month in this map-support mart.
+        description: True for the selected latest available reporter snapshot exposed by this one-row-per-country map-support mart.
         tests:
           - not_null
           - accepted_values:
@@ -1297,10 +1303,10 @@ models:
                 values: [true, false]
 
   - name: mart_chokepoint_monthly_hotspot_map
-    description: Monthly one-row-per-chokepoint semantic mart for the supporting Page 4 point map, combining monthly stress, display-safe stress labels, and aggregated exposure counts with simple lat-lon geography.
+    description: One-row-per-chokepoint semantic mart for the supporting Page 4 point map, combining each chokepoint's latest available stress snapshot, display-safe stress labels, aggregated exposure counts, latitude/longitude, and geography point.
     columns:
       - name: month_start_date
-        description: First calendar day of the month used by Looker Studio date controls.
+        description: First calendar day of the chokepoint's selected latest available stress snapshot.
         tests:
           - not_null
 
@@ -1323,6 +1329,9 @@ models:
 
       - name: latitude
         description: Chokepoint latitude in decimal degrees for Looker Studio point maps.
+
+      - name: geo_point
+        description: BigQuery GEOGRAPHY point built with ST_GEOGPOINT(longitude, latitude), retained beside numeric coordinates for future GIS usage.
 
       - name: has_map_coordinates_flag
         description: True when the chokepoint has usable latitude and longitude for point-map rendering.
@@ -1380,7 +1389,7 @@ models:
         description: Country name of the reporting country with the highest exposed trade value on the chokepoint-month.
 
       - name: latest_month_flag
-        description: True when the row belongs to the latest available month in this map-support mart.
+        description: True for the selected latest available chokepoint snapshot exposed by this one-row-per-chokepoint map-support mart.
         tests:
           - not_null
           - accepted_values:

@@ -1,6 +1,6 @@
 # Macro-Political Trade Intelligence Pipeline
 
-This repository packages a portfolio-grade data pipeline for studying how trade, chokepoints, macro signals, energy dependence, and disruptive events interact over time.
+This repository packages a portfolio MVP data pipeline for studying how trade, chokepoints, macro signals, energy dependence, and disruptive events interact over time.
 
 In plain language: the project collects public and API-based data, stores it in cloud storage, cleans it into analytical tables, and builds dashboard-ready models that help answer questions like:
 
@@ -115,7 +115,11 @@ The command-line setup is preferred once the project exists, because it is repea
 
 ### FRED
 
-Create or view a FRED key from the FRED API key page. Put it in `.env`:
+Create or view a FRED key from the FRED API key page:
+
+https://fred.stlouisfed.org/docs/api/api_key.html
+
+Put the key in `.env`:
 
 ```bash
 FRED_API_KEY=your_fred_key_here
@@ -252,6 +256,99 @@ sudo systemctl enable --now capstone-schedule-lane-monthly_refresh.timer
 sudo systemctl enable --now capstone-schedule-lane-yearly_refresh.timer
 systemctl list-timers 'capstone-schedule-lane-*'
 ```
+
+## VM Repository on the Persistent Disk
+
+The VM uses the persistent disk for both runtime state and the repository checkout.
+
+| Path | Meaning |
+| --- | --- |
+| `/var/lib/pipeline` | Mounted persistent disk root. This survives normal VM stop/start cycles. |
+| `/var/lib/pipeline/capstone` | Repo root used by VM scripts, systemd services, Docker Compose, and manual runs. |
+| `/var/lib/pipeline/capstone/data` | Local bronze/silver runtime data mounted into containers as `/workspace/data`. |
+| `/var/lib/pipeline/capstone/logs` | Local runtime logs mounted into containers as `/workspace/logs`. |
+| `/var/lib/pipeline/capstone/runtime/postgres` | Optional local Postgres state for run metadata. |
+
+The first-time command below is the simplest way to put the repo on the persistent disk:
+
+```bash
+make vm-bootstrap VM_BOOTSTRAP_ARGS="--reset-known-host --show-resolved"
+```
+
+By default, `vm-bootstrap` uses the copy transfer path. It packages your local repo, copies it to `/var/lib/pipeline/capstone`, renders `/etc/capstone/pipeline.env`, and restarts `capstone-stack`.
+
+The copy path is useful because the VM does not need GitHub access. It also excludes local `.env`, secrets, `data`, `logs`, `runtime`, `target`, and cache folders so local development state does not overwrite persistent VM runtime state.
+
+### Copy Local Changes to the VM
+
+Use this when you have local edits that are not pushed to Git yet, or when you want the fastest way to refresh the VM from your laptop.
+
+First collect the VM connection values. You can use the `VM_USER` and `VM_HOST` printed by `make vm-bootstrap VM_BOOTSTRAP_ARGS="--show-resolved"`, or get the host from GCP:
+
+```bash
+export VM_USER=your-vm-linux-user
+export VM_HOST="$(gcloud compute instances describe capstone-vm-eu \
+  --zone europe-west1-b \
+  --format='get(networkInterfaces[0].accessConfigs[0].natIP)')"
+```
+
+Then copy the repo:
+
+```bash
+scripts/vm_repo_copy.sh \
+  --vm-user "$VM_USER" \
+  --vm-host "$VM_HOST" \
+  --ssh-key-path "$HOME/.ssh/google_compute_engine" \
+  --vm-repo-dir /var/lib/pipeline/capstone
+```
+
+Restart the stack so the Docker images rebuild with the copied source:
+
+```bash
+ssh -i "$HOME/.ssh/google_compute_engine" "$VM_USER@$VM_HOST"
+cd /var/lib/pipeline/capstone
+sudo systemctl restart capstone-stack
+sudo docker compose --env-file /etc/capstone/pipeline.env -f docker/docker-compose.yml ps
+```
+
+This restart matters. The containers run from images built from the repo source, while `data`, `logs`, `target`, and a few runtime folders are mounted as volumes. Updating files under `/var/lib/pipeline/capstone` alone does not update code inside the running `pipeline`, `dbt`, or `orchestrator` containers until the stack rebuilds/restarts.
+
+### Pull Pushed Changes onto the VM
+
+Use this when changes are committed and pushed to a Git remote, and the VM has access to that remote. For private repos, configure a deploy key or another GitHub access method first.
+
+```bash
+scripts/vm_repo_sync.sh \
+  --vm-user "$VM_USER" \
+  --vm-host "$VM_HOST" \
+  --ssh-key-path "$HOME/.ssh/google_compute_engine" \
+  --vm-repo-dir /var/lib/pipeline/capstone \
+  --repo-url git@github.com:YOUR_ORG/YOUR_REPO.git \
+  --branch main
+```
+
+To deploy a specific commit instead of the branch head:
+
+```bash
+scripts/vm_repo_sync.sh \
+  --vm-user "$VM_USER" \
+  --vm-host "$VM_HOST" \
+  --ssh-key-path "$HOME/.ssh/google_compute_engine" \
+  --vm-repo-dir /var/lib/pipeline/capstone \
+  --repo-url git@github.com:YOUR_ORG/YOUR_REPO.git \
+  --branch main \
+  --commit COMMIT_SHA
+```
+
+After a Git sync, restart the stack in the same way:
+
+```bash
+ssh -i "$HOME/.ssh/google_compute_engine" "$VM_USER@$VM_HOST"
+cd /var/lib/pipeline/capstone
+sudo systemctl restart capstone-stack
+```
+
+Prefer the copy path for early setup and non-technical handoff because it has fewer moving parts. Prefer the Git sync path once the repo is published and operators are deploying reviewed commits.
 
 ## Command Context Headers
 
@@ -794,17 +891,9 @@ Semantic/dashboard marts include:
 - `mart_reporter_month_exposure_map`
 - `mart_trade_month_coverage_status`
 
-## Local DuckDB And dbt
+## BigQuery dbt
 
-For local analytics:
-
-```bash
-make events-silver
-uv run python warehouse/load_silver_to_duckdb.py
-uv run dbt build --profiles-dir . --target duckdb_dev
-```
-
-For BigQuery dbt:
+Run dbt against the BigQuery warehouse:
 
 ```bash
 uv run dbt debug --profiles-dir . --target bigquery_dev
@@ -824,36 +913,6 @@ make dbt-bigquery-debug
 make dbt-bigquery-build
 ```
 
-## Streamlit Dashboard
-
-The repository includes a Streamlit frontend under `app/` with narrative pages for:
-
-- Executive Overview
-- Trade Dependence
-- Chokepoint Stress and Exposure
-- Events and Commodity Impact
-- Energy Vulnerability Context
-
-Run locally:
-
-```bash
-python -m pip install -r requirements-streamlit.txt
-streamlit run app/streamlit_app.py
-```
-
-Run with Docker:
-
-```bash
-docker build -f docker/streamlit/Dockerfile -t capstone-streamlit .
-docker run --rm -p 8501:8501 capstone-streamlit
-```
-
-Then open:
-
-```text
-http://localhost:8501
-```
-
 ## Delivery Checklist
 
 Before handing this repo to someone else:
@@ -866,7 +925,7 @@ Before handing this repo to someone else:
 - confirm `infra/terraform/terraform.tfvars.json` does not contain private values you do not want to share
 - run `python -m json.tool ops/batch_plan.json`
 - run `bruin validate --fast ./bruin/pipelines/dataset_batch/pipeline.yml`
-- run `uv run dbt parse --profiles-dir . --target duckdb_dev`
+- run `uv run dbt parse --profiles-dir . --target bigquery_dev`
 
 ## Reflection
 

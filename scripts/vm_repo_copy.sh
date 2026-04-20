@@ -116,7 +116,6 @@ echo "Copying local repo contents to ${REMOTE}:${VM_REPO_DIR} ..."
     --exclude='*.pyo' \
     --exclude='*.pyd' \
     --exclude='*.log' \
-    --exclude='*.duckdb' \
     --exclude='*.zip' \
     --exclude='.env' \
     --exclude='.env.bak' \
@@ -127,7 +126,6 @@ echo "Copying local repo contents to ${REMOTE}:${VM_REPO_DIR} ..."
     --exclude='runtime' \
     --exclude='Documentation' \
     --exclude='notebooks' \
-    --exclude='docker/streamlit' \
     --exclude='infra/terraform/.terraform' \
     --exclude='infra/terraform/*.tfstate' \
     --exclude='*.MD' \

@@ -30,8 +30,8 @@ source_data as (
       {{ safe_cast('ref_year_raw', dbt.type_int()) }},
       {{ safe_cast('substr(period_raw, 1, 4)', dbt.type_int()) }}
     ) as ref_year,
-    upper(trim(reporter_iso3_raw)) as reporter_iso3,
-    upper(trim(partner_iso3_raw)) as partner_iso3,
+    {{ canonical_country_iso3('reporter_iso3_raw') }} as reporter_iso3,
+    {{ canonical_country_iso3('partner_iso3_raw') }} as partner_iso3,
     trim(cmd_code_raw) as cmd_code,
     trim(commodity_name_raw) as commodity_name_raw,
     case

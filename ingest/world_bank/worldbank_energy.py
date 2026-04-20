@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import glob
 import json
 import os
 import sys
@@ -39,7 +40,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
 
-import duckdb
+import pandas as pd
 import requests
 from dotenv import load_dotenv
 
@@ -88,7 +89,6 @@ class WorldBankEnergyConfig:
     manifest_path: Path = MANIFEST_PATH
     bronze_root: Path = BRONZE_ROOT
     metadata_root: Path = WORLD_BANK_METADATA_ROOT
-    duckdb_path: Path = PROJECT_ROOT / "warehouse" / "analytics.duckdb"
     dim_country_parquet_path: Path = PROJECT_ROOT / "data" / "silver" / "comtrade" / "dimensions" / "dim_country.parquet"
     energy_batch_glob: str = str(PROJECT_ROOT / "data" / "bronze" / "worldbank_energy" / "Batch" / "*.csv")
     user_agent: str = DEFAULT_USER_AGENT
@@ -503,84 +503,43 @@ def build_wide_preview(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def load_db_countries(cfg: WorldBankEnergyConfig) -> list[dict[str, Any]]:
-    if cfg.duckdb_path.exists():
-        try:
-            with duckdb.connect(str(cfg.duckdb_path), read_only=True) as con:
-                rows = con.execute(
-                    """
-                    select
-                      upper(trim(iso3)) as country_iso3,
-                      country_name,
-                      region,
-                      cast(null as varchar) as admin_region,
-                      cast(null as varchar) as income_level,
-                      cast(null as varchar) as lending_type,
-                      subregion,
-                      continent
-                    from raw.dim_country
-                    where iso3 is not null
-                    order by 1
-                    """
-                ).fetchdf()
-            return rows.to_dict(orient="records")
-        except Exception:
-            pass
-
     if cfg.dim_country_parquet_path.exists():
-        with duckdb.connect(":memory:") as con:
-            rows = con.execute(
-                """
-                select
-                  upper(trim(iso3)) as country_iso3,
-                  country_name,
-                  region,
-                  cast(null as varchar) as admin_region,
-                  cast(null as varchar) as income_level,
-                  cast(null as varchar) as lending_type,
-                  subregion,
-                  continent
-                from read_parquet(?)
-                where iso3 is not null
-                order by 1
-                """,
-                [str(cfg.dim_country_parquet_path)],
-            ).fetchdf()
+        dim_country = pd.read_parquet(cfg.dim_country_parquet_path)
+        if "iso3" not in dim_country.columns:
+            raise RuntimeError(f"Missing iso3 column in {cfg.dim_country_parquet_path}")
+
+        rows = pd.DataFrame(index=dim_country.index)
+        rows["country_iso3"] = dim_country["iso3"].astype("string").str.strip().str.upper()
+        rows["country_name"] = dim_country["country_name"] if "country_name" in dim_country.columns else None
+        rows["region"] = dim_country["region"] if "region" in dim_country.columns else None
+        rows["admin_region"] = None
+        rows["income_level"] = None
+        rows["lending_type"] = None
+        rows["subregion"] = dim_country["subregion"] if "subregion" in dim_country.columns else None
+        rows["continent"] = dim_country["continent"] if "continent" in dim_country.columns else None
+
+        rows = rows[rows["country_iso3"].notna() & (rows["country_iso3"] != "")]
+        rows = rows.sort_values("country_iso3")
+        rows = rows.where(pd.notna(rows), None)
         return rows.to_dict(orient="records")
 
-    raise RuntimeError("Could not resolve local database countries from DuckDB or dim_country parquet.")
+    raise RuntimeError("Could not resolve local database countries from dim_country parquet.")
 
 
 def load_existing_db_years(cfg: WorldBankEnergyConfig) -> list[int]:
-    if cfg.duckdb_path.exists():
-        try:
-            with duckdb.connect(str(cfg.duckdb_path), read_only=True) as con:
-                rows = con.execute(
-                    """
-                    select distinct cast(year as integer) as year
-                    from raw.energy_vulnerability
-                    where year is not null
-                    order by 1
-                    """
-                ).fetchall()
-            return [int(row[0]) for row in rows if row and row[0] is not None]
-        except Exception:
-            pass
+    years: set[int] = set()
+    for batch_path in sorted(glob.glob(cfg.energy_batch_glob)):
+        with open(batch_path, newline="", encoding="utf-8") as handle:
+            for row in csv.DictReader(handle):
+                year_value = (row.get("year") or "").strip()
+                if not year_value:
+                    continue
+                try:
+                    years.add(int(float(year_value)))
+                except ValueError:
+                    continue
 
-    batch_dir = Path(cfg.energy_batch_glob).parent
-    if batch_dir.exists():
-        with duckdb.connect(":memory:") as con:
-            rows = con.execute(
-                """
-                select distinct cast(year as integer) as year
-                from read_csv_auto(?, header=true)
-                where year is not null
-                order by 1
-                """,
-                [cfg.energy_batch_glob],
-            ).fetchall()
-        return [int(row[0]) for row in rows if row and row[0] is not None]
-
-    return []
+    return sorted(years)
 
 
 def resolve_requested_window(

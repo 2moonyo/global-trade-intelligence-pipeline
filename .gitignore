@@ -13,7 +13,6 @@ __pycache__
 *.pyo
 *.pyd
 *.log
-*duckdb
 check_db.py
 .github/*
 /.github

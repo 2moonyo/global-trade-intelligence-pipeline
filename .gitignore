@@ -67,7 +67,7 @@ override.tf.json
 /infra/terraform/terraform.tfvars.json
 /infra/terraform/terraform.tfvars*.json
 /infra/terraform/*.tfplan
-
+.gitignore
 /.secrets
 /.uv-cache
 /app

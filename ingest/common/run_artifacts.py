@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import sys
 import uuid
 from datetime import date, datetime, timezone
@@ -76,14 +77,18 @@ def iter_progress(
 def append_manifest(path: Path, entry: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a", encoding="utf-8") as handle:
-        handle.write(json.dumps(json_ready(entry), ensure_ascii=False) + "\n")
+        handle.write(json.dumps(json_ready(entry), ensure_ascii=False, allow_nan=False) + "\n")
 
 
 def json_ready(value: Any) -> Any:
+    if value is None:
+        return None
     if isinstance(value, Path):
         return str(value)
     if isinstance(value, (datetime, date)):
         return value.isoformat()
+    if isinstance(value, float):
+        return None if not math.isfinite(value) else value
     if isinstance(value, set):
         return [json_ready(item) for item in value]
     if hasattr(value, "tolist") and callable(value.tolist):

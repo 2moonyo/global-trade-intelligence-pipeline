@@ -338,12 +338,13 @@ models:
         description: Optional secondary partner code from source.
 
   - name: stg_dim_commodity
-    description: Commodity dimension standardized from Comtrade source metadata.
+    description: Commodity dimension standardized from Comtrade source metadata, with one canonical row retained per commodity code when source descriptions are duplicated.
     columns:
       - name: cmd_code
         description: Commodity code used as the primary commodity key.
         tests:
           - not_null
+          - unique
 
       - name: hs2
         description: Two-digit HS chapter code.

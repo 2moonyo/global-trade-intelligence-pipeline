@@ -44,7 +44,7 @@ def _validate_identifier(value: str, *, label: str) -> str:
 
 
 def _json_text(value: Any) -> str:
-    return json.dumps(json_ready(value), ensure_ascii=False, sort_keys=True)
+    return json.dumps(json_ready(value), ensure_ascii=False, sort_keys=True, allow_nan=False)
 
 
 def _pg_jsonb(value: Any) -> Any:

@@ -1347,7 +1347,7 @@ models:
         description: World Bank renewable energy share percentage, broadcast from annual reporter-year data.
 
       - name: fossil_share_pct
-        description: Fossil electricity share percentage, using reported fossil share when available and otherwise the bounded sum of oil, gas, and coal electricity shares.
+        description: Fossil dependency percentage for the dashboard, using the reported World Bank fossil energy share only when it falls inside the expected 0-100 range and otherwise falling back to the bounded sum of oil, gas, and coal electricity shares as a proxy.
 
       - name: chokepoint_exposure_pct
         description: Percent of reporter monthly trade value exposed to modeled chokepoint routes after aggregating reporter-month-chokepoint rows.

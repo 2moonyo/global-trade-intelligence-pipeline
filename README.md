@@ -1057,13 +1057,20 @@ First make sure the dbt marts exist in BigQuery:
 uv run dbt build --profiles-dir . --target bigquery_dev
 ```
 
+Warehouse builds should run seeds first so static dbt lookup tables are present in the target dataset. If you run dbt directly, prefer:
+
+```bash
+uv run dbt seed --profiles-dir . --target bigquery_dev
+uv run dbt build --profiles-dir . --target bigquery_dev
+```
+
 If you are operating from the VM, run dbt through the existing runtime stack after the bootstrap has loaded raw BigQuery tables:
 
 ```bash
 cd /var/lib/pipeline/capstone
 sudo docker compose --env-file /etc/capstone/pipeline.env \
   -f docker/docker-compose.yml \
-  exec -T dbt dbt build --profiles-dir . --target bigquery_dev
+  exec -T dbt sh -lc 'dbt seed --profiles-dir . --target bigquery_dev && dbt build --profiles-dir . --target bigquery_dev'
 ```
 
 In Looker Studio:

@@ -354,6 +354,7 @@ dbt-bigquery-debug: check-tfvars
 
 dbt-bigquery-build: check-tfvars
 	@eval "$$(python $(TF_DIR)/render_dotenv.py --format export)"; \
+	UV_CACHE_DIR="$(PROJECT_ROOT)/.uv-cache" uv run dbt seed --profiles-dir . --target bigquery_dev && \
 	UV_CACHE_DIR="$(PROJECT_ROOT)/.uv-cache" uv run dbt build --profiles-dir . --target bigquery_dev
 
 dbt-bigquery-docs-generate: check-tfvars

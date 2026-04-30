@@ -37,6 +37,7 @@ COPY ingest ./ingest
 COPY macros ./macros
 COPY models ./models
 COPY ops ./ops
+COPY seeds ./seeds
 RUN mkdir -p ./data/seed/events
 COPY data/seed/events/events_seed_extended_2015.csv ./data/seed/events/events_seed_extended_2015.csv
 COPY tests ./tests

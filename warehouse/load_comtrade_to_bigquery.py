@@ -61,6 +61,8 @@ class FixedTableSpec:
     local_path: Path
     gcs_parts: tuple[str, ...]
     clustering_fields: tuple[str, ...] = ()
+    merge_keys: tuple[str, ...] = ()
+    merge_update_existing: bool = False
 
 
 FIXED_TABLE_SPECS = (
@@ -78,6 +80,7 @@ FIXED_TABLE_SPECS = (
         table_name="dim_commodity",
         local_path=PROJECT_ROOT / "data" / "silver" / "comtrade" / "dimensions" / "dim_commodity.parquet",
         gcs_parts=("silver", "comtrade", "dimensions", "dim_commodity.parquet"),
+        merge_keys=("cmdCode",),
     ),
     FixedTableSpec(
         table_name="dim_trade_flow",
@@ -258,6 +261,110 @@ def _selected_fact_months(
 
 def _gcs_uri_for_fixed_spec(config: GcpCloudConfig, spec: FixedTableSpec) -> str:
     return config.gcs_uri(*spec.gcs_parts)
+
+
+def _temp_table_id_for_fixed_spec(
+    *,
+    config: GcpCloudConfig,
+    spec: FixedTableSpec,
+    run_id: str,
+) -> str:
+    safe_run_id = run_id.replace("-", "_")
+    return f"{config.gcp_project_id}.{config.bq_raw_dataset}.__tmp_{spec.table_name}_{safe_run_id}"
+
+
+def _fixed_table_merge_sql(*, spec: FixedTableSpec, target_table_id: str, source_table_id: str, columns: list[str]) -> str:
+    on_clause = " and ".join(
+        f"target.`{column}` = source.`{column}`"
+        for column in spec.merge_keys
+    )
+    insert_columns = ", ".join(f"`{column}`" for column in columns)
+    insert_values = ", ".join(f"source.`{column}`" for column in columns)
+
+    when_matched_clause = ""
+    if spec.merge_update_existing:
+        update_columns = [column for column in columns if column not in spec.merge_keys]
+        assignments = ",\n            ".join(
+            f"target.`{column}` = source.`{column}`"
+            for column in update_columns
+        )
+        when_matched_clause = f"""
+        when matched then
+          update set
+            {assignments}
+        """
+
+    return f"""
+    merge `{target_table_id}` as target
+    using `{source_table_id}` as source
+      on {on_clause}
+    {when_matched_clause}
+    when not matched then
+      insert ({insert_columns})
+      values ({insert_values})
+    """
+
+
+def _load_fixed_table_with_merge(
+    *,
+    client,
+    bigquery,
+    config: GcpCloudConfig,
+    logger,
+    spec: FixedTableSpec,
+    run_id: str,
+    target_table_id: str,
+    source_uri: str,
+    location: str,
+    NotFound,
+) -> str:
+    temp_table_id = _temp_table_id_for_fixed_spec(config=config, spec=spec, run_id=run_id)
+    try:
+        logger.info(
+            "Loading merge source for fixed table=%s from %s into temporary table=%s",
+            spec.table_name,
+            source_uri,
+            temp_table_id,
+        )
+        load_job = client.load_table_from_uri(
+            source_uri,
+            temp_table_id,
+            location=location,
+            job_config=bigquery.LoadJobConfig(
+                source_format=bigquery.SourceFormat.PARQUET,
+                create_disposition=bigquery.CreateDisposition.CREATE_IF_NEEDED,
+                write_disposition=bigquery.WriteDisposition.WRITE_TRUNCATE,
+                clustering_fields=list(spec.clustering_fields) or None,
+            ),
+        )
+        load_job.result()
+
+        temp_table = client.get_table(temp_table_id)
+        source_columns = [field.name for field in temp_table.schema]
+
+        try:
+            client.get_table(target_table_id)
+        except NotFound:
+            create_job = client.query(
+                f"create table `{target_table_id}` as select * from `{temp_table_id}`",
+                location=location,
+            )
+            create_job.result()
+            return "created_from_merge_source"
+
+        merge_job = client.query(
+            _fixed_table_merge_sql(
+                spec=spec,
+                target_table_id=target_table_id,
+                source_table_id=temp_table_id,
+                columns=source_columns,
+            ),
+            location=location,
+        )
+        merge_job.result()
+        return "merged"
+    finally:
+        client.delete_table(temp_table_id, not_found_ok=True)
 
 
 def _fact_month_state(config: GcpCloudConfig, candidate_uris: list[str], fact_table_id: str) -> dict[str, LoadStateRecord]:
@@ -690,24 +797,46 @@ def load_comtrade(
                 if source_mode == "local" and not spec.local_path.exists():
                     raise FileNotFoundError(f"Missing required Comtrade fixed table source: {spec.local_path}")
                 table_id = f"{config.gcp_project_id}.{config.bq_raw_dataset}.{spec.table_name}"
-                logger.info(
-                    "Replacing fixed table=%s from %s with WRITE_TRUNCATE",
-                    spec.table_name,
-                    _gcs_uri_for_fixed_spec(config, spec),
-                )
-                load_job = client.load_table_from_uri(
-                    _gcs_uri_for_fixed_spec(config, spec),
-                    table_id,
-                    location=config.gcp_location,
-                    job_config=bigquery.LoadJobConfig(
-                        source_format=bigquery.SourceFormat.PARQUET,
-                        create_disposition=bigquery.CreateDisposition.CREATE_IF_NEEDED,
-                        write_disposition=bigquery.WriteDisposition.WRITE_TRUNCATE,
-                        clustering_fields=list(spec.clustering_fields) or None,
-                    ),
-                )
-                load_job.result()
-                fixed_table_results[spec.table_name] = {"status": "loaded", "uri": _gcs_uri_for_fixed_spec(config, spec)}
+                source_uri = _gcs_uri_for_fixed_spec(config, spec)
+                if spec.merge_keys:
+                    logger.info(
+                        "Merging fixed table=%s from %s on keys=%s",
+                        spec.table_name,
+                        source_uri,
+                        list(spec.merge_keys),
+                    )
+                    result_status = _load_fixed_table_with_merge(
+                        client=client,
+                        bigquery=bigquery,
+                        config=config,
+                        logger=logger,
+                        spec=spec,
+                        run_id=run_id,
+                        target_table_id=table_id,
+                        source_uri=source_uri,
+                        location=config.gcp_location,
+                        NotFound=NotFound,
+                    )
+                else:
+                    logger.info(
+                        "Replacing fixed table=%s from %s with WRITE_TRUNCATE",
+                        spec.table_name,
+                        source_uri,
+                    )
+                    load_job = client.load_table_from_uri(
+                        source_uri,
+                        table_id,
+                        location=config.gcp_location,
+                        job_config=bigquery.LoadJobConfig(
+                            source_format=bigquery.SourceFormat.PARQUET,
+                            create_disposition=bigquery.CreateDisposition.CREATE_IF_NEEDED,
+                            write_disposition=bigquery.WriteDisposition.WRITE_TRUNCATE,
+                            clustering_fields=list(spec.clustering_fields) or None,
+                        ),
+                    )
+                    load_job.result()
+                    result_status = "loaded"
+                fixed_table_results[spec.table_name] = {"status": result_status, "uri": source_uri}
             for table_name in skipped_fixed_tables:
                 fixed_table_results[table_name] = {
                     "status": "skipped_unchanged",

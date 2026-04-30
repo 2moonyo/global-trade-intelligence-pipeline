@@ -45,6 +45,10 @@ ensure_ops_bigquery() {
   "$(python_bin)" warehouse/ops_store.py ensure-bigquery
 }
 
+run_seed_prerequisites() {
+  run_dbt seed
+}
+
 usage() {
   cat <<'EOF'
 Usage: scripts/run_dbt.sh <command>
@@ -73,6 +77,7 @@ case "${COMMAND}" in
     ;;
   build)
     ensure_ops_bigquery
+    run_seed_prerequisites
     run_dbt build
     ;;
   docs-generate)

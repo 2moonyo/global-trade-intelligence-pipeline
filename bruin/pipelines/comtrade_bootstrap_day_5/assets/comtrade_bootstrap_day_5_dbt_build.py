@@ -1,6 +1,7 @@
 """ @bruin
 
 name: capstone.comtrade_bootstrap_day_5_dbt_build
+uri: capstone://batch/comtrade_bootstrap_day_5/dbt_build
 image: python:3.12
 
 depends:

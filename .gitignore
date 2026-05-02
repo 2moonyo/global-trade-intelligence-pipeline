@@ -90,3 +90,5 @@ NEXT_STEPS.md
 notebooks/
 .github/workflows/
 /Documentation/
+
+.bruin.yml

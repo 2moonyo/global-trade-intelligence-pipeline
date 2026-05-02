@@ -3,6 +3,9 @@
 name: capstone.worldbank_energy_bootstrap_full_extract
 image: python:3.12
 
+depends:
+  - uri: capstone://batch/comtrade_bootstrap_day_6/dbt_build
+
 description: |
   Extract the full World Bank energy bootstrap window from 2015 through 2026.
 

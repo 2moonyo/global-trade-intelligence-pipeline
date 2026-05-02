@@ -3,6 +3,9 @@
 name: capstone.comtrade_bootstrap_day_5_extract
 image: python:3.12
 
+depends:
+  - uri: capstone://batch/comtrade_bootstrap_day_4/dbt_build
+
 description: |
   Run the self-contained Comtrade bootstrap day 5 monthly-history extraction lane.
 

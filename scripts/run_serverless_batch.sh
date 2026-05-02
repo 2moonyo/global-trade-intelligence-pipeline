@@ -14,6 +14,37 @@ USAGE
 fi
 shift 2
 
+CLI_EXECUTION_PROFILE=""
+CLI_TARGET_RUNTIME=""
+CLI_BRUIN_ENVIRONMENT=""
+CLI_BRUIN_PIPELINE_PATH=""
+PIPELINE_EXTRA_ARGS=()
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --execution-profile)
+      CLI_EXECUTION_PROFILE="${2:-}"
+      shift 2
+      ;;
+    --target-runtime)
+      CLI_TARGET_RUNTIME="${2:-}"
+      shift 2
+      ;;
+    --bruin-environment)
+      CLI_BRUIN_ENVIRONMENT="${2:-}"
+      shift 2
+      ;;
+    --bruin-pipeline-path)
+      CLI_BRUIN_PIPELINE_PATH="${2:-}"
+      shift 2
+      ;;
+    *)
+      PIPELINE_EXTRA_ARGS+=("$1")
+      shift
+      ;;
+  esac
+done
+
 export EXECUTION_PROFILE="${EXECUTION_PROFILE:-hybrid_vm_serverless}"
 export EXECUTION_RUNTIME="${EXECUTION_RUNTIME:-cloud_run}"
 export EXECUTION_PROFILE_PATH="${EXECUTION_PROFILE_PATH:-ops/execution_profiles.json}"
@@ -26,7 +57,23 @@ export AWS_EC2_METADATA_DISABLED="${AWS_EC2_METADATA_DISABLED:-true}"
 export TELEMETRY_OPTOUT="${TELEMETRY_OPTOUT:-true}"
 export PYTHONPATH="${PROJECT_ROOT}:${PYTHONPATH:-}"
 export UV_CACHE_DIR="${PROJECT_ROOT}/.uv-cache"
+export BRUIN_ENVIRONMENT="${BRUIN_ENVIRONMENT:-production}"
 export SERVERLESS_RUN_ID="${SERVERLESS_RUN_ID:-serverless_$(date -u +%Y%m%dT%H%M%SZ)_${DATASET_NAME}_${BATCH_ID}}"
+
+if [[ -n "${CLI_EXECUTION_PROFILE}" ]]; then
+  export EXECUTION_PROFILE="${CLI_EXECUTION_PROFILE}"
+fi
+if [[ -n "${CLI_TARGET_RUNTIME}" ]]; then
+  export TARGET_RUNTIME="${CLI_TARGET_RUNTIME}"
+else
+  export TARGET_RUNTIME="${TARGET_RUNTIME:-cloud_run}"
+fi
+if [[ -n "${CLI_BRUIN_ENVIRONMENT}" ]]; then
+  export BRUIN_ENVIRONMENT="${CLI_BRUIN_ENVIRONMENT}"
+fi
+if [[ -n "${CLI_BRUIN_PIPELINE_PATH}" ]]; then
+  export BRUIN_PIPELINE_PATH="${CLI_BRUIN_PIPELINE_PATH}"
+fi
 
 mkdir -p "${PROJECT_ROOT}/.uv-cache" "${PROJECT_ROOT}/data" "${PROJECT_ROOT}/logs" "${PROJECT_ROOT}/target" "${PROJECT_ROOT}/dbt_packages"
 
@@ -37,14 +84,23 @@ set +e
 python warehouse/serverless_preflight.py --dataset-name "${DATASET_NAME}" --batch-id "${BATCH_ID}"
 preflight_status=$?
 if [[ "${preflight_status}" -eq 0 ]]; then
-  scripts/run_pipeline.sh dataset-batch \
-    "${DATASET_NAME}" \
-    "${BATCH_ID}" \
-    --plan-path "${BATCH_PLAN_PATH}" \
-    --trigger-type cloud_run \
-    --bruin-pipeline-name "cloud_run.${DATASET_NAME}.${BATCH_ID}" \
-    "$@"
-  batch_status=$?
+  if [[ -n "${BRUIN_PIPELINE_PATH:-}" ]]; then
+    git init "${PROJECT_ROOT}" >/dev/null 2>&1 || true
+    bruin run \
+      --environment "${BRUIN_ENVIRONMENT}" \
+      --force \
+      "${BRUIN_PIPELINE_PATH}"
+    batch_status=$?
+  else
+    scripts/run_pipeline.sh dataset-batch \
+      "${DATASET_NAME}" \
+      "${BATCH_ID}" \
+      --plan-path "${BATCH_PLAN_PATH}" \
+      --trigger-type cloud_run \
+      --bruin-pipeline-name "cloud_run.${DATASET_NAME}.${BATCH_ID}" \
+      "${PIPELINE_EXTRA_ARGS[@]}"
+    batch_status=$?
+  fi
 else
   batch_status="${preflight_status}"
 fi

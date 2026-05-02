@@ -632,6 +632,73 @@ sudo docker compose --env-file /etc/capstone/pipeline.env \
   bruin run --environment production --force ./bruin/pipelines/dataset_batch
 ```
 
+### Explicit Weekly Bruin Pipelines
+
+The weekly non-Comtrade refreshes now have explicit Bruin pipelines:
+
+- `bruin/pipelines/portwatch_weekly_refresh`
+- `bruin/pipelines/brent_weekly_refresh`
+- `bruin/pipelines/fx_weekly_refresh`
+- `bruin/pipelines/events_incremental_recent`
+
+These pipelines support two runtime selection paths:
+
+- profile-driven default ownership from `ops/execution_profiles.json`
+- manual override through `--target-runtime vm` or `--target-runtime cloud_run`
+
+Default ownership behavior:
+
+- `EXECUTION_PROFILE=all_vm`: all four weekly pipelines stay on the VM
+- `EXECUTION_PROFILE=hybrid_vm_serverless`: these four weekly pipelines default to Cloud Run
+
+Run one explicit weekly pipeline directly on the current machine or VM:
+
+```bash
+EXECUTION_PROFILE=all_vm \
+TARGET_RUNTIME=vm \
+bruin run --environment production --force ./bruin/pipelines/portwatch_weekly_refresh
+```
+
+Resolve runtime ownership automatically and run or dispatch through the helper:
+
+```bash
+python warehouse/run_bruin_pipeline.py \
+  --batch-id portwatch_weekly_refresh \
+  --execution-profile hybrid_vm_serverless \
+  --cloud-run-region "$REGION" \
+  --wait
+```
+
+Force the same batch to stay on the VM even when the active profile would normally route it to Cloud Run:
+
+```bash
+python warehouse/run_bruin_pipeline.py \
+  --batch-id portwatch_weekly_refresh \
+  --execution-profile hybrid_vm_serverless \
+  --target-runtime vm \
+  --environment production
+```
+
+Force a one-off Cloud Run execution even when the active profile is VM-first:
+
+```bash
+python warehouse/run_bruin_pipeline.py \
+  --batch-id portwatch_weekly_refresh \
+  --execution-profile all_vm \
+  --target-runtime cloud_run \
+  --cloud-run-region "$REGION" \
+  --wait
+```
+
+Equivalent manual commands for the four explicit weekly pipelines:
+
+| Batch | Direct Bruin run on VM/current runtime | Profile-aware helper to dispatch or run | Force Cloud Run |
+| --- | --- | --- | --- |
+| `portwatch_weekly_refresh` | `EXECUTION_PROFILE=all_vm TARGET_RUNTIME=vm bruin run --environment production --force ./bruin/pipelines/portwatch_weekly_refresh` | `python warehouse/run_bruin_pipeline.py --batch-id portwatch_weekly_refresh --execution-profile hybrid_vm_serverless --cloud-run-region "$REGION" --wait` | `python warehouse/run_bruin_pipeline.py --batch-id portwatch_weekly_refresh --execution-profile all_vm --target-runtime cloud_run --cloud-run-region "$REGION" --wait` |
+| `brent_weekly_refresh` | `EXECUTION_PROFILE=all_vm TARGET_RUNTIME=vm bruin run --environment production --force ./bruin/pipelines/brent_weekly_refresh` | `python warehouse/run_bruin_pipeline.py --batch-id brent_weekly_refresh --execution-profile hybrid_vm_serverless --cloud-run-region "$REGION" --wait` | `python warehouse/run_bruin_pipeline.py --batch-id brent_weekly_refresh --execution-profile all_vm --target-runtime cloud_run --cloud-run-region "$REGION" --wait` |
+| `fx_weekly_refresh` | `EXECUTION_PROFILE=all_vm TARGET_RUNTIME=vm bruin run --environment production --force ./bruin/pipelines/fx_weekly_refresh` | `python warehouse/run_bruin_pipeline.py --batch-id fx_weekly_refresh --execution-profile hybrid_vm_serverless --cloud-run-region "$REGION" --wait` | `python warehouse/run_bruin_pipeline.py --batch-id fx_weekly_refresh --execution-profile all_vm --target-runtime cloud_run --cloud-run-region "$REGION" --wait` |
+| `events_incremental_recent` | `EXECUTION_PROFILE=all_vm TARGET_RUNTIME=vm bruin run --environment production --force ./bruin/pipelines/events_incremental_recent` | `python warehouse/run_bruin_pipeline.py --batch-id events_incremental_recent --execution-profile hybrid_vm_serverless --cloud-run-region "$REGION" --wait` | `python warehouse/run_bruin_pipeline.py --batch-id events_incremental_recent --execution-profile all_vm --target-runtime cloud_run --cloud-run-region "$REGION" --wait` |
+
 If Bruin reports `no git repository found` inside the container, initialize a temporary git root in `/workspace` before the proof run:
 
 ```bash
@@ -753,6 +820,7 @@ Current Bruin shape:
 - `bruin/pipelines/dataset_batch`: generic wrapper for one batch from `ops/batch_plan.json`
 - `bruin/pipelines/schedule_lane_queue`: generic wrapper for one schedule lane
 - `bruin/pipelines/monthly_refresh`: coarse wrapper
+- explicit weekly pipelines for PortWatch, Brent, FX, and Events refreshes
 - stage-level pipelines for Comtrade days, PortWatch phase 1, Brent phase 1, FX phase 1, and World Bank full bootstrap
 
 Why Bruin is not the only runner yet:

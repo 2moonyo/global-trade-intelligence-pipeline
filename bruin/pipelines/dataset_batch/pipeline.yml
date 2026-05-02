@@ -1,3 +1,26 @@
 name: dataset_batch
 start_date: "2026-04-11"
 catchup: false
+retries: 0
+tags: ["ops", "batch", "orchestration"]
+domains: ["orchestration"]
+meta:
+  retry_owner: ops_ledger
+  orchestration_source: bruin
+variables:
+  dataset_name:
+    type: string
+    default: "portwatch"
+  batch_id:
+    type: string
+    default: "portwatch_bootstrap_phase_1"
+  batch_plan_path:
+    type: string
+    default: "ops/batch_plan.json"
+  start_at_task:
+    type: string
+    default: ""
+  start_at_step_order:
+    type: integer
+    minimum: 0
+    default: 0

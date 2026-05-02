@@ -51,20 +51,22 @@ def main() -> None:
 
     profile = get_execution_profile(profile_name=args.execution_profile)
     runtime = args.execution_runtime or current_runtime(default="vm")
-    schedule_batches = [batch for batch in all_schedule_batches if profile.owns_dataset(batch.dataset_name, runtime)]
+    schedule_batches = [
+        batch for batch in all_schedule_batches if profile.owns_batch(batch.batch_id, batch.dataset_name, runtime)
+    ]
     runtime_skipped_batches = [
         _queue_summary_row(
             batch.batch_id,
             "skipped_runtime_owner",
             {
                 "dataset_name": batch.dataset_name,
-                "owner_runtime": profile.runtime_for_dataset(batch.dataset_name),
+                "owner_runtime": profile.runtime_for_batch(batch.batch_id, batch.dataset_name),
                 "current_runtime": runtime,
                 "execution_profile": profile.name,
             },
         )
         for batch in all_schedule_batches
-        if not profile.owns_dataset(batch.dataset_name, runtime)
+        if not profile.owns_batch(batch.batch_id, batch.dataset_name, runtime)
     ]
     if not schedule_batches:
         payload = {

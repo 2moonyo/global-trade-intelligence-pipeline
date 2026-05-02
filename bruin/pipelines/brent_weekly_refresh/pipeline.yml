@@ -1,0 +1,19 @@
+name: brent_weekly_refresh
+schedule: "35 5 * * 1"
+start_date: "2026-04-11"
+catchup: false
+retries: 2
+tags: ["ingestion", "weekly_refresh", "brent"]
+domains: ["energy"]
+meta:
+  batch_id: brent_weekly_refresh
+  orchestration_source: explicit_assets
+default:
+  rerun_cooldown: 120
+variables:
+  execution_profile:
+    type: string
+    default: ""
+  target_runtime:
+    type: string
+    default: ""

@@ -17,7 +17,7 @@ if str(PROJECT_ROOT) not in sys.path:
 from ingest.common.cloud_config import GcpCloudConfig
 from ingest.common.gcs_io import download_file
 from ingest.common.run_artifacts import json_ready
-from warehouse.execution_profiles import current_runtime, runtime_for_dataset
+from warehouse.execution_profiles import current_runtime, runtime_for_batch, runtime_for_dataset
 
 DIM_COUNTRY_LOCAL_PATH = PROJECT_ROOT / "data" / "silver" / "comtrade" / "dimensions" / "dim_country.parquet"
 EVENTS_SEED_PATH = PROJECT_ROOT / "data" / "seed" / "events" / "events_seed_extended_2015.csv"
@@ -37,15 +37,25 @@ def _bigquery_imports():
     return bigquery
 
 
-def _assert_runtime_owner(dataset_name: str) -> dict[str, Any]:
+def _assert_runtime_owner(dataset_name: str, batch_id: str | None) -> dict[str, Any]:
     runtime = current_runtime(default="cloud_run")
-    owner_runtime = runtime_for_dataset(dataset_name)
+    owner_runtime = (
+        runtime_for_batch(batch_id, dataset_name)
+        if batch_id
+        else runtime_for_dataset(dataset_name)
+    )
     if owner_runtime != runtime:
         raise RuntimeError(
-            f"Dataset {dataset_name!r} is owned by runtime {owner_runtime!r} in EXECUTION_PROFILE "
-            f"{os.getenv('EXECUTION_PROFILE', 'all_vm')!r}, but this job is running as {runtime!r}."
+            f"Batch {batch_id!r} for dataset {dataset_name!r} is owned by runtime {owner_runtime!r} "
+            f"in EXECUTION_PROFILE {os.getenv('EXECUTION_PROFILE', 'all_vm')!r}, but this job is "
+            f"running as {runtime!r}."
         )
-    return {"dataset_name": dataset_name, "execution_runtime": runtime, "owner_runtime": owner_runtime}
+    return {
+        "dataset_name": dataset_name,
+        "batch_id": batch_id,
+        "execution_runtime": runtime,
+        "owner_runtime": owner_runtime,
+    }
 
 
 def _hydrate_dim_country_from_gcs(*, config: GcpCloudConfig, destination_path: Path) -> dict[str, Any]:
@@ -115,7 +125,7 @@ def run_preflight(*, dataset_name: str, batch_id: str | None, force: bool) -> di
         "started_at": _utc_now_iso(),
         "dataset_name": dataset_name,
         "batch_id": batch_id,
-        "runtime_owner": _assert_runtime_owner(dataset_name),
+        "runtime_owner": _assert_runtime_owner(dataset_name, batch_id),
     }
 
     if dataset_name == "worldbank_energy":

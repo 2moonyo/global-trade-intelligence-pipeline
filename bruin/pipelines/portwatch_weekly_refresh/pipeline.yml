@@ -1,0 +1,19 @@
+name: portwatch_weekly_refresh
+schedule: "15 5 * * 1"
+start_date: "2026-04-11"
+catchup: false
+retries: 2
+tags: ["ingestion", "weekly_refresh", "portwatch"]
+domains: ["maritime"]
+meta:
+  batch_id: portwatch_weekly_refresh
+  orchestration_source: explicit_assets
+default:
+  rerun_cooldown: 180
+variables:
+  execution_profile:
+    type: string
+    default: ""
+  target_runtime:
+    type: string
+    default: ""

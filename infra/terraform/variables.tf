@@ -252,6 +252,7 @@ variable "serverless_scheduled_batches" {
     batch_id              = string
     schedule              = string
     description           = string
+    bruin_pipeline_path   = optional(string)
     time_zone             = optional(string)
     timeout               = optional(string)
     cpu                   = optional(string)
@@ -264,36 +265,40 @@ variable "serverless_scheduled_batches" {
   }))
   default = {
     events_incremental_recent = {
-      job_name       = "capstone-events-incremental"
-      scheduler_name = "capstone-events-incremental"
-      dataset_name   = "events"
-      batch_id       = "events_incremental_recent"
-      schedule       = "0 5 * * *"
-      description    = "Run the Events incremental recent batch as a Cloud Run Job."
+      job_name            = "capstone-events-incremental"
+      scheduler_name      = "capstone-events-incremental"
+      dataset_name        = "events"
+      batch_id            = "events_incremental_recent"
+      schedule            = "0 5 * * *"
+      description         = "Run the Events incremental recent batch as a Cloud Run Job."
+      bruin_pipeline_path = "bruin/pipelines/events_incremental_recent"
     }
     portwatch_weekly_refresh = {
-      job_name       = "capstone-portwatch-weekly"
-      scheduler_name = "capstone-portwatch-weekly"
-      dataset_name   = "portwatch"
-      batch_id       = "portwatch_weekly_refresh"
-      schedule       = "15 5 * * 1"
-      description    = "Run the PortWatch weekly refresh batch as a Cloud Run Job."
+      job_name            = "capstone-portwatch-weekly"
+      scheduler_name      = "capstone-portwatch-weekly"
+      dataset_name        = "portwatch"
+      batch_id            = "portwatch_weekly_refresh"
+      schedule            = "15 5 * * 1"
+      description         = "Run the PortWatch weekly refresh batch as a Cloud Run Job."
+      bruin_pipeline_path = "bruin/pipelines/portwatch_weekly_refresh"
     }
     brent_weekly_refresh = {
-      job_name       = "capstone-brent-weekly"
-      scheduler_name = "capstone-brent-weekly"
-      dataset_name   = "brent"
-      batch_id       = "brent_weekly_refresh"
-      schedule       = "35 5 * * 1"
-      description    = "Run the Brent weekly refresh batch as a Cloud Run Job."
+      job_name            = "capstone-brent-weekly"
+      scheduler_name      = "capstone-brent-weekly"
+      dataset_name        = "brent"
+      batch_id            = "brent_weekly_refresh"
+      schedule            = "35 5 * * 1"
+      description         = "Run the Brent weekly refresh batch as a Cloud Run Job."
+      bruin_pipeline_path = "bruin/pipelines/brent_weekly_refresh"
     }
     fx_weekly_refresh = {
-      job_name       = "capstone-fx-weekly"
-      scheduler_name = "capstone-fx-weekly"
-      dataset_name   = "fx"
-      batch_id       = "fx_weekly_refresh"
-      schedule       = "55 5 * * 1"
-      description    = "Run the FX weekly refresh batch as a Cloud Run Job."
+      job_name            = "capstone-fx-weekly"
+      scheduler_name      = "capstone-fx-weekly"
+      dataset_name        = "fx"
+      batch_id            = "fx_weekly_refresh"
+      schedule            = "55 5 * * 1"
+      description         = "Run the FX weekly refresh batch as a Cloud Run Job."
+      bruin_pipeline_path = "bruin/pipelines/fx_weekly_refresh"
     }
     worldbank_energy_yearly_refresh = {
       job_name       = "capstone-worldbank-energy-yearly"

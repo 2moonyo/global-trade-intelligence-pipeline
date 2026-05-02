@@ -1,3 +1,11 @@
 name: worldbank_energy_bootstrap_full
 start_date: "2026-04-11"
 catchup: false
+retries: 2
+tags: ["ingestion", "bootstrap", "worldbank"]
+domains: ["energy"]
+meta:
+  batch_id: worldbank_energy_bootstrap_full
+  orchestration_source: explicit_assets
+default:
+  rerun_cooldown: 300

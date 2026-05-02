@@ -24,12 +24,19 @@ class ExecutionProfile:
     description: str
     default_runtime: str
     datasets: dict[str, str]
+    batches: dict[str, str]
 
     def runtime_for_dataset(self, dataset_name: str) -> str:
         return self.datasets.get(dataset_name, self.default_runtime)
 
     def owns_dataset(self, dataset_name: str, runtime: str) -> bool:
         return self.runtime_for_dataset(dataset_name) == runtime
+
+    def runtime_for_batch(self, batch_id: str, dataset_name: str) -> str:
+        return self.batches.get(batch_id, self.runtime_for_dataset(dataset_name))
+
+    def owns_batch(self, batch_id: str, dataset_name: str, runtime: str) -> bool:
+        return self.runtime_for_batch(batch_id, dataset_name) == runtime
 
 
 def resolve_execution_profile_path(path: str | None = None) -> Path:
@@ -72,11 +79,24 @@ def load_profiles(path: str | None = None) -> tuple[str, dict[str, ExecutionProf
                 f"Profile {profile_name!r} has unsupported dataset runtimes {unsupported}; "
                 f"supported: {sorted(SUPPORTED_RUNTIMES)}"
             )
+        raw_batches = raw_profile.get("batches") or {}
+        if not isinstance(raw_batches, dict):
+            raise ValueError(f"Profile {profile_name!r} batches must be an object")
+        batches = {str(batch_id): str(runtime) for batch_id, runtime in raw_batches.items()}
+        unsupported_batch_runtimes = sorted(
+            {runtime for runtime in batches.values() if runtime not in SUPPORTED_RUNTIMES}
+        )
+        if unsupported_batch_runtimes:
+            raise ValueError(
+                f"Profile {profile_name!r} has unsupported batch runtimes {unsupported_batch_runtimes}; "
+                f"supported: {sorted(SUPPORTED_RUNTIMES)}"
+            )
         profiles[str(profile_name)] = ExecutionProfile(
             name=str(profile_name),
             description=str(raw_profile.get("description") or ""),
             default_runtime=default_runtime,
             datasets=datasets,
+            batches=batches,
         )
 
     if default_profile not in profiles:
@@ -120,6 +140,16 @@ def runtime_for_dataset(
     return get_execution_profile(profile_name=profile_name, path=path).runtime_for_dataset(dataset_name)
 
 
+def runtime_for_batch(
+    batch_id: str,
+    dataset_name: str,
+    *,
+    profile_name: str | None = None,
+    path: str | None = None,
+) -> str:
+    return get_execution_profile(profile_name=profile_name, path=path).runtime_for_batch(batch_id, dataset_name)
+
+
 def batch_owned_by_runtime(
     batch: BatchDefinition,
     *,
@@ -129,7 +159,7 @@ def batch_owned_by_runtime(
 ) -> bool:
     resolved_runtime = runtime or current_runtime()
     profile = get_execution_profile(profile_name=profile_name, path=path)
-    return profile.owns_dataset(batch.dataset_name, resolved_runtime)
+    return profile.owns_batch(batch.batch_id, batch.dataset_name, resolved_runtime)
 
 
 def filter_batches_for_runtime(
@@ -141,7 +171,7 @@ def filter_batches_for_runtime(
 ) -> list[BatchDefinition]:
     resolved_runtime = runtime or current_runtime()
     profile = get_execution_profile(profile_name=profile_name, path=path)
-    return [batch for batch in batches if profile.owns_dataset(batch.dataset_name, resolved_runtime)]
+    return [batch for batch in batches if profile.owns_batch(batch.batch_id, batch.dataset_name, resolved_runtime)]
 
 
 def _build_arg_parser() -> argparse.ArgumentParser:
@@ -166,6 +196,7 @@ def main() -> None:
         "description": profile.description,
         "default_runtime": profile.default_runtime,
         "datasets": profile.datasets,
+        "batches_map": profile.batches,
         "profile_path": str(resolve_execution_profile_path(args.profile_path)),
     }
 
@@ -174,7 +205,7 @@ def main() -> None:
         batches = sorted(plan.values(), key=lambda item: (item.schedule_lane, item.run_order, item.batch_id))
         rows = []
         for batch in batches:
-            owner = profile.runtime_for_dataset(batch.dataset_name)
+            owner = profile.runtime_for_batch(batch.batch_id, batch.dataset_name)
             if runtime_filter and owner != runtime_filter:
                 continue
             rows.append(
@@ -200,6 +231,10 @@ def main() -> None:
         if runtime_filter and runtime != runtime_filter:
             continue
         print(f"dataset {dataset}: {runtime}")
+    for batch_id, runtime in sorted(profile.batches.items()):
+        if runtime_filter and runtime != runtime_filter:
+            continue
+        print(f"batch {batch_id}: {runtime}")
     for row in payload.get("batches", []):
         print(f"batch {row['batch_id']} ({row['dataset_name']}, lane={row['schedule_lane']}): {row['runtime']}")
 

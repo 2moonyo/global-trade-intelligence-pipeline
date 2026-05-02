@@ -24,6 +24,8 @@ locals {
     POSTGRES_SCHEMA                = "ops"
     AWS_EC2_METADATA_DISABLED      = "true"
     TELEMETRY_OPTOUT               = "true"
+    SERVERLESS_REGION              = local.serverless_region
+    BRUIN_ENVIRONMENT              = "production"
   }
 
   serverless_runtime_sa_member = local.serverless_active ? "serviceAccount:${google_service_account.serverless_runtime[0].email}" : null
@@ -173,7 +175,12 @@ resource "google_cloud_run_v2_job" "serverless_dataset_batch" {
         }
 
         dynamic "env" {
-          for_each = local.serverless_runtime_env
+          for_each = merge(
+            local.serverless_runtime_env,
+            try(each.value.bruin_pipeline_path, null) == null
+            ? {}
+            : { BRUIN_PIPELINE_PATH = each.value.bruin_pipeline_path },
+          )
           content {
             name  = env.key
             value = env.value

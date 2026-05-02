@@ -1,6 +1,7 @@
 """ @bruin
 
 name: capstone.worldbank_energy_bootstrap_full_dbt_build
+uri: capstone://batch/worldbank_energy_bootstrap_full/dbt_build
 image: python:3.12
 
 depends:

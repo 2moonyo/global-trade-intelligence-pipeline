@@ -1,6 +1,7 @@
 """ @bruin
 
 name: capstone.portwatch_bootstrap_phase_1_dbt_build
+uri: capstone://batch/portwatch_bootstrap_phase_1/dbt_build
 image: python:3.12
 
 depends:

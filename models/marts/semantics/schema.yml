@@ -1,6 +1,72 @@
 version: 2
 
 models:
+  - name: mart_reporter_brent_fx_trade_correlation_monthly
+    description: Monthly reporter-level semantic mart combining Brent, FX, and reporter trade month-over-month series for dashboard correlation views.
+    columns:
+      - name: month_start_date
+        description: First calendar day of the reporting month used for time-series joins and rolling windows.
+        tests:
+          - not_null
+
+      - name: year_month
+        description: Canonical month label in YYYY-MM format for display and join alignment.
+        tests:
+          - not_null
+
+      - name: reporter_iso3
+        description: ISO3 code for the reporting country that defines the reporter grain of the mart.
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_country')
+                field: iso3
+
+      - name: reporter_country_name
+        description: Standardized reporter country name for dashboard labels and filters.
+        tests:
+          - not_null
+
+      - name: currency_view
+        description: FX quote orientation used for the joined monthly macro series.
+        tests:
+          - not_null
+
+      - name: base_currency_code
+        description: Base currency code carried through from the macro monthly features mart.
+        tests:
+          - not_null
+
+      - name: fx_currency_code
+        description: FX currency code carried through from the macro monthly features mart.
+        tests:
+          - not_null
+
+      - name: reporter_total_trade_value_usd
+        description: Total monthly reporter trade value in USD across all partners and commodities.
+
+      - name: reporter_food_trade_value_usd
+        description: Total monthly reporter trade value in USD limited to food-flagged commodities.
+
+      - name: reporter_oil_trade_value_usd
+        description: Total monthly reporter trade value in USD limited to oil proxy commodity codes.
+
+      - name: mom_change_total_trade_pct
+        description: Reporter month-over-month percentage change in total trade value, populated only for contiguous month pairs.
+
+      - name: mom_change_food_trade_pct
+        description: Reporter month-over-month percentage change in food trade value, populated only for contiguous month pairs.
+
+      - name: mom_change_oil_trade_pct
+        description: Reporter month-over-month percentage change in oil trade value, populated only for contiguous month pairs.
+
+      - name: rolling_6m_corr_brent_fx_mom
+        description: Six-month rolling correlation between Brent month-over-month change and FX month-over-month change at reporter and currency-view grain.
+
+      - name: rolling_12m_corr_brent_fx_mom
+        description: Twelve-month rolling correlation between Brent month-over-month change and FX month-over-month change at reporter and currency-view grain.
+
   - name: mart_dashboard_global_trade_overview
     description: Monthly reporter-level semantic mart built on a full reporter-month coverage grid for Page 1 global trade scorecards, trend lines, top reporters, and reporting completeness visuals.
     columns:

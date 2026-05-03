@@ -1,0 +1,29 @@
+version: 2
+
+seeds:
+  - name: reporters
+    description: Comtrade reporter metadata seed copied from the curated project metadata directory and used as the dbt-layer authority for reporter ISO2/ISO3, group status, and current-vs-expired reporter handling.
+    columns:
+      - name: reporterCode
+        description: Numeric Comtrade reporter code.
+        tests:
+          - not_null
+
+      - name: reporterDesc
+        description: Human-readable reporter label from Comtrade metadata.
+        tests:
+          - not_null
+
+      - name: reporterCodeIsoAlpha2
+        description: Source ISO Alpha-2 code when provided by Comtrade metadata.
+
+      - name: reporterCodeIsoAlpha3
+        description: Source ISO Alpha-3 code when provided by Comtrade metadata.
+        tests:
+          - not_null
+
+      - name: isGroup
+        description: Source group flag identifying aggregate or pseudo geographies.
+
+      - name: entryExpiredDate
+        description: Optional source expiration timestamp used to identify historical reporter records that should not appear in default map marts.

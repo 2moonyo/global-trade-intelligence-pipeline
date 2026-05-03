@@ -1,7 +1,7 @@
 select
   reporter_iso3,
   month_start_date,
-  count(*) as row_count
+  latitude
 from {{ ref('mart_reporter_month_exposure_map') }}
-group by 1, 2
-having count(*) > 1
+where latitude is not null
+  and (latitude < -90 or latitude > 90)

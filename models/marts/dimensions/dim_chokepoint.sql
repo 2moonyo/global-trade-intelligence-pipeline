@@ -17,7 +17,16 @@ raw_chokepoints as (
     zone_of_influence_wkb,
     chokepoint_point_geog,
     zone_of_influence_geog,
-    geo_point
+    geo_point,
+    case
+      when longitude is not null and latitude is not null
+        then concat(
+          cast(latitude as {{ dbt.type_string() }}),
+          ',',
+          cast(longitude as {{ dbt.type_string() }})
+        )
+      else null
+    end as lat_lng_string
   from {{ ref('stg_dim_chokepoint') }}
 ),
 event_chokepoints as (
@@ -70,6 +79,7 @@ select
   rc.chokepoint_point_geog,
   rc.zone_of_influence_geog,
   rc.geo_point,
+  rc.lat_lng_string,
   b.portwatch_source_chokepoint_id,
   b.latest_tanker_share,
   b.latest_container_share,

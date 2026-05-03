@@ -39,6 +39,9 @@ joined as (
     bm.bloc_total_trade_value_usd,
     bm.bloc_food_trade_value_usd,
     bm.bloc_oil_trade_value_usd,
+    bm.bloc_reporting_coverage_pct,
+    bm.bloc_coverage_status,
+    bm.bloc_dashboard_warning,
     bm.mom_change_total_trade_pct,
     bm.mom_change_food_trade_pct,
     bm.mom_change_oil_trade_pct
@@ -65,9 +68,39 @@ select
   bloc_total_trade_value_usd,
   bloc_food_trade_value_usd,
   bloc_oil_trade_value_usd,
+  bloc_reporting_coverage_pct,
+  bloc_coverage_status,
+  bloc_dashboard_warning,
   mom_change_total_trade_pct,
   mom_change_food_trade_pct,
   mom_change_oil_trade_pct,
+  case
+    when brent_mom_change is null then false
+    when abs(brent_mom_change) >= 0.05 then true
+    else false
+  end as is_oil_shock_5pct,
+  case
+    when brent_mom_change is null then false
+    when abs(brent_mom_change) >= 0.10 then true
+    else false
+  end as is_oil_shock_10pct,
+  case
+    when mom_change_oil_trade_pct is null then false
+    when coalesce(bloc_reporting_coverage_pct, 0) >= 0.70 then true
+    else false
+  end as oil_trade_change_reliability_flag,
+  case
+    when mom_change_food_trade_pct is null then false
+    when coalesce(bloc_reporting_coverage_pct, 0) >= 0.70 then true
+    else false
+  end as food_trade_change_reliability_flag,
+  case
+    when bloc_reporting_coverage_pct is null then 'Bloc coverage metadata is unavailable for this month.'
+    when bloc_reporting_coverage_pct < 0.40 then 'Bloc reporting coverage is poor; trade correlation signals are low confidence.'
+    when mom_change_food_trade_pct is null or mom_change_oil_trade_pct is null then 'Trade change inputs require contiguous monthly data and sufficient reporter coverage.'
+    when brent_mom_change is null or fx_mom_change is null then 'Macro comparison inputs are incomplete for this month.'
+    else null
+  end as data_quality_warning,
   {{ rolling_corr(
     'brent_mom_change',
     'fx_mom_change',

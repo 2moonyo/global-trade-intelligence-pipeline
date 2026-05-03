@@ -102,6 +102,15 @@ global_bounds as (
   select max(month_start_date) as latest_month_start_date
   from bloc_trade
 ),
+coverage as (
+  select
+    bloc_code,
+    month_start_date,
+    bloc_reporting_coverage_pct,
+    bloc_coverage_status,
+    bloc_dashboard_warning
+  from {{ ref('mart_trade_bloc_month_coverage') }}
+),
 with_macro as (
   select
     bt.bloc_code,
@@ -125,6 +134,9 @@ with_macro as (
     bt.bloc_oil_trade_value_usd,
     bt.bloc_oil_import_value_usd,
     bt.bloc_oil_export_value_usd,
+    cov.bloc_reporting_coverage_pct,
+    cov.bloc_coverage_status,
+    cov.bloc_dashboard_warning,
     brent.brent_price_usd,
     brent.brent_mom_change,
     brent.wti_price_usd,
@@ -136,6 +148,9 @@ with_macro as (
   from bloc_trade as bt
   left join member_counts as mc
     on bt.bloc_code = mc.bloc_code
+  left join coverage as cov
+    on bt.bloc_code = cov.bloc_code
+   and bt.month_start_date = cov.month_start_date
   left join brent_monthly as brent
     on bt.year_month = brent.year_month
 ),
@@ -187,6 +202,9 @@ select
   wp.bloc_oil_trade_value_usd,
   wp.bloc_oil_import_value_usd,
   wp.bloc_oil_export_value_usd,
+  wp.bloc_reporting_coverage_pct,
+  wp.bloc_coverage_status,
+  wp.bloc_dashboard_warning,
   wp.brent_price_usd,
   wp.brent_mom_change,
   wp.wti_price_usd,

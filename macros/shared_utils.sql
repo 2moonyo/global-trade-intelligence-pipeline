@@ -193,7 +193,32 @@
   end
 {%- endmacro %}
 
-{% macro canonicalize_chokepoint_name(name_expr) -%}
+{% macro looker_country_name(name_expr, iso3_expr='null') -%}
+  {%- set cleaned_name = clean_label_text(name_expr) -%}
+  {%- set canonical_iso3 = canonical_country_iso3(iso3_expr) -%}
+  case
+    when {{ canonical_iso3 }} = 'USA' then 'United States'
+    when {{ canonical_iso3 }} = 'RUS' then 'Russia'
+    when {{ canonical_iso3 }} = 'TUR' then 'Turkey'
+    when {{ canonical_iso3 }} = 'VNM' then 'Vietnam'
+    when {{ canonical_iso3 }} = 'KOR' then 'South Korea'
+    when {{ canonical_iso3 }} = 'COD' then 'Democratic Republic of the Congo'
+    when {{ canonical_iso3 }} = 'HKG' then 'Hong Kong'
+    when {{ canonical_iso3 }} = 'MAC' then 'Macao'
+    when {{ cleaned_name }} is null then null
+    when lower({{ cleaned_name }}) in ('turkiye', 'türkiye') then 'Turkey'
+    when lower({{ cleaned_name }}) = 'russian federation' then 'Russia'
+    when lower({{ cleaned_name }}) in ('usa', 'u.s.a.', 'united states of america') then 'United States'
+    when lower({{ cleaned_name }}) = 'viet nam' then 'Vietnam'
+    when lower({{ cleaned_name }}) = 'rep. of korea' then 'South Korea'
+    when lower({{ cleaned_name }}) = 'dem. rep. of the congo' then 'Democratic Republic of the Congo'
+    when lower({{ cleaned_name }}) = 'china, hong kong sar' then 'Hong Kong'
+    when lower({{ cleaned_name }}) = 'china, macao sar' then 'Macao'
+    else {{ canonical_country_name(name_expr, iso3_expr) }}
+  end
+{%- endmacro %}
+
+{% macro canonical_chokepoint_key(name_expr) -%}
   {%- set cleaned_name = clean_label_text(name_expr) -%}
   case
     when {{ cleaned_name }} is null then null
@@ -209,8 +234,7 @@
     when lower({{ cleaned_name }}) in ('panama', 'panama canal') then 'Panama Canal'
     when lower({{ cleaned_name }}) in ('malacca', 'malacca strait', 'strait of malacca') then 'Malacca Strait'
     when lower({{ cleaned_name }}) in ('gibraltar', 'gibraltar strait', 'strait of gibraltar') then 'Gibraltar Strait'
-    when lower({{ cleaned_name }}) = 'suez' then 'Suez Canal'
-    when lower({{ cleaned_name }}) = 'suez canal' then 'Suez Canal'
+    when lower({{ cleaned_name }}) in ('suez', 'suez canal') then 'Suez Canal'
     when lower({{ cleaned_name }}) = 'cape of good hope' then 'Cape of Good Hope'
     when lower({{ cleaned_name }}) = 'turkish straits' then 'Turkish Straits'
     when lower({{ cleaned_name }}) = 'open sea' then 'Open Sea'
@@ -218,8 +242,18 @@
   end
 {%- endmacro %}
 
+{% macro canonicalize_chokepoint_name(name_expr) -%}
+  case
+    when {{ canonical_chokepoint_key(name_expr) }} is null then null
+    when {{ canonical_chokepoint_key(name_expr) }} = 'Bab el-Mandeb' then 'Bab el-Mandeb Strait'
+    when {{ canonical_chokepoint_key(name_expr) }} = 'Malacca Strait' then 'Strait of Malacca'
+    when {{ canonical_chokepoint_key(name_expr) }} = 'Gibraltar Strait' then 'Strait of Gibraltar'
+    else {{ canonical_chokepoint_key(name_expr) }}
+  end
+{%- endmacro %}
+
 {% macro canonical_chokepoint_id(name_expr) -%}
-  {{ hash_text("lower(" ~ canonicalize_chokepoint_name(name_expr) ~ ")") }}
+  {{ hash_text("lower(" ~ canonical_chokepoint_key(name_expr) ~ ")") }}
 {%- endmacro %}
 
 {% macro geography_from_wkb(expression) -%}

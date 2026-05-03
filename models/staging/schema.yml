@@ -404,6 +404,41 @@ models:
       - name: is_country_map_eligible
         description: True when the row is a canonical country suitable for Looker Studio Geo Country rendering.
 
+  - name: stg_reporters
+    description: Seed-backed Comtrade reporter metadata cleaned for ISO joins, current/historical status handling, and Looker Studio country map compatibility.
+    columns:
+      - name: reporter_code
+        description: Numeric Comtrade reporter code from the metadata seed.
+        tests:
+          - not_null
+
+      - name: country_name_raw
+        description: Raw reporter description from Comtrade metadata before Looker-specific display cleanup.
+        tests:
+          - not_null
+
+      - name: country_name_looker
+        description: Looker-safe country display name derived from the raw reporter description and ISO3 code.
+        tests:
+          - not_null
+
+      - name: country_iso2
+        description: Preferred ISO2 country code for filled-map rendering in Looker Studio.
+
+      - name: country_iso3
+        description: Canonical ISO3 code retained for analytical joins and mart relationships.
+        tests:
+          - not_null
+
+      - name: is_group
+        description: True when the Comtrade reporter row represents an aggregate or pseudo geography rather than a country.
+
+      - name: is_current
+        description: True when the reporter row is not expired as of the dbt run date.
+
+      - name: is_map_eligible
+        description: True when the reporter row is a current non-group country with usable ISO2 and ISO3 codes for Looker Studio country maps.
+
   - name: stg_dim_time
     description: >
       Canonical monthly time dimension generated in dbt from the observed month

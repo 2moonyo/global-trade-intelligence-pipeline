@@ -1,7 +1,7 @@
 select
-  reporter_iso3,
+  bloc_code,
   month_start_date,
   count(*) as row_count
-from {{ ref('mart_reporter_month_exposure_map') }}
+from {{ ref('mart_trade_bloc_month_coverage') }}
 group by 1, 2
 having count(*) > 1

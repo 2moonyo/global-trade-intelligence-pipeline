@@ -1,15 +1,21 @@
 -- Looker Studio support mart for the Page 4 reporter-country exposure map.
--- Grain: one row per reporter_iso3, using the reporter's latest available exposure month.
+-- Grain: one row per reporter_iso3 + month_start_date.
 
 with eligible_reporters as (
   select
     iso3,
     country_name,
+    country_name_looker,
+    country_iso2,
     region,
     subregion,
     continent,
     is_eu,
-    is_oecd
+    is_oecd,
+    latitude,
+    longitude,
+    geo_point,
+    lat_lng_string
   from {{ ref('dim_country') }}
   where is_country_map_eligible
 ),
@@ -104,12 +110,18 @@ top_chokepoint as (
 country_snapshot as (
   select
     ac.reporter_iso3,
+    er.country_iso2 as reporter_iso2,
     er.country_name as reporter_country_name,
+    er.country_name_looker as reporter_country_name_looker,
     er.region as reporter_region,
     er.subregion as reporter_subregion,
     er.continent as reporter_continent,
     er.is_eu as reporter_is_eu,
     er.is_oecd as reporter_is_oecd,
+    er.latitude,
+    er.longitude,
+    er.geo_point,
+    er.lat_lng_string,
     ac.period,
     ac.year_month,
     ac.month_start_date,
@@ -129,11 +141,10 @@ country_snapshot as (
     tc.top_exposed_chokepoint_trade_value_usd,
     tc.top_exposed_chokepoint_trade_share_of_reporter_total,
     tc.top_exposed_chokepoint_stress_index_weighted,
-    true as latest_month_flag,
     row_number() over (
       partition by ac.reporter_iso3
       order by ac.month_start_date desc, ac.period desc
-    ) as country_snapshot_rank
+    ) as reporter_latest_month_rank
   from aggregated_country as ac
   inner join eligible_reporters as er
     on ac.reporter_iso3 = er.iso3
@@ -148,13 +159,19 @@ country_snapshot as (
 )
 
 select
+  reporter_iso2,
   reporter_iso3,
   reporter_country_name,
+  reporter_country_name_looker,
   reporter_region,
   reporter_subregion,
   reporter_continent,
   reporter_is_eu,
   reporter_is_oecd,
+  latitude,
+  longitude,
+  geo_point,
+  lat_lng_string,
   period,
   year_month,
   month_start_date,
@@ -174,6 +191,8 @@ select
   top_exposed_chokepoint_trade_value_usd,
   top_exposed_chokepoint_trade_share_of_reporter_total,
   top_exposed_chokepoint_stress_index_weighted,
-  latest_month_flag
+  case
+    when reporter_latest_month_rank = 1 then true
+    else false
+  end as latest_month_flag
 from country_snapshot
-where country_snapshot_rank = 1

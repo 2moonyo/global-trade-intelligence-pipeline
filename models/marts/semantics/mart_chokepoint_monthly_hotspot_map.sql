@@ -1,5 +1,5 @@
 -- Looker Studio support mart for the Page 4 chokepoint point map.
--- Grain: one row per chokepoint_id, using the chokepoint's latest available stress month.
+-- Grain: one row per chokepoint_id + month_start_date.
 
 with stress_base as (
   select
@@ -106,6 +106,7 @@ hotspot_snapshot as (
     dc.longitude,
     dc.latitude,
     dc.geo_point,
+    dc.lat_lng_string,
     case
       when dc.longitude is not null and dc.latitude is not null then true
       else false
@@ -130,11 +131,10 @@ hotspot_snapshot as (
     tr.top_exposed_reporter_iso3,
     tr.top_exposed_reporter_country_name,
     tr.top_exposed_reporter_trade_value_usd,
-    true as latest_month_flag,
     row_number() over (
       partition by sb.chokepoint_id
       order by sb.month_start_date desc, sb.year_month desc
-    ) as chokepoint_snapshot_rank
+    ) as chokepoint_latest_month_rank
   from stress_base as sb
   left join exposure_aggregated as ea
     on sb.month_start_date = ea.month_start_date
@@ -145,8 +145,10 @@ hotspot_snapshot as (
   left join top_reporter as tr
     on sb.month_start_date = tr.month_start_date
    and sb.chokepoint_id = tr.chokepoint_id
-  left join {{ ref('dim_chokepoint') }} as dc
+  inner join {{ ref('dim_chokepoint') }} as dc
     on sb.chokepoint_id = dc.chokepoint_id
+  where dc.longitude between -180 and 180
+    and dc.latitude between -90 and 90
 )
 
 select
@@ -159,6 +161,7 @@ select
   longitude,
   latitude,
   geo_point,
+  lat_lng_string,
   has_map_coordinates_flag,
   z_score_historical,
   abs_z_score_historical,
@@ -180,6 +183,8 @@ select
   top_exposed_reporter_iso3,
   top_exposed_reporter_country_name,
   top_exposed_reporter_trade_value_usd,
-  latest_month_flag
+  case
+    when chokepoint_latest_month_rank = 1 then true
+    else false
+  end as latest_month_flag
 from hotspot_snapshot
-where chokepoint_snapshot_rank = 1

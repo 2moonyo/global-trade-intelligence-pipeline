@@ -22,7 +22,7 @@ with macro_spine as (
 ),
 reporter_commodity_month as (
   select
-    {{ canonical_country_iso3('rcm.reporter_iso3') }} as reporter_iso3,
+    rcm.reporter_iso3,
     rcm.cmd_code,
     rcm.year_month,
     rcm.month_start_date,
@@ -55,7 +55,7 @@ reporter_trade as (
       case
         when rcm.hs4 in ('2709', '2710')
           or rcm.hs6 = '271111'
-          or cast(rcm.cmd_code as {{ dbt.type_string() }}) in ('2709', '2710', '271111')
+          or cast(rcm.cmd_code as string) in ('2709', '2710', '271111')
           then rcm.total_trade_value_usd
         else 0
       end
@@ -64,7 +64,7 @@ reporter_trade as (
       case
         when rcm.hs4 in ('2709', '2710')
           or rcm.hs6 = '271111'
-          or cast(rcm.cmd_code as {{ dbt.type_string() }}) in ('2709', '2710', '271111')
+          or cast(rcm.cmd_code as string) in ('2709', '2710', '271111')
           then rcm.import_trade_value_usd
         else 0
       end
@@ -73,7 +73,7 @@ reporter_trade as (
       case
         when rcm.hs4 in ('2709', '2710')
           or rcm.hs6 = '271111'
-          or cast(rcm.cmd_code as {{ dbt.type_string() }}) in ('2709', '2710', '271111')
+          or cast(rcm.cmd_code as string) in ('2709', '2710', '271111')
           then rcm.export_trade_value_usd
         else 0
       end
@@ -126,29 +126,26 @@ reporter_monthly as (
     wp.reporter_oil_export_value_usd,
     case
       when wp.previous_month_start_date is not null
-        and {{ date_add_months('wp.previous_month_start_date', 1) }} = wp.month_start_date
-        then {{ safe_divide(
-          'wp.reporter_total_trade_value_usd - wp.previous_total_trade_value_usd',
-          'wp.previous_total_trade_value_usd'
-        ) }}
+        and date_add(wp.previous_month_start_date, interval 1 month) = wp.month_start_date
+        and wp.previous_total_trade_value_usd is not null
+        and wp.previous_total_trade_value_usd != 0
+        then (wp.reporter_total_trade_value_usd - wp.previous_total_trade_value_usd) / wp.previous_total_trade_value_usd
       else null
     end as mom_change_total_trade_pct,
     case
       when wp.previous_month_start_date is not null
-        and {{ date_add_months('wp.previous_month_start_date', 1) }} = wp.month_start_date
-        then {{ safe_divide(
-          'wp.reporter_food_trade_value_usd - wp.previous_food_trade_value_usd',
-          'wp.previous_food_trade_value_usd'
-        ) }}
+        and date_add(wp.previous_month_start_date, interval 1 month) = wp.month_start_date
+        and wp.previous_food_trade_value_usd is not null
+        and wp.previous_food_trade_value_usd != 0
+        then (wp.reporter_food_trade_value_usd - wp.previous_food_trade_value_usd) / wp.previous_food_trade_value_usd
       else null
     end as mom_change_food_trade_pct,
     case
       when wp.previous_month_start_date is not null
-        and {{ date_add_months('wp.previous_month_start_date', 1) }} = wp.month_start_date
-        then {{ safe_divide(
-          'wp.reporter_oil_trade_value_usd - wp.previous_oil_trade_value_usd',
-          'wp.previous_oil_trade_value_usd'
-        ) }}
+        and date_add(wp.previous_month_start_date, interval 1 month) = wp.month_start_date
+        and wp.previous_oil_trade_value_usd is not null
+        and wp.previous_oil_trade_value_usd != 0
+        then (wp.reporter_oil_trade_value_usd - wp.previous_oil_trade_value_usd) / wp.previous_oil_trade_value_usd
       else null
     end as mom_change_oil_trade_pct
   from with_previous as wp
@@ -213,46 +210,34 @@ select
   mom_change_total_trade_pct,
   mom_change_food_trade_pct,
   mom_change_oil_trade_pct,
-  {{ rolling_corr(
-    'brent_mom_change',
-    'fx_mom_change',
-    'currency_view, base_currency_code, fx_currency_code, reporter_iso3',
-    'month_start_date',
-    6
-  ) }} as rolling_6m_corr_brent_fx_mom,
-  {{ rolling_corr(
-    'brent_mom_change',
-    'fx_mom_change',
-    'currency_view, base_currency_code, fx_currency_code, reporter_iso3',
-    'month_start_date',
-    12
-  ) }} as rolling_12m_corr_brent_fx_mom,
-  {{ rolling_corr(
-    'brent_mom_change',
-    'mom_change_food_trade_pct',
-    'currency_view, base_currency_code, fx_currency_code, reporter_iso3',
-    'month_start_date',
-    6
-  ) }} as rolling_6m_corr_brent_food_trade_mom,
-  {{ rolling_corr(
-    'brent_mom_change',
-    'mom_change_food_trade_pct',
-    'currency_view, base_currency_code, fx_currency_code, reporter_iso3',
-    'month_start_date',
-    12
-  ) }} as rolling_12m_corr_brent_food_trade_mom,
-  {{ rolling_corr(
-    'brent_mom_change',
-    'mom_change_oil_trade_pct',
-    'currency_view, base_currency_code, fx_currency_code, reporter_iso3',
-    'month_start_date',
-    6
-  ) }} as rolling_6m_corr_brent_oil_trade_mom,
-  {{ rolling_corr(
-    'brent_mom_change',
-    'mom_change_oil_trade_pct',
-    'currency_view, base_currency_code, fx_currency_code, reporter_iso3',
-    'month_start_date',
-    12
-  ) }} as rolling_12m_corr_brent_oil_trade_mom
+  corr(brent_mom_change, fx_mom_change) over (
+    partition by currency_view, base_currency_code, fx_currency_code, reporter_iso3
+    order by month_start_date
+    rows between 5 preceding and current row
+  ) as rolling_6m_corr_brent_fx_mom,
+  corr(brent_mom_change, fx_mom_change) over (
+    partition by currency_view, base_currency_code, fx_currency_code, reporter_iso3
+    order by month_start_date
+    rows between 11 preceding and current row
+  ) as rolling_12m_corr_brent_fx_mom,
+  corr(brent_mom_change, mom_change_food_trade_pct) over (
+    partition by currency_view, base_currency_code, fx_currency_code, reporter_iso3
+    order by month_start_date
+    rows between 5 preceding and current row
+  ) as rolling_6m_corr_brent_food_trade_mom,
+  corr(brent_mom_change, mom_change_food_trade_pct) over (
+    partition by currency_view, base_currency_code, fx_currency_code, reporter_iso3
+    order by month_start_date
+    rows between 11 preceding and current row
+  ) as rolling_12m_corr_brent_food_trade_mom,
+  corr(brent_mom_change, mom_change_oil_trade_pct) over (
+    partition by currency_view, base_currency_code, fx_currency_code, reporter_iso3
+    order by month_start_date
+    rows between 5 preceding and current row
+  ) as rolling_6m_corr_brent_oil_trade_mom,
+  corr(brent_mom_change, mom_change_oil_trade_pct) over (
+    partition by currency_view, base_currency_code, fx_currency_code, reporter_iso3
+    order by month_start_date
+    rows between 11 preceding and current row
+  ) as rolling_12m_corr_brent_oil_trade_mom
 from joined

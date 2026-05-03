@@ -2,17 +2,37 @@ version: 2
 
 models:
   - name: dim_country
-    description: "Conformed country dimension promoted from staging for BI-facing marts and dashboard joins."
+    description: "Conformed country dimension promoted from staging and seed-backed Comtrade reporter metadata for BI-facing marts, ISO joins, and Looker Studio map compatibility."
     columns:
       - name: iso3
         description: "ISO3 code for the country."
         tests: [not_null, unique]
+      - name: reporter_code
+        description: "Numeric Comtrade reporter code retained for metadata lineage and exact reporter joins."
       - name: country_name
-        description: "Canonical business-readable country name for BI display and Looker Studio country geography."
+        description: "Canonical analytical country name used in marts and country joins."
+      - name: country_name_raw
+        description: "Raw Comtrade reporter label before Looker-specific cleanup."
+      - name: country_name_looker
+        description: "Looker-safe display name for country maps and dashboard labels."
+      - name: country_iso2
+        description: "Preferred ISO2 code for Looker Studio filled maps."
+      - name: country_iso3
+        description: "ISO3 code repeated from iso3 for compatibility with dashboard-facing naming."
       - name: is_country_group
         description: "True when the row is an aggregate, group, world, or special geography bucket rather than a renderable country."
+      - name: is_current
+        description: "True when the reporter metadata row is not expired as of the dbt run date."
       - name: is_country_map_eligible
         description: "True when the row is a canonical country suitable for Looker Studio Geo Country rendering."
+      - name: latitude
+        description: "Approximate country point latitude derived from existing port geography as a bubble-map helper."
+      - name: longitude
+        description: "Approximate country point longitude derived from existing port geography as a bubble-map helper."
+      - name: geo_point
+        description: "BigQuery GEOGRAPHY point built from the country helper latitude and longitude when available."
+      - name: lat_lng_string
+        description: "Comma-separated latitude and longitude helper string for Looker Studio point/bubble maps."
 
   - name: dim_time
     description: "Conformed month dimension for all trade, macro, energy, and event marts."
@@ -67,3 +87,5 @@ models:
         description: "BigQuery geography generated from the zone-of-influence WKB."
       - name: geo_point
         description: "BigQuery point geography generated from longitude and latitude for GIS usage."
+      - name: lat_lng_string
+        description: "Comma-separated latitude and longitude helper string for Looker Studio point maps."

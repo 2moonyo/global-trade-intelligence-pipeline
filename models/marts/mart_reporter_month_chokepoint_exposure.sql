@@ -7,6 +7,7 @@ with route_fact as (
     period,
     year_month,
     trade_value_usd,
+    {{ canonical_chokepoint_id('main_chokepoint') }} as chokepoint_id,
     {{ canonicalize_chokepoint_name('main_chokepoint') }} as chokepoint_name,
     route_applicability_status,
     is_maritime_routed
@@ -26,18 +27,19 @@ reporter_month_chokepoint as (
     rf.reporter_iso3,
     rf.period,
     rf.year_month,
+    rf.chokepoint_id,
     rf.chokepoint_name,
     sum(rf.trade_value_usd) as chokepoint_trade_value_usd,
     count(distinct rf.partner_iso3) as route_pair_count
   from route_fact as rf
   where {{ clean_label_text('rf.chokepoint_name') }} is not null
     and coalesce(rf.is_maritime_routed, false)
-  group by 1, 2, 3, 4
+  group by 1, 2, 3, 4, 5
 ),
 active_events as (
   select
     year_month,
-    chokepoint_name,
+    {{ canonical_chokepoint_id('chokepoint_name') }} as chokepoint_id,
     count(distinct case when is_event_active then event_id end) as active_event_count,
     max(case when is_event_active then severity_weight end) as max_active_event_severity,
     avg(case when is_event_active then severity_weight end) as avg_active_event_severity
@@ -47,6 +49,7 @@ active_events as (
 portwatch as (
   select
     year_month,
+    chokepoint_id,
     chokepoint_name,
     stress_index,
     stress_index_weighted,
@@ -63,8 +66,8 @@ select
   rmc.period,
   rmc.year_month,
   t.month_start_date,
-  dc.chokepoint_id,
-  rmc.chokepoint_name,
+  rmc.chokepoint_id,
+  coalesce(dc.chokepoint_name, rmc.chokepoint_name) as chokepoint_name,
   rmc.route_pair_count,
   rmc.chokepoint_trade_value_usd,
   rmt.reporter_month_trade_value_usd,
@@ -91,10 +94,10 @@ left join {{ ref('dim_country') }} as c
 left join {{ ref('dim_time') }} as t
   on rmc.period = t.period
 left join {{ ref('dim_chokepoint') }} as dc
-  on rmc.chokepoint_name = dc.chokepoint_name
+  on rmc.chokepoint_id = dc.chokepoint_id
 left join portwatch as p
   on rmc.year_month = p.year_month
- and rmc.chokepoint_name = p.chokepoint_name
+ and rmc.chokepoint_id = p.chokepoint_id
 left join active_events as a
   on rmc.year_month = a.year_month
- and rmc.chokepoint_name = a.chokepoint_name
+ and rmc.chokepoint_id = a.chokepoint_id

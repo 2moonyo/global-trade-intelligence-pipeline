@@ -1297,10 +1297,15 @@ models:
                 values: [true, false]
 
   - name: mart_reporter_month_exposure_map
-    description: One-row-per-country semantic mart for the primary Page 4 country map, combining canonical country geography with each reporter's latest available chokepoint exposure snapshot.
+    description: Monthly semantic mart for the primary Page 4 country map at one row per reporter and month, combining canonical country geography, Looker-safe country labels, and reporter chokepoint exposure metrics.
     columns:
+      - name: reporter_iso2
+        description: Preferred ISO2 code for Looker Studio filled maps. Use Geo -> Country on this field for the default country map.
+        tests:
+          - not_null
+
       - name: reporter_iso3
-        description: ISO3 code of the reporting country used directly in Looker Studio geo charts.
+        description: ISO3 code of the reporting country retained for analytical joins and QA.
         tests:
           - not_null
           - relationships:
@@ -1309,14 +1314,36 @@ models:
                 field: iso3
 
       - name: reporter_country_name
-        description: Standardized reporter country name for geo labels and filters.
+        description: Canonical analytical reporter country name for labels and filters.
+        tests:
+          - not_null
+
+      - name: reporter_country_name_looker
+        description: Looker-safe reporter country display name for country geo charts when ISO2 is not used directly.
         tests:
           - not_null
 
       - name: month_start_date
-        description: First calendar day of the reporter's selected latest available exposure snapshot.
+        description: First calendar day of the reporter exposure month.
         tests:
           - not_null
+
+      - name: year_month
+        description: Canonical month key in YYYY-MM format retained for month filters and QA.
+        tests:
+          - not_null
+
+      - name: latitude
+        description: Approximate reporter-country point latitude retained as a bubble-map helper.
+
+      - name: longitude
+        description: Approximate reporter-country point longitude retained as a bubble-map helper.
+
+      - name: geo_point
+        description: BigQuery GEOGRAPHY point built from the reporter-country helper latitude and longitude when available.
+
+      - name: lat_lng_string
+        description: Comma-separated latitude and longitude helper string for Looker Studio bubble maps.
 
       - name: total_chokepoint_exposed_trade_value_usd
         description: Total reporter monthly trade value in USD exposed to any mapped chokepoint.
@@ -1360,7 +1387,7 @@ models:
         description: Share of reporter monthly trade value represented by the top exposed chokepoint.
 
       - name: latest_month_flag
-        description: True for the selected latest available reporter snapshot exposed by this one-row-per-country map-support mart.
+        description: True when the row belongs to the latest available month in this monthly map-support mart.
         tests:
           - not_null
           - accepted_values:
@@ -1493,10 +1520,15 @@ models:
                 values: [true, false]
 
   - name: mart_chokepoint_monthly_hotspot_map
-    description: One-row-per-chokepoint semantic mart for the supporting Page 4 point map, combining each chokepoint's latest available stress snapshot, display-safe stress labels, aggregated exposure counts, latitude/longitude, and geography point.
+    description: Monthly semantic mart for the supporting Page 4 chokepoint point map at one row per chokepoint and month, combining stress signals, aggregated exposure counts, and map-ready chokepoint coordinates.
     columns:
       - name: month_start_date
-        description: First calendar day of the chokepoint's selected latest available stress snapshot.
+        description: First calendar day of the chokepoint month.
+        tests:
+          - not_null
+
+      - name: year_month
+        description: Canonical month key in YYYY-MM format retained for month filters and QA.
         tests:
           - not_null
 
@@ -1522,6 +1554,9 @@ models:
 
       - name: geo_point
         description: BigQuery GEOGRAPHY point built with ST_GEOGPOINT(longitude, latitude), retained beside numeric coordinates for future GIS usage.
+
+      - name: lat_lng_string
+        description: Comma-separated latitude and longitude helper string for Looker Studio point and bubble maps.
 
       - name: has_map_coordinates_flag
         description: True when the chokepoint has usable latitude and longitude for point-map rendering.
@@ -1579,10 +1614,427 @@ models:
         description: Country name of the reporting country with the highest exposed trade value on the chokepoint-month.
 
       - name: latest_month_flag
-        description: True for the selected latest available chokepoint snapshot exposed by this one-row-per-chokepoint map-support mart.
+        description: True when the row belongs to the latest available month in this monthly chokepoint map-support mart.
         tests:
           - not_null
           - accepted_values:
               arguments:
                 quote: false
                 values: [true, false]
+
+  - name: mart_dataset_coverage_summary
+    description: >
+      Dashboard-ready semantic summary with one row per dataset_name describing completeness,
+      freshness, observed scope, and dashboard warning state across Comtrade, PortWatch, Brent,
+      FX, World Bank energy, and curated events. Use this for dataset health scorecards and
+      footnote banners. Recent Comtrade months can reflect reporting delay rather than real
+      economic movement, so weak or partial coverage should be surfaced rather than hidden.
+      Grain: dataset_name.
+    columns:
+      - name: dataset_name
+        description: Stable dataset identifier used in dashboard warnings and health tiles.
+        tests:
+          - not_null
+
+      - name: dataset_family
+        description: High-level source family grouping such as trade, maritime, macro_market, structural_energy, or curated_events.
+        tests:
+          - not_null
+
+      - name: grain_description
+        description: Human-readable statement of the native or semantic dataset grain used for completeness reasoning.
+        tests:
+          - not_null
+
+      - name: expected_frequency
+        description: Expected publication or refresh cadence used for freshness interpretation.
+        tests:
+          - not_null
+
+      - name: expected_lag_days
+        description: Grace period in days before the source is treated as lagging or stale.
+        tests:
+          - not_null
+
+      - name: latest_data_month
+        description: Latest month bucket available for the dataset, retained for dashboard annotation.
+
+      - name: row_presence_score
+        description: Ratio from 0 to 1 measuring how often expected periods have any observed data.
+        tests:
+          - not_null
+
+      - name: freshness_score
+        description: Ratio from 0 to 1 measuring how current the latest available data is relative to the expected lag.
+        tests:
+          - not_null
+
+      - name: expected_scope_score
+        description: Ratio from 0 to 1 measuring latest-period observed scope relative to expected scope.
+        tests:
+          - not_null
+
+      - name: coverage_score
+        description: Weighted dataset health score computed as 0.50 row presence plus 0.30 freshness plus 0.20 expected scope.
+        tests:
+          - not_null
+
+      - name: overall_coverage_score
+        description: Convenience repeat of coverage_score for scorecards that expect an overall metric.
+        tests:
+          - not_null
+
+      - name: coverage_status
+        description: Coverage band derived from coverage_score and recommended for dashboard warning colors.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['Good', 'Partial', 'Weak', 'Poor']
+
+      - name: freshness_status
+        description: Freshness band derived from latest_data_date and expected_lag_days.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['Current', 'Lagging', 'Stale', 'Unknown']
+
+      - name: warning_flag
+        description: True when the dataset should display a dashboard warning because freshness or completeness is not healthy.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                quote: false
+                values: [true, false]
+
+  - name: mart_dataset_coverage_monthly
+    description: >
+      Monthly dataset coverage trend mart with one row per dataset_name and month_start_date,
+      designed for Looker Studio time-series coverage visuals and source warning callouts.
+      This mart intentionally shows missingness instead of inferring complete public-data
+      coverage. Recent Comtrade months can reflect reporting delay rather than real economic
+      movement. Grain: dataset_name + month_start_date.
+    columns:
+      - name: dataset_name
+        description: Stable dataset identifier used to facet coverage trends.
+        tests:
+          - not_null
+
+      - name: dataset_family
+        description: High-level source family grouping used for dashboard filters or grouped legends.
+        tests:
+          - not_null
+
+      - name: month_start_date
+        description: First calendar day of the coverage month.
+        tests:
+          - not_null
+
+      - name: year_month
+        description: Canonical YYYY-MM label for the coverage month.
+        tests:
+          - not_null
+
+      - name: expected_records
+        description: Expected row count or presence proxy for the dataset in the month.
+        tests:
+          - not_null
+
+      - name: observed_records
+        description: Observed row count or presence proxy for the dataset in the month.
+        tests:
+          - not_null
+
+      - name: coverage_ratio
+        description: Observed records divided by expected records, bounded between 0 and 1 for dashboard use.
+        tests:
+          - not_null
+
+      - name: coverage_status
+        description: Monthly coverage band derived from coverage_ratio.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['Good', 'Partial', 'Weak', 'Poor']
+
+      - name: warning_flag
+        description: True when the month should display a dataset-specific warning in the dashboard.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                quote: false
+                values: [true, false]
+
+  - name: mart_trade_reporter_month_coverage
+    description: >
+      Reporter-month coverage heatmap mart showing whether each expected reporter submitted
+      public trade data, how broad the commodity coverage is, and whether the latest month
+      likely reflects reporting lag rather than real economic movement. Use this for reporter
+      gap heatmaps, missing reporter tables, and reliability overlays on Page 1 or supporting
+      diagnostics. Grain: reporter_iso3 + month_start_date.
+    columns:
+      - name: reporter_iso3
+        description: ISO3 code for the reporting country at reporter-month grain.
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_country')
+                field: iso3
+
+      - name: reporter_name
+        description: Standardized reporter country name for heatmaps and tables.
+        tests:
+          - not_null
+
+      - name: month_start_date
+        description: First calendar day of the reporting month.
+        tests:
+          - not_null
+
+      - name: year_month
+        description: Canonical YYYY-MM month label for the reporting month.
+        tests:
+          - not_null
+
+      - name: expected_reporter_flag
+        description: True when the reporter belongs to the expected dashboard country scope.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                quote: false
+                values: [true, false]
+
+      - name: reported_trade_flag
+        description: True when one or more canonical upstream trade rows exist for the reporter-month.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                quote: false
+                values: [true, false]
+
+      - name: import_reported_flag
+        description: True when the reporter-month includes at least one import flow row.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                quote: false
+                values: [true, false]
+
+      - name: export_reported_flag
+        description: True when the reporter-month includes at least one export flow row.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                quote: false
+                values: [true, false]
+
+      - name: reporting_coverage_score
+        description: Compact 0 to 1 reporter coverage score for reliability shading in the dashboard.
+
+      - name: reporter_coverage_status
+        description: Reporter-month status band showing Good, Partial, Missing, or Unknown reporting coverage.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['Good', 'Partial', 'Missing', 'Unknown']
+
+      - name: latest_month_flag
+        description: True when the row belongs to the latest available trade month in the heatmap mart.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                quote: false
+                values: [true, false]
+
+  - name: mart_trade_bloc_month_coverage
+    description: >
+      Bloc-month coverage mart for OPEC, BRICS, G7, EU, OECD, and WESTERN_ALIGNED_PROXY,
+      summarizing how many member reporters are present in the selected month and listing
+      missing reporters for dashboard caveats. Countries can belong to multiple blocs, so
+      bloc totals are not additive across bloc_code. Recent Comtrade gaps can reflect reporting
+      delay rather than real economic movement. Grain: bloc_code + month_start_date.
+    columns:
+      - name: bloc_code
+        description: Stable analytical bloc code used in dashboard filters and joins.
+        tests:
+          - not_null
+
+      - name: bloc_name
+        description: Human-readable bloc name for labels and legends.
+        tests:
+          - not_null
+
+      - name: bloc_type
+        description: Analytical bloc category such as advanced economy bloc or analytical proxy.
+        tests:
+          - not_null
+
+      - name: month_start_date
+        description: First calendar day of the reporting month.
+        tests:
+          - not_null
+
+      - name: year_month
+        description: Canonical YYYY-MM month label for the bloc-month row.
+        tests:
+          - not_null
+
+      - name: expected_member_country_count
+        description: Count of configured member countries expected for the bloc.
+        tests:
+          - not_null
+
+      - name: reported_member_country_count
+        description: Count of member countries with observed trade rows in the month.
+        tests:
+          - not_null
+
+      - name: missing_member_country_count
+        description: Count of member countries without observed trade rows in the month.
+        tests:
+          - not_null
+
+      - name: bloc_reporting_coverage_pct
+        description: Share of configured member countries with observed trade rows in the month.
+        tests:
+          - not_null
+
+      - name: bloc_coverage_status
+        description: Bloc coverage band derived from bloc_reporting_coverage_pct.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['Good', 'Partial', 'Weak', 'Poor']
+
+      - name: latest_month_flag
+        description: True when the row belongs to the latest month in the bloc coverage mart.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                quote: false
+                values: [true, false]
+
+  - name: mart_field_lineage_summary
+    description: >
+      Readable dashboard field lineage reference with one row per dashboard_page and field_name.
+      This is not full dbt graph lineage. It is a BI-facing guide for chart builders explaining
+      which semantic mart a field should come from, how it is calculated, how it should be
+      aggregated, and what limitation or warning to show. Grain: dashboard_page + field_name.
+    columns:
+      - name: dashboard_page
+        description: Dashboard page name or use-case grouping that owns the field.
+        tests:
+          - not_null
+
+      - name: chart_group
+        description: Chart or interaction group inside the dashboard page.
+        tests:
+          - not_null
+
+      - name: field_name
+        description: Stable BI field identifier documented for dashboard builders.
+        tests:
+          - not_null
+
+      - name: display_name
+        description: Human-readable field label recommended for dashboard display.
+        tests:
+          - not_null
+
+      - name: source_dataset
+        description: Primary upstream dataset or dataset family used to derive the field.
+        tests:
+          - not_null
+
+      - name: source_model
+        description: Recommended semantic mart or mart model that should supply the field to Looker Studio.
+        tests:
+          - not_null
+
+      - name: grain
+        description: Recommended grain to preserve when charting the field.
+        tests:
+          - not_null
+
+  - name: mart_bloc_month_trade_macro_summary
+    description: >
+      Monthly bloc comparison mart for Looker Studio combining bloc trade composition, Brent
+      context, month-over-month trade movement, and now bloc coverage reliability fields.
+      Use this for bloc trend lines, composition tables, and cross-bloc comparison cards.
+      Countries can belong to multiple blocs, so totals are not additive across bloc_code.
+      Recent Comtrade months can reflect reporting delay rather than real economic movement.
+      Grain: bloc_code + month_start_date.
+    columns:
+      - name: bloc_reporting_coverage_pct
+        description: Share of expected bloc members with observed trade rows in the month, joined from mart_trade_bloc_month_coverage.
+
+      - name: bloc_coverage_status
+        description: Coverage band for the bloc-month, recommended for warning chips or conditional formatting.
+
+      - name: bloc_dashboard_warning
+        description: Business-readable warning explaining when bloc totals are low reliability because members are missing.
+
+  - name: mart_brent_fx_trade_correlation_monthly
+    description: >
+      Monthly semantic mart combining bloc trade movement with Brent and FX context for
+      dashboard correlation views, now with bloc coverage reliability overlays and simple
+      oil-shock flags. Correlation fields are descriptive only and do not imply causality.
+      Recent Comtrade months can reflect reporting delay rather than real economic movement.
+      Grain: currency_view + base_currency_code + fx_currency_code + bloc_code + month_start_date.
+    columns:
+      - name: bloc_reporting_coverage_pct
+        description: Joined bloc-month reporting coverage percentage used to qualify the reliability of trade-change fields.
+
+      - name: bloc_coverage_status
+        description: Coverage band joined from mart_trade_bloc_month_coverage for display warnings.
+
+      - name: bloc_dashboard_warning
+        description: Human-readable bloc coverage warning repeated into the correlation mart for direct BI consumption.
+
+      - name: is_oil_shock_5pct
+        description: True when absolute Brent month-over-month change is at least 5 percent.
+        tests:
+          - accepted_values:
+              arguments:
+                quote: false
+                values: [true, false]
+
+      - name: is_oil_shock_10pct
+        description: True when absolute Brent month-over-month change is at least 10 percent.
+        tests:
+          - accepted_values:
+              arguments:
+                quote: false
+                values: [true, false]
+
+      - name: oil_trade_change_reliability_flag
+        description: True when bloc reporting coverage is sufficient and oil trade month-over-month change is present.
+        tests:
+          - accepted_values:
+              arguments:
+                quote: false
+                values: [true, false]
+
+      - name: food_trade_change_reliability_flag
+        description: True when bloc reporting coverage is sufficient and food trade month-over-month change is present.
+        tests:
+          - accepted_values:
+              arguments:
+                quote: false
+                values: [true, false]
+
+      - name: data_quality_warning
+        description: Business-readable warning highlighting missing macro inputs, missing contiguous trade history, or weak bloc coverage.

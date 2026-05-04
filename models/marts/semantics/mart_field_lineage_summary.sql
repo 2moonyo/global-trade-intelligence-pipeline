@@ -1,272 +1,72 @@
 -- Readable dashboard field lineage summary.
 -- Grain: one row per dashboard_page + field_name.
 
-select
-  'Page 1 Global Trade Overview' as dashboard_page,
-  'Executive Scorecards' as chart_group,
-  'total_trade_value_usd' as field_name,
-  'Total Trade Value (USD)' as display_name,
-  'comtrade' as source_dataset,
-  'mart_dashboard_global_trade_overview' as source_model,
-  'mart_dashboard_global_trade_overview <- mart_reporter_month_trade_summary <- fct_reporter_partner_commodity_month <- stg_comtrade_fact' as upstream_models_summary,
-  'reporter_country_code + month_start_date' as grain,
-  'Monthly reporter total across all partners and commodities.' as calculation_summary,
-  'Sum across reporters only after checking reporting completeness for the selected month.' as aggregation_guidance,
-  'Recent Comtrade months can be incomplete because official reporter submissions arrive late.' as known_limitation,
-  'Filter to latest_complete_month_flag = true for headline scorecards.' as recommended_filter
-
-union all
-
-select
-  'Page 1 Global Trade Overview',
-  'Coverage Context',
-  'reporting_completeness',
-  'Reporting Completeness',
-  'comtrade',
-  'mart_trade_month_coverage_status',
-  'mart_trade_month_coverage_status <- mart_dashboard_global_trade_overview <- mart_reporter_month_trade_summary',
-  'month_start_date',
-  'Share of expected reporters with observed trade data in the month.',
-  'Do not sum. Use the month-level ratio directly or average only across explicitly comparable months.',
-  'Low completeness often reflects delayed official reporting rather than true zero trade.',
-  'Use latest_month_flag or latest_complete_month_flag depending whether you want timeliness or completeness.'
-
-union all
-
-select
-  'Page 2 Daily Chokepoint Signal',
-  'Daily Stress Trends',
-  'z_score_rolling_30d',
-  '30-Day Z-Score',
-  'portwatch_daily',
-  'mart_chokepoint_daily_signal',
-  'mart_chokepoint_daily_signal <- stg_portwatch_daily',
-  'date_day + chokepoint_id',
-  'Current daily throughput deviation relative to the trailing 30 observed days.',
-  'Do not sum across chokepoints. Use average or compare individual chokepoint traces.',
-  'Null means insufficient baseline or missing PortWatch daily observations.',
-  'Filter on a single chokepoint or use date_day windows with enough history.'
-
-union all
-
-select
-  'Page 2 Monthly Stress Detail',
-  'Stress Severity',
-  'stress_index',
-  'Stress Index',
-  'portwatch_monthly',
-  'mart_chokepoint_monthly_stress_detail',
-  'mart_chokepoint_monthly_stress_detail <- mart_chokepoint_monthly_stress <- stg_portwatch_stress_metrics',
-  'month_start_date + chokepoint_id',
-  'Monthly blended stress measure from vessel-count and throughput z-scores.',
-  'Do not sum across chokepoints. Use ranking, average, or max depending on the visual.',
-  'Missing PortWatch months remain null by design instead of being filled.',
-  'Filter to stress_severity_band <> INSUFFICIENT_BASELINE for ranked comparisons.'
-
-union all
+with field_catalog as (
+  select 1 as dashboard_page_sort_order, 'Summary' as dashboard_page, 1 as chart_group_sort_order, 'Executive Scorecards' as chart_group, 1 as field_sort_order, 'total_trade_value_usd' as field_name, 'Total Trade Value (USD)' as display_name, 'comtrade' as source_dataset, 'mart_dashboard_global_trade_overview' as source_model, 'mart_dashboard_global_trade_overview <- mart_reporter_month_trade_summary <- fct_reporter_partner_commodity_month <- stg_comtrade_fact' as upstream_models_summary, 'reporter_country_code + month_start_date' as grain, 'Monthly reporter total across all partners and commodities.' as calculation_summary, 'Sum across reporters only after checking reporting completeness for the selected month.' as aggregation_guidance, 'Recent Comtrade months can be incomplete because official reporter submissions arrive late.' as known_limitation, 'Filter to latest_complete_month_flag = true for headline scorecards.' as recommended_filter
+  union all
+  select 1, 'Summary', 1, 'Executive Scorecards', 2, 'reporting_completeness_pct', 'Reporting Completeness %', 'comtrade', 'mart_trade_month_coverage_status', 'mart_trade_month_coverage_status <- mart_dashboard_global_trade_overview <- mart_reporter_month_trade_summary', 'month_start_date', 'Share of configured reporters with observed trade data in the selected month.', 'Do not sum. Use the month-level ratio directly or average only across explicitly comparable months.', 'Low completeness often reflects delayed official reporting rather than true zero trade.', 'Use latest_month_flag for timeliness or latest_complete_month_flag for completeness-focused scorecards.'
+  union all
+  select 1, 'Summary', 2, 'System Pulse', 3, 'system_stress_level', 'System Stress Level', 'portwatch_monthly + events', 'mart_executive_monthly_system_snapshot', 'mart_executive_monthly_system_snapshot <- mart_global_monthly_system_stress_summary + mart_chokepoint_monthly_stress', 'month_start_date', 'Monthly categorical stress label summarizing system-wide chokepoint conditions.', 'Use as a label or grouped status field, not as an additive measure.', 'Stress labels depend on monthly PortWatch coverage and event overlays.', 'Keep monthly coverage context visible when comparing stress regimes.'
+  union all
+  select 2, 'Daily Chokepoint Stress Pulse', 1, 'Daily Stress Trends', 1, 'avg_chokepoint_signal_index', 'Average Chokepoint Signal Index', 'portwatch_daily', 'mart_global_daily_market_signal', 'mart_global_daily_market_signal <- mart_chokepoint_daily_signal <- stg_portwatch_daily', 'date_day', 'Daily average of chokepoint signal intensity across the monitored system.', 'Do not sum across days. Use as a time series or daily average only.', 'Coverage gaps or null daily observations can soften the apparent signal.', 'Filter to recent windows and keep daily_coverage_ratio visible.'
+  union all
+  select 2, 'Daily Chokepoint Stress Pulse', 1, 'Daily Stress Trends', 2, 'brent_z_score_rolling_30_observed_days', 'Brent 30-Day Z-Score', 'brent_daily', 'mart_global_daily_market_signal', 'mart_global_daily_market_signal <- stg_brent_daily', 'date_day', 'Daily Brent deviation versus the trailing 30 observed trading days.', 'Do not sum. Use as a contextual macro overlay or threshold-based alert field.', 'Null means insufficient trailing Brent history for the selected day.', 'Use with latest_day_flag = true for current pulse cards.'
+  union all
+  select 3, 'Monthly Stress & Pattern', 1, 'Chokepoint Severity', 1, 'stress_index', 'Stress Index', 'portwatch_monthly', 'mart_chokepoint_monthly_stress_detail', 'mart_chokepoint_monthly_stress_detail <- mart_chokepoint_monthly_stress <- stg_portwatch_stress_metrics', 'month_start_date + chokepoint_id', 'Monthly blended stress measure from throughput and vessel-count z-scores.', 'Do not sum across chokepoints. Use ranking, average, or max depending on the visual.', 'Missing PortWatch months remain null by design instead of being filled.', 'Filter out INSUFFICIENT_BASELINE rows for ranked comparisons.'
+  union all
+  select 3, 'Monthly Stress & Pattern', 2, 'System Pattern', 2, 'max_abs_z_score_historical', 'Max Absolute Z-Score', 'portwatch_monthly', 'mart_global_monthly_system_stress_summary', 'mart_global_monthly_system_stress_summary <- mart_chokepoint_monthly_stress <- stg_portwatch_stress_metrics', 'month_start_date', 'Largest absolute historical z-score observed across chokepoints in the month.', 'Do not sum across months. Use as a monthly peak-severity diagnostic.', 'One extreme chokepoint can dominate the monthly value.', 'Pair with stressed_chokepoint_count for a fuller monthly pattern read.'
+  union all
+  select 4, 'Exposure Patterns', 1, 'Reporter Exposure Snapshot', 1, 'chokepoint_exposure_pct', 'Chokepoint Exposure %', 'comtrade + portwatch_monthly + events', 'mart_reporter_month_energy_trade_dependency', 'mart_reporter_month_energy_trade_dependency <- mart_reporter_structural_vulnerability <- mart_reporter_month_chokepoint_exposure + mart_reporter_energy_vulnerability', 'reporter_iso3 + month_start_date', 'Percent of reporter monthly trade value routed through modeled chokepoint exposures.', 'Do not sum percentages. Use average for group views or pair with trade value for weighting.', 'Exposure depends on modeled trade routes and can understate reality where routing confidence is low.', 'Filter to latest_month_flag = true for map snapshots.'
+  union all
+  select 4, 'Exposure Patterns', 2, 'Partner Detail', 2, 'partner_commodity_trade_share_of_reporter_chokepoint', 'Partner Commodity Share of Reporter Chokepoint', 'comtrade + routing + portwatch_monthly', 'mart_reporter_partner_commodity_month_enriched', 'mart_reporter_partner_commodity_month_enriched <- fct_reporter_partner_commodity_route_month + mart_reporter_month_chokepoint_exposure', 'reporter_iso3 + partner_iso3 + cmd_code + chokepoint_id + month_start_date', 'Share of a reporter-chokepoint total explained by a specific partner-commodity slice.', 'Do not sum percentages across partner or commodity rows.', 'Detailed exposure rows are highly granular and should stay filtered to one reporter and month.', 'Filter to latest_month_flag = true and a single reporter for readable tables.'
+  union all
+  select 5, 'Structural Vulnerability Dashboard', 1, 'Risk Scorecards', 1, 'structural_risk_score', 'Structural Risk Score', 'comtrade + worldbank_energy + portwatch_monthly + events', 'mart_reporter_structural_vulnerability', 'mart_reporter_structural_vulnerability <- mart_reporter_month_trade_summary + mart_reporter_energy_vulnerability + mart_reporter_month_chokepoint_exposure + dim_event bridges', 'reporter_iso3 + month_start_date', 'Weighted 0-100 score combining energy dependence, renewable gap, chokepoint exposure, supplier concentration, and event context.', 'Use as a ranking or scatter axis, not as an additive measure.', 'Annual World Bank inputs are broadcast to month grain and provide structural context more than monthly movement.', 'Filter to latest_month_flag = true for latest-country comparisons.'
+  union all
+  select 5, 'Structural Vulnerability Dashboard', 2, 'Supplier Dependence', 2, 'top_supplier_share_pct', 'Top Supplier Share %', 'comtrade', 'mart_reporter_structural_vulnerability', 'mart_reporter_structural_vulnerability <- fct_reporter_partner_commodity_month + dim_country', 'reporter_iso3 + month_start_date', 'Percent of import concentration captured by the top supplier for the reporter-month.', 'Do not sum percentages. Compare across reporters or across contiguous months only.', 'Supplier concentration is based on observed import partner coverage and can move with reporting gaps.', 'Pair with import_supplier_count and latest_month_flag for structural readouts.'
+  union all
+  select 6, 'Market Sensitivity by Reporter', 1, 'Reporter Correlations', 1, 'rolling_6m_corr_brent_fx_mom', 'Rolling 6M Brent-FX Correlation', 'brent_monthly + fx_monthly', 'mart_reporter_brent_fx_trade_correlation_monthly', 'mart_reporter_brent_fx_trade_correlation_monthly <- mart_macro_monthly_features + mart_reporter_commodity_month_trade_summary', 'currency_view + base_currency_code + fx_currency_code + reporter_iso3 + month_start_date', 'Six-month rolling descriptive correlation between Brent month-over-month change and FX month-over-month change for each reporter.', 'Do not sum. Use as a trend line, conditional format, or comparative diagnostic.', 'Correlation is descriptive only and can be unstable on short samples.', 'Keep one reporter, one currency_view, and one currency pair per chart.'
+  union all
+  select 6, 'Market Sensitivity by Reporter', 2, 'Reporter Trade Change', 2, 'mom_change_food_trade_pct', 'Food Trade MoM Change %', 'comtrade', 'mart_reporter_brent_fx_trade_correlation_monthly', 'mart_reporter_brent_fx_trade_correlation_monthly <- mart_reporter_commodity_month_trade_summary', 'currency_view + base_currency_code + fx_currency_code + reporter_iso3 + month_start_date', 'Reporter month-over-month percent change in food trade value.', 'Do not sum. Use only for time-series comparison or correlation windows.', 'Null when the prior month is missing or non-contiguous.', 'Filter out nulls and compare against Brent or FX movement inside one reporter view.'
+  union all
+  select 7, 'Event Lead/Lag (Reporters)', 1, 'Reporter Event Context', 1, 'historical_event_count', 'Historical Event Count', 'events + portwatch_monthly + routing', 'mart_reporter_structural_vulnerability', 'mart_reporter_structural_vulnerability <- mart_reporter_month_chokepoint_exposure + stg_chokepoint_bridge + dim_event', 'reporter_iso3 + month_start_date', 'Cumulative count of historical disruption events linked to the reporter through exposed chokepoints.', 'Do not sum across reporters. Use as a context or ranking field.', 'This is historical accumulation, not a dedicated event-window lead-lag panel.', 'Use alongside latest_month_flag and structural_risk_score for reporter context tables.'
+  union all
+  select 7, 'Event Lead/Lag (Reporters)', 1, 'Reporter Event Context', 2, 'most_recent_event_date', 'Most Recent Event Date', 'events', 'mart_reporter_structural_vulnerability', 'mart_reporter_structural_vulnerability <- dim_event + stg_chokepoint_bridge', 'reporter_iso3 + month_start_date', 'Latest disruption start date linked to the reporter as of the selected month.', 'Use as a tooltip or recency field rather than an aggregate.', 'A recent event date does not imply the event remained active through the selected month.', 'Show with historical_event_count or max_event_severity.'
+  union all
+  select 8, 'Bloc Comparison', 1, 'Bloc Scale', 1, 'bloc_total_trade_value_usd', 'Bloc Total Trade Value (USD)', 'comtrade', 'mart_bloc_month_trade_macro_summary', 'mart_bloc_month_trade_macro_summary <- mart_reporter_commodity_month_trade_summary <- fct_reporter_partner_commodity_month <- stg_comtrade_fact', 'bloc_code + month_start_date', 'Sum of member-country monthly trade values inside each analytical bloc.', 'Do not add across blocs because countries can belong to multiple blocs.', 'Bloc totals can understate real activity when member reporting coverage is partial.', 'Filter to bloc_reporting_coverage_pct >= 0.70 for cleaner bloc comparisons.'
+  union all
+  select 8, 'Bloc Comparison', 2, 'Bloc Composition', 2, 'energy_share_of_bloc_trade_pct', 'Energy Share of Bloc Trade %', 'comtrade', 'mart_bloc_month_trade_macro_summary', 'mart_bloc_month_trade_macro_summary <- mart_reporter_commodity_month_trade_summary + dim_commodity', 'bloc_code + month_start_date', 'Energy-flagged trade value divided by bloc total trade value.', 'Do not sum percentages. Use averages or within-month comparisons.', 'Energy commodity tagging depends on the conformed commodity dimension and excludes some edge classifications.', 'Keep bloc coverage warnings visible when comparing composition.'
+  union all
+  select 8, 'Bloc Comparison', 3, 'Bloc Correlations', 3, 'rolling_6m_corr_brent_fx_mom', 'Rolling 6M Brent-FX Correlation', 'brent_monthly + fx_monthly', 'mart_brent_fx_trade_correlation_monthly', 'mart_brent_fx_trade_correlation_monthly <- mart_macro_monthly_features + mart_bloc_month_trade_macro_summary', 'currency_view + base_currency_code + fx_currency_code + bloc_code + month_start_date', 'Six-month rolling descriptive correlation between Brent month-over-month change and FX month-over-month change for each bloc.', 'Do not sum. Use as a rolling correlation trend or comparative diagnostic.', 'Correlation is descriptive only and depends on stable bloc coverage and contiguous history.', 'Keep one bloc, one currency_view, and one currency pair per chart.'
+  union all
+  select 8, 'Bloc Comparison', 4, 'Reliability Overlay', 4, 'oil_trade_change_reliability_flag', 'Oil Trade Change Reliability Flag', 'comtrade + coverage', 'mart_brent_fx_trade_correlation_monthly', 'mart_brent_fx_trade_correlation_monthly <- mart_trade_bloc_month_coverage + mart_bloc_month_trade_macro_summary', 'currency_view + base_currency_code + fx_currency_code + bloc_code + month_start_date', 'True when oil trade month-over-month change is present and bloc reporting coverage is sufficient.', 'Use as a filter or warning flag, not as a quantity to aggregate.', 'False can mean missing prior month, missing oil trade change, or weak coverage.', 'Filter to oil_trade_change_reliability_flag = true for cleaner correlation reads.'
+  union all
+  select 9, 'Event Lead/Lag (BLOC)', 1, 'Event Window', 1, 'relative_month_offset', 'Relative Month Offset', 'events', 'mart_event_bloc_lead_lag_trade_panel', 'mart_event_bloc_lead_lag_trade_panel <- dim_event + dim_time + mart_bloc_month_trade_macro_summary', 'event_id + bloc_code + relative_month_offset', 'Integer month distance from the event start month, where 0 is the event month.', 'Use as an ordering dimension, not as a measure.', 'The panel is descriptive and limited to the configured +/- 6 month event window.', 'Filter to one event and one bloc for clean lead-lag visuals.'
+  union all
+  select 9, 'Event Lead/Lag (BLOC)', 2, 'Trade Deviation', 2, 'total_trade_vs_pre_event_baseline_pct', 'Total Trade vs Pre-Event Baseline %', 'comtrade + events', 'mart_event_bloc_lead_lag_trade_panel', 'mart_event_bloc_lead_lag_trade_panel <- mart_bloc_month_trade_macro_summary + dim_event', 'event_id + bloc_code + relative_month_offset', 'Percent deviation in bloc total trade value versus the average pre-event baseline window.', 'Do not sum across offsets. Compare offsets inside the same event-bloc panel.', 'Baseline is an average of pre-event months and can be null when history is sparse.', 'Use with relative_month_offset and one event selection.'
+  union all
+  select 10, 'Data completeness', 1, 'Dataset Health', 1, 'coverage_score', 'Dataset Coverage Score', 'ops + serving marts', 'mart_dataset_coverage_summary', 'mart_dataset_coverage_summary <- mart_dataset_coverage_monthly + stg_ops_pipeline_run + raw source freshness', 'dataset_name', 'Weighted score blending row presence, freshness, and expected-scope coverage for each dataset.', 'Do not sum. Use as a dataset-level scorecard or conditional format field.', 'Scores are heuristic and intentionally conservative when freshness or expected scope drifts.', 'Use warning_flag = false for cleaner production-health tables.'
+  union all
+  select 10, 'Data completeness', 2, 'Reporter Coverage', 2, 'reporting_coverage_score', 'Reporter Coverage Score', 'comtrade', 'mart_trade_reporter_month_coverage', 'mart_trade_reporter_month_coverage <- fct_reporter_partner_commodity_month + dim_time + configured reporter scope', 'reporter_iso3 + month_start_date', 'Compact reporter-month reliability score used to shade the configured trade coverage table.', 'Do not sum across reporters or months. Use as a cell-level or row-level indicator only.', 'The score is tuned for dashboard readability rather than formal statistical quality measurement.', 'Filter to expected_reporter_flag = true for the curated completeness table.'
+  union all
+  select 10, 'Data completeness', 2, 'Reporter Coverage', 3, 'reporter_dashboard_sort_order', 'Reporter Dashboard Sort Order', 'comtrade + batch plan scope', 'mart_trade_reporter_month_coverage', 'mart_trade_reporter_month_coverage <- configured reporter scope + reporter lifetime trade importance', 'reporter_iso3 + month_start_date', 'Stable numeric sort helper that keeps the curated reporter list first and pushes spillover reporters down by trade importance.', 'Never aggregate. Use only as a hidden ascending sort key in BI tables.', 'This is a presentation helper, not a business metric.', 'Sort ascending on reporter_scope_cohort_sort_order, then reporter_dashboard_sort_order, then month_start_date.'
+  union all
+  select 10, 'Data completeness', 3, 'Warning Flags', 4, 'warning_flag', 'Dataset Warning Flag', 'ops + freshness checks', 'mart_dataset_coverage_summary', 'mart_dataset_coverage_summary <- mart_dataset_coverage_monthly + stg_ops_pipeline_run', 'dataset_name', 'True when the dataset should surface a freshness or completeness warning in the dashboard.', 'Use as a filter or conditional format field, not as a quantity to sum.', 'A warning can come from lag, sparse history, or weak expected-scope coverage.', 'Filter to warning_flag = true when building operational exception lists.'
+)
 
 select
-  'Page 4 Reporter Exposure Map',
-  'Latest Reporter Snapshot',
-  'chokepoint_exposure_pct',
-  'Chokepoint Exposure %',
-  'comtrade + portwatch_monthly + events',
-  'mart_reporter_month_energy_trade_dependency',
-  'mart_reporter_month_energy_trade_dependency <- mart_reporter_structural_vulnerability <- mart_reporter_month_chokepoint_exposure + mart_reporter_energy_vulnerability',
-  'reporter_iso3 + month_start_date',
-  'Percent of reporter monthly trade value routed through modeled chokepoint exposures.',
-  'Do not sum percentages. Use average for group views or pair with trade value for weighting.',
-  'Exposure depends on modeled trade routes and can understate reality where routing confidence is low.',
-  'Filter to latest_month_flag = true for map snapshots.'
-
-union all
-
-select
-  'Page 5 Structural Vulnerability',
-  'Risk Scorecards',
-  'structural_risk_score',
-  'Structural Risk Score',
-  'comtrade + worldbank_energy + portwatch_monthly + events',
-  'mart_reporter_structural_vulnerability',
-  'mart_reporter_structural_vulnerability <- mart_reporter_month_trade_summary + mart_reporter_energy_vulnerability + mart_reporter_month_chokepoint_exposure + dim_event bridges',
-  'reporter_iso3 + month_start_date',
-  'Weighted 0-100 score combining energy import dependence, renewable gap, chokepoint exposure, supplier concentration, and event context.',
-  'Use as a ranking or scatter axis, not as an additive measure.',
-  'Annual World Bank inputs are broadcast to month grain and therefore provide structural context rather than monthly movement.',
-  'Filter to latest_month_flag = true for latest-country comparisons.'
-
-union all
-
-select
-  'Page 5 Structural Vulnerability',
-  'Energy Structure',
-  'energy_import_pct',
-  'Energy Import %',
-  'worldbank_energy',
-  'mart_reporter_month_energy_trade_dependency',
-  'mart_reporter_month_energy_trade_dependency <- mart_reporter_structural_vulnerability <- mart_reporter_energy_vulnerability <- stg_energy_vulnerability',
-  'reporter_iso3 + month_start_date',
-  'World Bank dependency on imported energy indicator matched by reporter-year and broadcast to month.',
-  'Average or compare across reporters; do not sum.',
-  'Annual structural indicator; recent months repeat the same yearly value until a new annual release lands.',
-  'Filter to latest_month_flag = true and compare alongside structural_risk_score.'
-
-union all
-
-select
-  'Page 5 Structural Vulnerability',
-  'Energy Structure',
-  'renewable_share_pct',
-  'Renewable Share %',
-  'worldbank_energy',
-  'mart_reporter_month_energy_trade_dependency',
-  'mart_reporter_month_energy_trade_dependency <- mart_reporter_structural_vulnerability <- mart_reporter_energy_vulnerability <- stg_energy_vulnerability',
-  'reporter_iso3 + month_start_date',
-  'World Bank renewable energy share broadcast from annual country-year data to the monthly reporter view.',
-  'Average or compare across reporters; do not sum.',
-  'Annual source repeated at month grain; not a true monthly signal.',
-  'Filter to latest_month_flag = true for current structural snapshots.'
-
-union all
-
-select
-  'Page 6 Bloc Trade And Macro',
-  'Bloc Scale',
-  'bloc_total_trade_value_usd',
-  'Bloc Total Trade Value (USD)',
-  'comtrade',
-  'mart_bloc_month_trade_macro_summary',
-  'mart_bloc_month_trade_macro_summary <- mart_reporter_commodity_month_trade_summary <- fct_reporter_partner_commodity_month <- stg_comtrade_fact',
-  'bloc_code + month_start_date',
-  'Sum of member-country monthly trade values inside each analytical bloc.',
-  'Do not add across blocs because countries can belong to multiple blocs.',
-  'Bloc totals can understate real activity when member reporting coverage is partial.',
-  'Filter to bloc_reporting_coverage_pct >= 0.70 for cleaner bloc comparisons.'
-
-union all
-
-select
-  'Page 6 Bloc Trade And Macro',
-  'Bloc Composition',
-  'food_share_of_bloc_trade_pct',
-  'Food Share of Bloc Trade %',
-  'comtrade',
-  'mart_bloc_month_trade_macro_summary',
-  'mart_bloc_month_trade_macro_summary <- mart_reporter_commodity_month_trade_summary + dim_commodity',
-  'bloc_code + month_start_date',
-  'Food-flagged trade value divided by bloc total trade value.',
-  'Do not sum percentages. Compare within the same month or average across a filtered time window.',
-  'Interpret with bloc reporting coverage because missing members change the denominator.',
-  'Filter on one bloc and use contiguous months for trend charts.'
-
-union all
-
-select
-  'Page 6 Bloc Trade And Macro',
-  'Bloc Composition',
-  'oil_share_of_bloc_trade_pct',
-  'Oil Share of Bloc Trade %',
-  'comtrade',
-  'mart_bloc_month_trade_macro_summary',
-  'mart_bloc_month_trade_macro_summary <- mart_reporter_commodity_month_trade_summary + dim_commodity',
-  'bloc_code + month_start_date',
-  'Oil proxy trade value using crude, refined petroleum, and LNG proxy commodity codes divided by bloc total trade.',
-  'Do not sum percentages. Compare inside bloc or average over time.',
-  'Commodity proxy is intentionally narrow and does not represent all energy products.',
-  'Filter to bloc_reporting_coverage_pct >= 0.70 when using month-over-month comparisons.'
-
-union all
-
-select
-  'Page 6 Bloc Trade And Macro',
-  'Bloc Composition',
-  'energy_share_of_bloc_trade_pct',
-  'Energy Share of Bloc Trade %',
-  'comtrade',
-  'mart_bloc_month_trade_macro_summary',
-  'mart_bloc_month_trade_macro_summary <- mart_reporter_commodity_month_trade_summary + dim_commodity',
-  'bloc_code + month_start_date',
-  'Energy-flagged trade value divided by bloc total trade value.',
-  'Do not sum percentages. Use averages or within-month comparisons.',
-  'Energy commodity tagging depends on the conformed commodity dimension and excludes some edge classifications.',
-  'Filter to a single bloc and keep coverage warnings visible.'
-
-union all
-
-select
-  'Page 6 Bloc Brent FX Correlation',
-  'Macro Inputs',
-  'brent_price_usd',
-  'Brent Price (USD)',
-  'brent_monthly',
-  'mart_brent_fx_trade_correlation_monthly',
-  'mart_brent_fx_trade_correlation_monthly <- mart_macro_monthly_features <- stg_brent_monthly',
-  'currency_view + base_currency_code + fx_currency_code + bloc_code + month_start_date',
-  'Monthly Brent benchmark price carried into the bloc correlation panel.',
-  'Do not sum. Use average, latest value, or time-series display.',
-  'Public Brent data is lower latency than trade but still reflects monthly aggregation rather than intramonth movement.',
-  'Filter on one currency_view and one bloc for readable comparisons.'
-
-union all
-
-select
-  'Page 6 Bloc Brent FX Correlation',
-  'Macro Inputs',
-  'brent_mom_change',
-  'Brent MoM Change',
-  'brent_monthly',
-  'mart_brent_fx_trade_correlation_monthly',
-  'mart_brent_fx_trade_correlation_monthly <- mart_macro_monthly_features <- stg_brent_monthly',
-  'currency_view + base_currency_code + fx_currency_code + bloc_code + month_start_date',
-  'Month-over-month percent change in the Brent benchmark series.',
-  'Do not sum. Use as a time-series field or correlation input.',
-  'Only comparable on contiguous monthly history and does not imply causality.',
-  'Filter out null months and consider is_oil_shock_5pct for stress scenarios.'
-
-union all
-
-select
-  'Page 6 Bloc Brent FX Correlation',
-  'Macro Inputs',
-  'fx_mom_change',
-  'FX MoM Change',
-  'fx_monthly',
-  'mart_brent_fx_trade_correlation_monthly',
-  'mart_brent_fx_trade_correlation_monthly <- mart_macro_monthly_features <- stg_fx_monthly',
-  'currency_view + base_currency_code + fx_currency_code + bloc_code + month_start_date',
-  'Month-over-month percent change in the selected monthly FX pair view.',
-  'Do not sum. Use as a time-series or correlation input.',
-  'Comparability depends on keeping one currency view and base/quote pair fixed.',
-  'Filter to a single currency_view and currency pair.'
-
-union all
-
-select
-  'Page 6 Bloc Brent FX Correlation',
-  'Trade Change Inputs',
-  'mom_change_food_trade_pct',
-  'Food Trade MoM Change %',
-  'comtrade',
-  'mart_brent_fx_trade_correlation_monthly',
-  'mart_brent_fx_trade_correlation_monthly <- mart_bloc_month_trade_macro_summary <- mart_reporter_commodity_month_trade_summary',
-  'currency_view + base_currency_code + fx_currency_code + bloc_code + month_start_date',
-  'Contiguous-month percent change in bloc food trade value.',
-  'Do not sum. Use only for time-series comparison or rolling correlation windows.',
-  'Null when prior month is missing; reliability falls when bloc reporter coverage is partial.',
-  'Filter to food_trade_change_reliability_flag = true for cleaner correlation reads.'
-
-union all
-
-select
-  'Page 6 Bloc Brent FX Correlation',
-  'Trade Change Inputs',
-  'mom_change_oil_trade_pct',
-  'Oil Trade MoM Change %',
-  'comtrade',
-  'mart_brent_fx_trade_correlation_monthly',
-  'mart_brent_fx_trade_correlation_monthly <- mart_bloc_month_trade_macro_summary <- mart_reporter_commodity_month_trade_summary',
-  'currency_view + base_currency_code + fx_currency_code + bloc_code + month_start_date',
-  'Contiguous-month percent change in bloc oil-proxy trade value.',
-  'Do not sum. Use only for time-series comparison or rolling correlation windows.',
-  'Oil proxy trade uses a narrow commodity subset and is sensitive to bloc reporting gaps.',
-  'Filter to oil_trade_change_reliability_flag = true and keep bloc coverage visible.'
+  dashboard_page_sort_order,
+  dashboard_page,
+  chart_group_sort_order,
+  chart_group,
+  field_sort_order,
+  field_name,
+  display_name,
+  source_dataset,
+  source_model,
+  upstream_models_summary,
+  grain,
+  calculation_summary,
+  aggregation_guidance,
+  known_limitation,
+  recommended_filter
+from field_catalog

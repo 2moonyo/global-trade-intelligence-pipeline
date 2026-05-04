@@ -641,6 +641,20 @@ The weekly non-Comtrade refreshes now have explicit Bruin pipelines:
 - `bruin/pipelines/fx_weekly_refresh`
 - `bruin/pipelines/events_incremental_recent`
 
+Current explicit Bruin cadence:
+
+| Pipeline | Default schedule |
+| --- | --- |
+| `portwatch_weekly_refresh` | Monday 05:15 UTC |
+| `brent_weekly_refresh` | Monday 05:35 UTC |
+| `fx_weekly_refresh` | Monday 05:55 UTC |
+| `events_incremental_recent` | Daily 05:00 UTC |
+
+Related orchestration wrappers:
+
+- `bruin/pipelines/monthly_refresh`: coarse monthly orchestration wrapper for refresh commands plus dbt.
+- `bruin/pipelines/schedule_lane_queue`: generic queue wrapper that runs all enabled batches for one `schedule_lane`.
+
 These pipelines support two runtime selection paths:
 
 - profile-driven default ownership from `ops/execution_profiles.json`
@@ -729,6 +743,20 @@ Default VM timer cadence:
 | `yearly_refresh` | `capstone-schedule-lane-yearly_refresh.timer` | January 1 at 06:45 UTC |
 
 Bootstrap lanes are normally manual. If you want bootstrap timers, add them explicitly to `vm_schedule_lane_timers` and re-apply Terraform.
+
+## Fresh Rebuilds, VM Reprovisioning, And Backfills
+
+The repo now has two operator-facing entry points:
+
+- [ops/vm/README.md](ops/vm/README.md): VM-first bootstrap, repo sync, and stack lifecycle commands.
+- [docs/OPERATIONS_RUNBOOK.md](docs/OPERATIONS_RUNBOOK.md): fresh-run workflow, Docker rebuild rules, backfill patterns, and dataset parameter matrix.
+
+The short version:
+
+- if you change dbt SQL, Python ingestion code, Bruin assets, or shell wrappers on the VM, rebuild the `pipeline` and `orchestrator` containers before the next production run
+- if you need a clean rerun of one batch, use `scripts/run_pipeline.sh dataset-batch <dataset> <batch_id>`
+- if you need to resume from a failed step instead of starting the full batch over, use `--start-at-task <task_name>` or `--start-at-step-order <n>`
+- if you need a clean environment from scratch, use `make vm-bootstrap`, then `./scripts/vm_batches/run_full_bootstrap.sh`, then enable the schedule-lane timers
 
 ## Dataset Run Commands
 

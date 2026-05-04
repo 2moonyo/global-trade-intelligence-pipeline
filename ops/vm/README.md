@@ -39,6 +39,8 @@ This helper will:
 - generate `/etc/capstone/pipeline.env` from tfvars + Secret Manager
 - start `capstone-stack`
 
+For the full rebuild decision tree, backfill patterns, and dataset parameter matrix, also see [docs/OPERATIONS_RUNBOOK.md](../../docs/OPERATIONS_RUNBOOK.md).
+
 If you prefer the older manual setup or need finer-grained control, keep using the step-by-step sections below.
 
 ## First-time VM setup

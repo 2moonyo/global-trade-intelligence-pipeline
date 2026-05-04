@@ -33,6 +33,7 @@ deep*.md
 !infra/terraform/README.md
 !ops/vm/README.md
 !docs/
+!docs/OPERATIONS_RUNBOOK.md
 !docs/contracts/
 !docs/contracts/*.md
 !docs/bruin/

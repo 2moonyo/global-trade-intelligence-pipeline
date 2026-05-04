@@ -1771,11 +1771,13 @@ models:
 
   - name: mart_trade_reporter_month_coverage
     description: >
-      Reporter-month coverage heatmap mart showing whether each expected reporter submitted
-      public trade data, how broad the commodity coverage is, and whether the latest month
-      likely reflects reporting lag rather than real economic movement. Use this for reporter
-      gap heatmaps, missing reporter tables, and reliability overlays on Page 1 or supporting
-      diagnostics. Grain: reporter_iso3 + month_start_date.
+      Reporter-month coverage heatmap mart showing whether each configured dashboard reporter
+      submitted public trade data, how broad the commodity coverage is, and whether the latest
+      month likely reflects reporting lag rather than real economic movement. The mart also
+      carries BI sort helpers so the curated reporter list stays in a stable dashboard order
+      and any spillover reporters sort afterward by lifetime trade importance. Use this for
+      reporter gap heatmaps, missing reporter tables, and reliability overlays on the Data
+      Completeness page. Grain: reporter_iso3 + month_start_date.
     columns:
       - name: reporter_iso3
         description: ISO3 code for the reporting country at reporter-month grain.
@@ -1790,6 +1792,30 @@ models:
         description: Standardized reporter country name for heatmaps and tables.
         tests:
           - not_null
+
+      - name: reporter_scope_cohort_sort_order
+        description: Numeric sort helper that keeps primary configured reporters before secondary configured reporters and then any spillover reporters.
+        tests:
+          - not_null
+
+      - name: reporter_scope_cohort
+        description: Business-readable cohort label describing whether the reporter belongs to the primary configured set, the secondary configured set, or an additional observed spillover group.
+        tests:
+          - not_null
+
+      - name: reporter_dashboard_sort_order
+        description: Stable row sort key for BI tables; configured reporters use the curated batch-plan order and spillover reporters sort later by trade importance.
+        tests:
+          - not_null
+
+      - name: reporter_trade_importance_rank
+        description: Lifetime trade-value rank used to order spillover reporters after the configured dashboard scope.
+
+      - name: reporter_lifetime_trade_value_usd
+        description: Lifetime observed trade value used to rank spillover reporters for dashboard sorting.
+
+      - name: reporter_lifetime_partner_count
+        description: Distinct observed trade partners across all history for the reporter, included as a secondary importance signal.
 
       - name: month_start_date
         description: First calendar day of the reporting month.
@@ -1932,15 +1958,31 @@ models:
       Readable dashboard field lineage reference with one row per dashboard_page and field_name.
       This is not full dbt graph lineage. It is a BI-facing guide for chart builders explaining
       which semantic mart a field should come from, how it is calculated, how it should be
-      aggregated, and what limitation or warning to show. Grain: dashboard_page + field_name.
+      aggregated, how the dashboard pages should sort, and what limitation or warning to show.
+      Grain: dashboard_page + field_name.
     columns:
+      - name: dashboard_page_sort_order
+        description: Stable page-order helper matching the current dashboard navigation from Summary through Data Completeness.
+        tests:
+          - not_null
+
       - name: dashboard_page
         description: Dashboard page name or use-case grouping that owns the field.
         tests:
           - not_null
 
+      - name: chart_group_sort_order
+        description: Stable group-order helper inside each dashboard page.
+        tests:
+          - not_null
+
       - name: chart_group
         description: Chart or interaction group inside the dashboard page.
+        tests:
+          - not_null
+
+      - name: field_sort_order
+        description: Stable field-order helper inside each chart group for the Data Completeness lineage table.
         tests:
           - not_null
 

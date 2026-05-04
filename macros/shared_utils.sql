@@ -175,6 +175,8 @@
     when {{ canonical_iso3 }} = 'FRA' then 'France'
     when {{ canonical_iso3 }} = 'ZAF' then 'South Africa'
     when {{ canonical_iso3 }} = 'CHN' then 'China'
+    when {{ canonical_iso3 }} = 'IND' then 'India'
+    when {{ canonical_iso3 }} = 'PAN' then 'Panama'
     when {{ canonical_iso3 }} = 'USA' then 'United States'
     when {{ canonical_iso3 }} = 'RUS' then 'Russia'
     when {{ canonical_iso3 }} = 'TUR' then 'Turkey'
@@ -197,6 +199,8 @@
   {%- set cleaned_name = clean_label_text(name_expr) -%}
   {%- set canonical_iso3 = canonical_country_iso3(iso3_expr) -%}
   case
+    when {{ canonical_iso3 }} = 'IND' then 'India'
+    when {{ canonical_iso3 }} = 'PAN' then 'Panama'
     when {{ canonical_iso3 }} = 'USA' then 'United States'
     when {{ canonical_iso3 }} = 'RUS' then 'Russia'
     when {{ canonical_iso3 }} = 'TUR' then 'Turkey'

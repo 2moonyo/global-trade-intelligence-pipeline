@@ -1,14 +1,113 @@
 -- Dashboard-ready reporter-month trade coverage mart.
 -- Grain: one row per reporter_iso3 + month_start_date.
 
-with eligible_reporters as (
+with configured_reporters as (
+  -- Keep the dashboard sort aligned with the configured Comtrade reporter batches.
+  select 'EUR' as reporter_iso3, 1 as reporter_dashboard_sort_order, 1 as reporter_scope_cohort_sort_order, 'Primary 16 reporters' as reporter_scope_cohort
+  union all select 'BGR', 2, 1, 'Primary 16 reporters'
+  union all select 'CHN', 3, 1, 'Primary 16 reporters'
+  union all select 'FRA', 4, 1, 'Primary 16 reporters'
+  union all select 'NLD', 5, 1, 'Primary 16 reporters'
+  union all select 'ROU', 6, 1, 'Primary 16 reporters'
+  union all select 'ESP', 7, 1, 'Primary 16 reporters'
+  union all select 'USA', 8, 1, 'Primary 16 reporters'
+  union all select 'RUS', 9, 1, 'Primary 16 reporters'
+  union all select 'IND', 10, 1, 'Primary 16 reporters'
+  union all select 'ZAF', 11, 1, 'Primary 16 reporters'
+  union all select 'EGY', 12, 1, 'Primary 16 reporters'
+  union all select 'TUR', 13, 1, 'Primary 16 reporters'
+  union all select 'IDN', 14, 1, 'Primary 16 reporters'
+  union all select 'BRA', 15, 1, 'Primary 16 reporters'
+  union all select 'PAN', 16, 1, 'Primary 16 reporters'
+  union all select 'AUS', 17, 2, 'Secondary 16 reporters'
+  union all select 'CAN', 18, 2, 'Secondary 16 reporters'
+  union all select 'JPN', 19, 2, 'Secondary 16 reporters'
+  union all select 'KOR', 20, 2, 'Secondary 16 reporters'
+  union all select 'MYS', 21, 2, 'Secondary 16 reporters'
+  union all select 'MEX', 22, 2, 'Secondary 16 reporters'
+  union all select 'MAR', 23, 2, 'Secondary 16 reporters'
+  union all select 'NOR', 24, 2, 'Secondary 16 reporters'
+  union all select 'PHL', 25, 2, 'Secondary 16 reporters'
+  union all select 'QAT', 26, 2, 'Secondary 16 reporters'
+  union all select 'SAU', 27, 2, 'Secondary 16 reporters'
+  union all select 'SGP', 28, 2, 'Secondary 16 reporters'
+  union all select 'THA', 29, 2, 'Secondary 16 reporters'
+  union all select 'ARE', 30, 2, 'Secondary 16 reporters'
+  union all select 'GBR', 31, 2, 'Secondary 16 reporters'
+  union all select 'VNM', 32, 2, 'Secondary 16 reporters'
+),
+country_lookup as (
   select
-    iso3 as reporter_iso3,
-    country_name as reporter_name,
-    region as reporter_region,
-    subregion as reporter_subregion
+    iso3,
+    country_name,
+    region,
+    subregion,
+    row_number() over (
+      partition by iso3
+      order by
+        case when is_country_map_eligible then 0 else 1 end,
+        case when is_country_group then 1 else 0 end,
+        country_name
+    ) as country_rank
   from {{ ref('dim_country') }}
-  where is_country_map_eligible
+  where iso3 is not null
+),
+reporter_lookup as (
+  select
+    country_iso3 as reporter_iso3,
+    country_name_looker,
+    country_name_raw,
+    row_number() over (
+      partition by country_iso3
+      order by
+        case when is_current then 0 else 1 end,
+        case when is_map_eligible then 0 else 1 end,
+        reporter_code desc
+    ) as reporter_rank
+  from {{ ref('stg_reporters') }}
+  where country_iso3 is not null
+),
+reporter_trade_importance as (
+  select
+    {{ canonical_country_iso3('reporter_iso3') }} as reporter_iso3,
+    sum(trade_value_usd) as reporter_lifetime_trade_value_usd,
+    count(distinct {{ canonical_country_iso3('partner_iso3') }}) as reporter_lifetime_partner_count
+  from {{ ref('fct_reporter_partner_commodity_month') }}
+  where reporter_iso3 is not null
+  group by 1
+),
+reporter_trade_importance_ranked as (
+  select
+    reporter_iso3,
+    reporter_lifetime_trade_value_usd,
+    reporter_lifetime_partner_count,
+    row_number() over (
+      order by reporter_lifetime_trade_value_usd desc, reporter_lifetime_partner_count desc, reporter_iso3
+    ) as reporter_trade_importance_rank
+  from reporter_trade_importance
+),
+configured_reporter_scope as (
+  select
+    cr.reporter_iso3,
+    coalesce(cl.country_name, rl.country_name_looker, rl.country_name_raw, cr.reporter_iso3) as reporter_name,
+    cl.region as reporter_region,
+    cl.subregion as reporter_subregion,
+    cr.reporter_scope_cohort_sort_order,
+    cr.reporter_scope_cohort,
+    cr.reporter_dashboard_sort_order,
+    rti.reporter_trade_importance_rank,
+    rti.reporter_lifetime_trade_value_usd,
+    rti.reporter_lifetime_partner_count,
+    true as expected_reporter_flag
+  from configured_reporters as cr
+  left join country_lookup as cl
+    on cr.reporter_iso3 = cl.iso3
+   and cl.country_rank = 1
+  left join reporter_lookup as rl
+    on cr.reporter_iso3 = rl.reporter_iso3
+   and rl.reporter_rank = 1
+  left join reporter_trade_importance_ranked as rti
+    on cr.reporter_iso3 = rti.reporter_iso3
 ),
 observed_reporters as (
   select distinct
@@ -20,30 +119,37 @@ unexpected_reporters as (
   select
     o.reporter_iso3
   from observed_reporters as o
-  left join eligible_reporters as er
-    on o.reporter_iso3 = er.reporter_iso3
-  where er.reporter_iso3 is null
+  left join configured_reporters as cr
+    on o.reporter_iso3 = cr.reporter_iso3
+  where cr.reporter_iso3 is null
 ),
-reporter_scope as (
-  select
-    reporter_iso3,
-    reporter_name,
-    reporter_region,
-    reporter_subregion,
-    true as expected_reporter_flag
-  from eligible_reporters
-
-  union all
-
+unexpected_reporter_scope as (
   select
     ur.reporter_iso3,
-    coalesce(dc.country_name, ur.reporter_iso3) as reporter_name,
-    dc.region as reporter_region,
-    dc.subregion as reporter_subregion,
+    coalesce(cl.country_name, rl.country_name_looker, rl.country_name_raw, ur.reporter_iso3) as reporter_name,
+    cl.region as reporter_region,
+    cl.subregion as reporter_subregion,
+    3 as reporter_scope_cohort_sort_order,
+    'Additional observed reporters' as reporter_scope_cohort,
+    1000 + coalesce(rti.reporter_trade_importance_rank, 999) as reporter_dashboard_sort_order,
+    rti.reporter_trade_importance_rank,
+    rti.reporter_lifetime_trade_value_usd,
+    rti.reporter_lifetime_partner_count,
     false as expected_reporter_flag
   from unexpected_reporters as ur
-  left join {{ ref('dim_country') }} as dc
-    on ur.reporter_iso3 = dc.iso3
+  left join country_lookup as cl
+    on ur.reporter_iso3 = cl.iso3
+   and cl.country_rank = 1
+  left join reporter_lookup as rl
+    on ur.reporter_iso3 = rl.reporter_iso3
+   and rl.reporter_rank = 1
+  left join reporter_trade_importance_ranked as rti
+    on ur.reporter_iso3 = rti.reporter_iso3
+),
+reporter_scope as (
+  select * from configured_reporter_scope
+  union all
+  select * from unexpected_reporter_scope
 ),
 month_spine as (
   select distinct
@@ -76,6 +182,12 @@ grid as (
     rs.reporter_name,
     rs.reporter_region,
     rs.reporter_subregion,
+    rs.reporter_scope_cohort_sort_order,
+    rs.reporter_scope_cohort,
+    rs.reporter_dashboard_sort_order,
+    rs.reporter_trade_importance_rank,
+    rs.reporter_lifetime_trade_value_usd,
+    rs.reporter_lifetime_partner_count,
     rs.expected_reporter_flag,
     ms.month_start_date,
     ms.year_month
@@ -92,6 +204,12 @@ select
   g.reporter_name,
   g.reporter_region,
   g.reporter_subregion,
+  g.reporter_scope_cohort_sort_order,
+  g.reporter_scope_cohort,
+  g.reporter_dashboard_sort_order,
+  g.reporter_trade_importance_rank,
+  g.reporter_lifetime_trade_value_usd,
+  g.reporter_lifetime_partner_count,
   g.month_start_date,
   g.year_month,
   g.expected_reporter_flag,
@@ -119,7 +237,7 @@ select
     else 'Partial'
   end as reporter_coverage_status,
   case
-    when not g.expected_reporter_flag then 'Reporter is outside the expected dashboard reporter scope.'
+    when not g.expected_reporter_flag then 'Reporter is outside the configured dashboard reporter scope and is sorted after the curated reporter list.'
     when coalesce(td.observed_trade_rows, 0) = 0
       then 'No trade rows are present for this reporter-month; recent Comtrade gaps may reflect reporting delay rather than real trade collapse.'
     when coalesce(td.observed_cmd_count, 0) < 3

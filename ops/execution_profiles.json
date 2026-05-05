@@ -1,0 +1,25 @@
+{
+  "default_profile": "all_vm",
+  "profiles": {
+    "all_vm": {
+      "description": "Current VM-first baseline. Every dataset is owned by the VM runtime.",
+      "default_runtime": "vm",
+      "datasets": {},
+      "batches": {}
+    },
+    "hybrid_vm_serverless": {
+      "description": "Hybrid profile: VM remains the default owner; bounded scheduled non-Comtrade refresh batches run on Cloud Run Jobs.",
+      "default_runtime": "vm",
+      "datasets": {
+        "comtrade": "vm"
+      },
+      "batches": {
+        "events_incremental_recent": "cloud_run",
+        "portwatch_weekly_refresh": "cloud_run",
+        "brent_weekly_refresh": "cloud_run",
+        "fx_weekly_refresh": "cloud_run",
+        "worldbank_energy_yearly_refresh": "cloud_run"
+      }
+    }
+  }
+}

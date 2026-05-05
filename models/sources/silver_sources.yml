@@ -1,0 +1,30 @@
+version: 2
+
+sources:
+  - name: raw
+    schema: raw
+    tables:
+      - name: comtrade_fact
+      - name: dim_country
+      - name: dim_time
+      - name: dim_commodity
+      - name: dim_trade_flow
+      - name: dim_chokepoint
+      - name: dim_country_ports
+      - name: route_applicability
+      - name: dim_trade_routes
+      - name: chokepoint_bridge
+      - name: bridge_event_month_chokepoint_core
+      - name: bridge_event_month_maritime_region
+      - name: dim_event
+      - name: portwatch_daily
+      - name: portwatch_monthly
+      - name: brent_daily
+      - name: brent_monthly
+      - name: ecb_fx_eu_monthly
+      - name: energy_vulnerability
+      - name: ops_pipeline_run
+      - name: ops_task_run
+      - name: ops_task_artifact
+      - name: ops_partition_checkpoint
+      - name: ops_retry_registry

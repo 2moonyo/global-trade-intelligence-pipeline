@@ -1,0 +1,78 @@
+{
+  "name": "capstone.comtrade_bootstrap_day_3_load_bigquery",
+  "type": "python",
+  "upstreams": [
+    {
+      "name": "capstone.comtrade_bootstrap_day_3_publish_gcs",
+      "type": "python",
+      "executable_file": {
+        "name": "comtrade_bootstrap_day_3_publish_gcs.py",
+        "path": "bruin/pipelines/comtrade_bootstrap_day_3/assets/comtrade_bootstrap_day_3_publish_gcs.py",
+        "content": ""
+      },
+      "definition_file": {
+        "name": "comtrade_bootstrap_day_3_publish_gcs.py",
+        "path": "bruin/pipelines/comtrade_bootstrap_day_3/assets/comtrade_bootstrap_day_3_publish_gcs.py",
+        "type": "comment"
+      }
+    },
+    {
+      "name": "capstone.comtrade_bootstrap_day_3_routing",
+      "type": "python",
+      "executable_file": {
+        "name": "comtrade_bootstrap_day_3_routing.py",
+        "path": "bruin/pipelines/comtrade_bootstrap_day_3/assets/comtrade_bootstrap_day_3_routing.py",
+        "content": ""
+      },
+      "definition_file": {
+        "name": "comtrade_bootstrap_day_3_routing.py",
+        "path": "bruin/pipelines/comtrade_bootstrap_day_3/assets/comtrade_bootstrap_day_3_routing.py",
+        "type": "comment"
+      }
+    },
+    {
+      "name": "capstone.comtrade_bootstrap_day_3_silver",
+      "type": "python",
+      "executable_file": {
+        "name": "comtrade_bootstrap_day_3_silver.py",
+        "path": "bruin/pipelines/comtrade_bootstrap_day_3/assets/comtrade_bootstrap_day_3_silver.py",
+        "content": ""
+      },
+      "definition_file": {
+        "name": "comtrade_bootstrap_day_3_silver.py",
+        "path": "bruin/pipelines/comtrade_bootstrap_day_3/assets/comtrade_bootstrap_day_3_silver.py",
+        "type": "comment"
+      }
+    },
+    {
+      "name": "capstone.comtrade_bootstrap_day_3_extract",
+      "type": "python",
+      "executable_file": {
+        "name": "comtrade_bootstrap_day_3_extract.py",
+        "path": "bruin/pipelines/comtrade_bootstrap_day_3/assets/comtrade_bootstrap_day_3_extract.py",
+        "content": ""
+      },
+      "definition_file": {
+        "name": "comtrade_bootstrap_day_3_extract.py",
+        "path": "bruin/pipelines/comtrade_bootstrap_day_3/assets/comtrade_bootstrap_day_3_extract.py",
+        "type": "comment"
+      }
+    }
+  ],
+  "downstream": [
+    {
+      "name": "capstone.comtrade_bootstrap_day_3_dbt_build",
+      "type": "python",
+      "executable_file": {
+        "name": "comtrade_bootstrap_day_3_dbt_build.py",
+        "path": "bruin/pipelines/comtrade_bootstrap_day_3/assets/comtrade_bootstrap_day_3_dbt_build.py",
+        "content": ""
+      },
+      "definition_file": {
+        "name": "comtrade_bootstrap_day_3_dbt_build.py",
+        "path": "bruin/pipelines/comtrade_bootstrap_day_3/assets/comtrade_bootstrap_day_3_dbt_build.py",
+        "type": "comment"
+      }
+    }
+  ]
+}

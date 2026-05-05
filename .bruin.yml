@@ -1,0 +1,20 @@
+default_environment: default
+environments:
+    default:
+        connections:
+            google_cloud_platform:
+                - location: ${GCP_LOCATION}
+                  name: gcp-default
+                  project_id: ${GCP_PROJECT_ID}
+                  use_application_default_credentials: true
+                - location: europe-west1-b
+                  name: capstone-fullcap-911-dev
+                  project_id: fulllcap-911
+                  use_application_default_credentials: true
+    production:
+        connections:
+            google_cloud_platform:
+                - location: ${GCP_LOCATION}
+                  name: gcp-default
+                  project_id: ${GCP_PROJECT_ID}
+                  use_application_default_credentials: true

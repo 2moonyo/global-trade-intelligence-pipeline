@@ -1,0 +1,31 @@
+iso3,bloc_code,bloc_name,bloc_type,membership_status,notes
+CAN,G7,Group of Seven,advanced_economy_bloc,member,Static membership snapshot for dashboard comparison
+FRA,G7,Group of Seven,advanced_economy_bloc,member,Static membership snapshot for dashboard comparison
+DEU,G7,Group of Seven,advanced_economy_bloc,member,Static membership snapshot for dashboard comparison
+ITA,G7,Group of Seven,advanced_economy_bloc,member,Static membership snapshot for dashboard comparison
+JPN,G7,Group of Seven,advanced_economy_bloc,member,Static membership snapshot for dashboard comparison
+GBR,G7,Group of Seven,advanced_economy_bloc,member,Static membership snapshot for dashboard comparison
+USA,G7,Group of Seven,advanced_economy_bloc,member,Static membership snapshot for dashboard comparison
+DZA,OPEC,Organization of the Petroleum Exporting Countries,commodity_producer_bloc,member,Static membership snapshot for dashboard comparison
+COG,OPEC,Organization of the Petroleum Exporting Countries,commodity_producer_bloc,member,Static membership snapshot for dashboard comparison
+GNQ,OPEC,Organization of the Petroleum Exporting Countries,commodity_producer_bloc,member,Static membership snapshot for dashboard comparison
+GAB,OPEC,Organization of the Petroleum Exporting Countries,commodity_producer_bloc,member,Static membership snapshot for dashboard comparison
+IRN,OPEC,Organization of the Petroleum Exporting Countries,commodity_producer_bloc,member,Static membership snapshot for dashboard comparison
+IRQ,OPEC,Organization of the Petroleum Exporting Countries,commodity_producer_bloc,member,Static membership snapshot for dashboard comparison
+KWT,OPEC,Organization of the Petroleum Exporting Countries,commodity_producer_bloc,member,Static membership snapshot for dashboard comparison
+LBY,OPEC,Organization of the Petroleum Exporting Countries,commodity_producer_bloc,member,Static membership snapshot for dashboard comparison
+NGA,OPEC,Organization of the Petroleum Exporting Countries,commodity_producer_bloc,member,Static membership snapshot for dashboard comparison
+SAU,OPEC,Organization of the Petroleum Exporting Countries,commodity_producer_bloc,member,Static membership snapshot for dashboard comparison
+ARE,OPEC,Organization of the Petroleum Exporting Countries,commodity_producer_bloc,member,Static membership snapshot for dashboard comparison
+VEN,OPEC,Organization of the Petroleum Exporting Countries,commodity_producer_bloc,member,Static membership snapshot for dashboard comparison
+BRA,BRICS,BRICS,multipolar_economic_bloc,member,Static membership snapshot for dashboard comparison
+RUS,BRICS,BRICS,multipolar_economic_bloc,member,Static membership snapshot for dashboard comparison
+IND,BRICS,BRICS,multipolar_economic_bloc,member,Static membership snapshot for dashboard comparison
+CHN,BRICS,BRICS,multipolar_economic_bloc,member,Static membership snapshot for dashboard comparison
+ZAF,BRICS,BRICS,multipolar_economic_bloc,member,Static membership snapshot for dashboard comparison
+EGY,BRICS,BRICS,multipolar_economic_bloc,member,Static membership snapshot for dashboard comparison
+ETH,BRICS,BRICS,multipolar_economic_bloc,member,Static membership snapshot for dashboard comparison
+IDN,BRICS,BRICS,multipolar_economic_bloc,member,Static membership snapshot for dashboard comparison
+IRN,BRICS,BRICS,multipolar_economic_bloc,member,Static membership snapshot for dashboard comparison
+SAU,BRICS,BRICS,multipolar_economic_bloc,member,Static membership snapshot for dashboard comparison
+ARE,BRICS,BRICS,multipolar_economic_bloc,member,Static membership snapshot for dashboard comparison

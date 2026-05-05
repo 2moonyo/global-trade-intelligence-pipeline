@@ -1,0 +1,25 @@
+name: monthly_refresh
+schedule: "30 6 1 * *"
+start_date: "2026-04-10"
+catchup: false
+retries: 1
+tags: ["refresh", "monthly", "orchestration"]
+domains: ["orchestration"]
+meta:
+  cadence: monthly
+  orchestration_source: bruin
+default:
+  rerun_cooldown: 300
+variables:
+  refresh_command:
+    type: string
+    default: "all-refresh-cloud"
+  dbt_command:
+    type: string
+    enum: ["build", "debug", "parse", "docs-generate"]
+    default: "build"
+  dbt_extra_args:
+    type: array
+    items:
+      type: string
+    default: []

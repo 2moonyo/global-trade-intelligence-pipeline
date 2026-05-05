@@ -1,0 +1,54 @@
+[
+  {
+    "pipeline": "brent_bootstrap_phase_1",
+    "issues": {}
+  },
+  {
+    "pipeline": "comtrade_bootstrap_day_1",
+    "issues": {}
+  },
+  {
+    "pipeline": "comtrade_bootstrap_day_2",
+    "issues": {}
+  },
+  {
+    "pipeline": "comtrade_bootstrap_day_3",
+    "issues": {}
+  },
+  {
+    "pipeline": "comtrade_bootstrap_day_4",
+    "issues": {}
+  },
+  {
+    "pipeline": "comtrade_bootstrap_day_5",
+    "issues": {}
+  },
+  {
+    "pipeline": "comtrade_bootstrap_day_6",
+    "issues": {}
+  },
+  {
+    "pipeline": "dataset_batch",
+    "issues": {}
+  },
+  {
+    "pipeline": "fx_bootstrap_phase_1",
+    "issues": {}
+  },
+  {
+    "pipeline": "monthly_refresh",
+    "issues": {}
+  },
+  {
+    "pipeline": "portwatch_bootstrap_phase_1",
+    "issues": {}
+  },
+  {
+    "pipeline": "schedule_lane_queue",
+    "issues": {}
+  },
+  {
+    "pipeline": "worldbank_energy_bootstrap_full",
+    "issues": {}
+  }
+]

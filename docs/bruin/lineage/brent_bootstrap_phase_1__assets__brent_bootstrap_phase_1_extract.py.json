@@ -1,0 +1,63 @@
+{
+  "name": "capstone.brent_bootstrap_phase_1_extract",
+  "type": "python",
+  "upstreams": [],
+  "downstream": [
+    {
+      "name": "capstone.brent_bootstrap_phase_1_silver",
+      "type": "python",
+      "executable_file": {
+        "name": "brent_bootstrap_phase_1_silver.py",
+        "path": "bruin/pipelines/brent_bootstrap_phase_1/assets/brent_bootstrap_phase_1_silver.py",
+        "content": ""
+      },
+      "definition_file": {
+        "name": "brent_bootstrap_phase_1_silver.py",
+        "path": "bruin/pipelines/brent_bootstrap_phase_1/assets/brent_bootstrap_phase_1_silver.py",
+        "type": "comment"
+      }
+    },
+    {
+      "name": "capstone.brent_bootstrap_phase_1_publish_gcs",
+      "type": "python",
+      "executable_file": {
+        "name": "brent_bootstrap_phase_1_publish_gcs.py",
+        "path": "bruin/pipelines/brent_bootstrap_phase_1/assets/brent_bootstrap_phase_1_publish_gcs.py",
+        "content": ""
+      },
+      "definition_file": {
+        "name": "brent_bootstrap_phase_1_publish_gcs.py",
+        "path": "bruin/pipelines/brent_bootstrap_phase_1/assets/brent_bootstrap_phase_1_publish_gcs.py",
+        "type": "comment"
+      }
+    },
+    {
+      "name": "capstone.brent_bootstrap_phase_1_load_bigquery",
+      "type": "python",
+      "executable_file": {
+        "name": "brent_bootstrap_phase_1_load_bigquery.py",
+        "path": "bruin/pipelines/brent_bootstrap_phase_1/assets/brent_bootstrap_phase_1_load_bigquery.py",
+        "content": ""
+      },
+      "definition_file": {
+        "name": "brent_bootstrap_phase_1_load_bigquery.py",
+        "path": "bruin/pipelines/brent_bootstrap_phase_1/assets/brent_bootstrap_phase_1_load_bigquery.py",
+        "type": "comment"
+      }
+    },
+    {
+      "name": "capstone.brent_bootstrap_phase_1_dbt_build",
+      "type": "python",
+      "executable_file": {
+        "name": "brent_bootstrap_phase_1_dbt_build.py",
+        "path": "bruin/pipelines/brent_bootstrap_phase_1/assets/brent_bootstrap_phase_1_dbt_build.py",
+        "content": ""
+      },
+      "definition_file": {
+        "name": "brent_bootstrap_phase_1_dbt_build.py",
+        "path": "bruin/pipelines/brent_bootstrap_phase_1/assets/brent_bootstrap_phase_1_dbt_build.py",
+        "type": "comment"
+      }
+    }
+  ]
+}

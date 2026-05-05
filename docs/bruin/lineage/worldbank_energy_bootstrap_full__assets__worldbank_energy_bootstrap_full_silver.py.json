@@ -1,0 +1,64 @@
+{
+  "name": "capstone.worldbank_energy_bootstrap_full_silver",
+  "type": "python",
+  "upstreams": [
+    {
+      "name": "capstone.worldbank_energy_bootstrap_full_extract",
+      "type": "python",
+      "executable_file": {
+        "name": "worldbank_energy_bootstrap_full_extract.py",
+        "path": "bruin/pipelines/worldbank_energy_bootstrap_full/assets/worldbank_energy_bootstrap_full_extract.py",
+        "content": ""
+      },
+      "definition_file": {
+        "name": "worldbank_energy_bootstrap_full_extract.py",
+        "path": "bruin/pipelines/worldbank_energy_bootstrap_full/assets/worldbank_energy_bootstrap_full_extract.py",
+        "type": "comment"
+      }
+    }
+  ],
+  "downstream": [
+    {
+      "name": "capstone.worldbank_energy_bootstrap_full_publish_gcs",
+      "type": "python",
+      "executable_file": {
+        "name": "worldbank_energy_bootstrap_full_publish_gcs.py",
+        "path": "bruin/pipelines/worldbank_energy_bootstrap_full/assets/worldbank_energy_bootstrap_full_publish_gcs.py",
+        "content": ""
+      },
+      "definition_file": {
+        "name": "worldbank_energy_bootstrap_full_publish_gcs.py",
+        "path": "bruin/pipelines/worldbank_energy_bootstrap_full/assets/worldbank_energy_bootstrap_full_publish_gcs.py",
+        "type": "comment"
+      }
+    },
+    {
+      "name": "capstone.worldbank_energy_bootstrap_full_load_bigquery",
+      "type": "python",
+      "executable_file": {
+        "name": "worldbank_energy_bootstrap_full_load_bigquery.py",
+        "path": "bruin/pipelines/worldbank_energy_bootstrap_full/assets/worldbank_energy_bootstrap_full_load_bigquery.py",
+        "content": ""
+      },
+      "definition_file": {
+        "name": "worldbank_energy_bootstrap_full_load_bigquery.py",
+        "path": "bruin/pipelines/worldbank_energy_bootstrap_full/assets/worldbank_energy_bootstrap_full_load_bigquery.py",
+        "type": "comment"
+      }
+    },
+    {
+      "name": "capstone.worldbank_energy_bootstrap_full_dbt_build",
+      "type": "python",
+      "executable_file": {
+        "name": "worldbank_energy_bootstrap_full_dbt_build.py",
+        "path": "bruin/pipelines/worldbank_energy_bootstrap_full/assets/worldbank_energy_bootstrap_full_dbt_build.py",
+        "content": ""
+      },
+      "definition_file": {
+        "name": "worldbank_energy_bootstrap_full_dbt_build.py",
+        "path": "bruin/pipelines/worldbank_energy_bootstrap_full/assets/worldbank_energy_bootstrap_full_dbt_build.py",
+        "type": "comment"
+      }
+    }
+  ]
+}

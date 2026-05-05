@@ -1,0 +1,89 @@
+version: 2
+
+models:
+  - name: dim_event
+    description: "Conformed event dimension built from silver event metadata and scoped through event bridges."
+    columns:
+      - name: event_id
+        description: "Unique identifier for an event in the conformed event dimension."
+        tests: [not_null, unique]
+      - name: event_name
+        description: "Business-readable name of the event."
+        tests: [not_null]
+      - name: event_start_date
+        description: "Date when the event begins."
+        tests: [not_null]
+      - name: event_end_date
+        description: "Date when the event ends."
+        tests: [not_null]
+      - name: severity_level
+        description: "Categorical severity bucket derived from base severity score (low, medium, high, critical)."
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['low', 'medium', 'high', 'critical']
+      - name: event_scope_type
+        description: "Derived scope classification based on chokepoint and region coverage plus global flags."
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['global', 'mixed', 'multi_chokepoint', 'chokepoint_specific', 'regional', 'unscoped']
+
+  - name: bridge_event_month
+    description: "Monthly event bridge aligned to the dbt-generated conformed monthly time dimension."
+    columns:
+      - name: event_id
+        description: "Event identifier for the monthly bridge record."
+        tests: [not_null]
+      - name: month_key
+        description: "Surrogate month key mapped from dim_time for joining monthly fact and dimension models."
+        tests: [not_null]
+
+  - name: bridge_event_chokepoint
+    description: "Event to chokepoint relationship bridge."
+    columns:
+      - name: event_id
+        description: "Event identifier participating in the event-chokepoint relationship."
+        tests: [not_null]
+      - name: chokepoint_id
+        description: "Hashed surrogate key of normalized chokepoint_name used for consistent chokepoint joins."
+        tests: [not_null]
+
+  - name: bridge_event_region
+    description: "Event to maritime region relationship bridge."
+    columns:
+      - name: event_id
+        description: "Event identifier participating in the event-region relationship."
+        tests: [not_null]
+      - name: region_id
+        description: "Hashed surrogate key of normalized region_name used for consistent region joins."
+        tests: [not_null]
+
+  - name: dim_location
+    description: "Conformed maritime location dimension spanning core chokepoints and normalized non-core event locations."
+    columns:
+      - name: location_id
+        description: "Stable hashed location key derived from location_name and location_type."
+        tests: [not_null, unique]
+      - name: location_name
+        description: "Business-readable maritime location label."
+        tests: [not_null]
+      - name: location_type
+        description: "Semantic location class used to distinguish chokepoints, regions, passages, and ports."
+        tests: [not_null]
+      - name: location_layer
+        description: "Normalized source-layer grouping identifying whether the location was sourced as a core chokepoint or non-core maritime location."
+      - name: is_core_chokepoint
+        description: "True when the location is a core chokepoint used directly in trade routing and chokepoint exposure joins."
+
+  - name: bridge_event_location
+    description: "Generic event-to-location relationship bridge complementing the chokepoint-specific and region-specific event bridges."
+    columns:
+      - name: event_id
+        description: "Event identifier participating in the event-location relationship."
+        tests: [not_null]
+      - name: location_id
+        description: "Hashed surrogate key of the related location."
+        tests: [not_null]
+      - name: month_count
+        description: "Number of distinct active months for the event-location relationship represented by the bridge row."

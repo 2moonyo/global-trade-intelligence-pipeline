@@ -1,0 +1,19 @@
+name: events_incremental_recent
+schedule: "0 5 * * *"
+start_date: "2026-04-11"
+catchup: false
+retries: 2
+tags: ["ingestion", "incremental", "events"]
+domains: ["events"]
+meta:
+  batch_id: events_incremental_recent
+  orchestration_source: explicit_assets
+default:
+  rerun_cooldown: 60
+variables:
+  execution_profile:
+    type: string
+    default: ""
+  target_runtime:
+    type: string
+    default: ""

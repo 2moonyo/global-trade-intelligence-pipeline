@@ -1,0 +1,11 @@
+name: comtrade_bootstrap_day_1
+start_date: "2026-04-11"
+catchup: false
+retries: 2
+tags: ["ingestion", "bootstrap", "comtrade"]
+domains: ["trade"]
+meta:
+  batch_id: comtrade_bootstrap_day_1
+  orchestration_source: explicit_assets
+default:
+  rerun_cooldown: 300

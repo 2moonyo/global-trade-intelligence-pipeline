@@ -1,0 +1,800 @@
+version: 2
+
+models:
+  - name: stg_fx_monthly
+    description: Standardized monthly FX context sourced from the canonical silver-backed raw FX monthly landing table, exposing both USD-base direct rates and EUR-base derived crosses.
+    columns:
+      - name: year_month
+        description: Canonical month key in YYYY-MM format.
+        tests:
+          - not_null
+
+      - name: currency_view
+        description: Analytical FX view label such as USD_base or EUR_base.
+        tests:
+          - not_null
+
+      - name: base_currency_code
+        description: Base currency for the presented FX rate view.
+        tests:
+          - not_null
+
+      - name: fx_currency_code
+        description: Currency code for the quoted monthly FX series standardized to uppercase.
+        tests:
+          - not_null
+
+      - name: fx_rate
+        description: Average monthly FX rate expressed as quote currency units per one base currency unit for the selected currency_view.
+
+      - name: fx_rate_to_usd
+        description: USD per quoted currency unit, retained as a normalized comparison metric across currency views.
+
+      - name: fx_mom_change
+        description: Month-over-month percentage change in the presented view-specific monthly FX rate.
+
+  - name: stg_brent_daily
+    description: Daily Brent benchmark price series normalized to one row per benchmark trading day for daily system pulse marts.
+    columns:
+      - name: date_day
+        description: Trading day date for the benchmark observation.
+        tests:
+          - not_null
+
+      - name: year_month
+        description: Canonical month key in YYYY-MM format.
+        tests:
+          - not_null
+
+      - name: benchmark_code
+        description: Short code identifying the benchmark series.
+        tests:
+          - not_null
+
+      - name: benchmark_name
+        description: Human-readable benchmark name.
+
+      - name: region
+        description: Geographic region associated with the benchmark series.
+
+      - name: source_series_id
+        description: Upstream provider series identifier.
+
+      - name: price_usd_per_bbl
+        description: Daily oil price in USD per barrel.
+
+      - name: load_ts
+        description: Latest load timestamp retained when duplicate benchmark-day rows are present upstream.
+
+  - name: stg_brent_monthly
+    description: Monthly Brent benchmark price series normalized for mart joins.
+    columns:
+      - name: year_month
+        description: Canonical month key in YYYY-MM format.
+        tests:
+          - not_null
+
+      - name: month_start_date
+        description: First calendar day of the month.
+        tests:
+          - not_null
+
+      - name: year
+        description: Calendar year extracted from the monthly series.
+
+      - name: month
+        description: Calendar month number from 1 to 12.
+
+      - name: benchmark_code
+        description: Short code identifying the benchmark series.
+
+      - name: benchmark_name
+        description: Human-readable benchmark name.
+
+      - name: region
+        description: Geographic region associated with the benchmark series.
+
+      - name: source_series_id
+        description: Upstream provider series identifier.
+
+      - name: avg_price_usd_per_bbl
+        description: Average monthly oil price in USD per barrel.
+
+      - name: min_price_usd_per_bbl
+        description: Lowest observed daily price in the month in USD per barrel.
+
+      - name: max_price_usd_per_bbl
+        description: Highest observed daily price in the month in USD per barrel.
+
+      - name: month_start_price_usd_per_bbl
+        description: Opening price for the first trading day of the month in USD per barrel.
+
+      - name: month_end_price_usd_per_bbl
+        description: Closing price for the last trading day of the month in USD per barrel.
+
+      - name: mom_abs_change_usd
+        description: Month-over-month absolute price change in USD per barrel.
+
+      - name: mom_pct_change
+        description: Month-over-month percentage price change.
+
+      - name: trading_day_count
+        description: Number of trading days included in the monthly aggregation.
+
+  - name: stg_portwatch_daily
+    description: >
+      Canonical PortWatch daily staging model at date-day and chokepoint grain.
+      Uses a scaffolded daily calendar to retain missing and stale source coverage
+      while standardizing daily traffic and throughput signals.
+    columns:
+      - name: date_day
+        description: Calendar day used by Looker Studio daily filters and trend charts.
+        tests:
+          - not_null
+
+      - name: portwatch_source_chokepoint_id
+        description: Source PortWatch chokepoint identifier retained for lineage to the raw landing table.
+        tests:
+          - not_null
+
+      - name: chokepoint_id
+        description: Stable canonical chokepoint identifier hashed from the standardized chokepoint name.
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_chokepoint')
+                field: chokepoint_id
+
+      - name: chokepoint_name
+        description: Human-readable chokepoint name standardized for downstream semantic marts.
+        tests:
+          - not_null
+
+      - name: year_month
+        description: Canonical month key in YYYY-MM format retained for daily-to-month filtering and grouping.
+        tests:
+          - not_null
+
+      - name: month_start_date
+        description: First calendar day of the row's month, retained for Looker Studio month filters.
+        tests:
+          - not_null
+
+      - name: n_total
+        description: Daily vessel count proxy sourced from PortWatch.
+
+      - name: capacity
+        description: Daily throughput proxy sourced from PortWatch.
+
+      - name: n_tanker
+        description: Daily tanker vessel count.
+
+      - name: n_container
+        description: Daily container vessel count.
+
+      - name: n_dry_bulk
+        description: Daily dry bulk vessel count.
+
+      - name: capacity_tanker
+        description: Daily tanker throughput proxy.
+
+      - name: capacity_container
+        description: Daily container throughput proxy.
+
+      - name: capacity_dry_bulk
+        description: Daily dry bulk throughput proxy.
+
+      - name: vessel_size_index
+        description: Capacity divided by total vessel count when both are available.
+
+      - name: tanker_share
+        description: Share of tracked daily vessel counts represented by tankers.
+
+      - name: container_share
+        description: Share of tracked daily vessel counts represented by container vessels.
+
+      - name: dry_bulk_share
+        description: Share of tracked daily vessel counts represented by dry bulk vessels.
+
+      - name: priority_vessel_share
+        description: Chokepoint-specific priority vessel share aligned to the project's monthly stress logic.
+
+      - name: has_portwatch_daily_data_flag
+        description: True when the raw PortWatch landing table contains an observed row for the day and chokepoint.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                quote: false
+                values: [0, 1]
+
+  - name: stg_comtrade_fact
+    description: >
+      Standardized staging view over stg_comtrade_trade_base.
+      Exposes partner and routing keys used by downstream models while preserving
+      the stable canonical grain key used for downstream lineage joins.
+    columns:
+      - name: canonical_grain_key
+        description: Stable hashed key for reporter-partner-commodity-month-flow, reused by marts and provenance models.
+        tests:
+          - not_null
+
+      - name: ref_date
+        description: First day of the reference month as a date.
+        tests:
+          - not_null
+
+      - name: period
+        description: Integer month key in YYYYMM format.
+        tests:
+          - not_null
+
+      - name: year_month
+        description: Canonical month key in YYYY-MM format used for cross-source joins.
+        tests:
+          - not_null
+
+      - name: ref_year
+        description: Calendar year of the reference period.
+
+
+
+      - name: qty
+        description: Reported trade quantity in source units.
+
+      - name: mot_code
+        description: Source mode-of-transport code.
+
+      - name: partner2_code
+        description: Optional secondary partner code from source.
+
+      - name: cmd_code
+        description: Commodity code at the source grain (HS hierarchy).
+        tests:
+          - not_null
+
+      - name: commodity_name_raw
+        description: Raw commodity description as provided by the source.
+
+      - name: trade_flow
+        description: Source trade flow label, for example Import or Export.
+        tests:
+          - not_null
+
+      - name: trade_value_usd
+        description: Trade value in current USD.
+        tests:
+          - not_null
+
+      - name: net_weight_kg
+        description: Net traded weight in kilograms.
+
+      - name: gross_weight_kg
+        description: Gross traded weight in kilograms.
+
+  - name: stg_comtrade_trade_base
+    description: >
+      Canonical cleaned Comtrade trade base at reporter-partner-commodity-month-flow grain.
+      Applies naming cleanup, type casts, month standardization, exact-row deduplication,
+      and stable canonical grain key generation for downstream facts and provenance.
+    columns:
+      - name: canonical_grain_key
+        description: Stable hashed key for reporter-partner-commodity-month-flow used to join the canonical fact back to provenance.
+        tests:
+          - not_null
+
+      - name: ref_date
+        description: First day of the reference month as a date.
+        tests:
+          - not_null
+
+      - name: period
+        description: Integer month key in YYYYMM format.
+        tests:
+          - not_null
+
+      - name: year_month
+        description: Canonical month key in YYYY-MM format.
+        tests:
+          - not_null
+
+      - name: ref_year
+        description: Calendar year of the reference period.
+
+
+
+      - name: cmd_code
+        description: Commodity code at source commodity grain.
+        tests:
+          - not_null
+
+      - name: commodity_name_raw
+        description: Raw commodity description as provided by source.
+
+      - name: trade_flow
+        description: Standardized trade flow label.
+        tests:
+          - not_null
+
+      - name: trade_value_usd
+        description: Trade value in current USD.
+        tests:
+          - not_null
+
+      - name: net_weight_kg
+        description: Net traded weight in kilograms.
+
+      - name: gross_weight_kg
+        description: Gross traded weight in kilograms.
+
+      - name: qty
+        description: Reported trade quantity in source units.
+
+      - name: mot_code
+        description: Source mode-of-transport code.
+
+      - name: partner2_code
+        description: Optional secondary partner code from source.
+
+  - name: stg_dim_commodity
+    description: Commodity dimension standardized from Comtrade source metadata, with one canonical row retained per commodity code when source descriptions are duplicated.
+    columns:
+      - name: cmd_code
+        description: Commodity code used as the primary commodity key.
+        tests:
+          - not_null
+          - unique
+
+      - name: hs2
+        description: Two-digit HS chapter code.
+
+      - name: hs4
+        description: Four-digit HS heading code.
+
+      - name: hs6
+        description: Six-digit HS subheading code.
+
+      - name: commodity_name
+        description: Normalized commodity description.
+
+      - name: commodity_group
+        description: Higher-level commodity grouping used in analysis.
+
+      - name: food_flag
+        description: True when the commodity is classified as food-related.
+
+      - name: energy_flag
+        description: True when the commodity is classified as energy-related.
+
+      - name: industrial_flag
+        description: True when the commodity is classified as industrial-related.
+
+  - name: stg_dim_country
+    description: Country dimension with canonical ISO3/name cleanup, region tags, analytical membership flags, and country-map eligibility.
+    columns:
+      - name: country_code
+        description: Numeric country code used by the source system.
+        tests:
+          - not_null
+
+
+
+      - name: country_name
+        description: Canonical display name of the country for BI labels and Looker Studio country geography.
+
+      - name: region
+        description: Source-provided geographic region.
+
+      - name: subregion
+        description: Source-provided geographic subregion.
+
+      - name: continent
+        description: Continent label used in dimensional rollups.
+
+      - name: is_eu
+        description: True when the country is part of the European Union.
+
+      - name: is_oecd
+        description: True when the country is part of the OECD.
+
+      - name: is_country_group
+        description: True when the row is an aggregate, group, world, or special geography bucket rather than a renderable country.
+
+      - name: is_country_map_eligible
+        description: True when the row is a canonical country suitable for Looker Studio Geo Country rendering.
+
+  - name: stg_reporters
+    description: Seed-backed Comtrade reporter metadata cleaned for ISO joins, current/historical status handling, and Looker Studio country map compatibility.
+    columns:
+      - name: reporter_code
+        description: Numeric Comtrade reporter code from the metadata seed.
+        tests:
+          - not_null
+
+      - name: country_name_raw
+        description: Raw reporter description from Comtrade metadata before Looker-specific display cleanup.
+        tests:
+          - not_null
+
+      - name: country_name_looker
+        description: Looker-safe country display name derived from the raw reporter description and ISO3 code.
+        tests:
+          - not_null
+
+      - name: country_iso2
+        description: Preferred ISO2 country code for filled-map rendering in Looker Studio.
+
+      - name: country_iso3
+        description: Canonical ISO3 code retained for analytical joins and mart relationships.
+        tests:
+          - not_null
+
+      - name: is_group
+        description: True when the Comtrade reporter row represents an aggregate or pseudo geography rather than a country.
+
+      - name: is_current
+        description: True when the reporter row is not expired as of the dbt run date.
+
+      - name: is_map_eligible
+        description: True when the reporter row is a current non-group country with usable ISO2 and ISO3 codes for Looker Studio country maps.
+
+  - name: stg_dim_time
+    description: >
+      Canonical monthly time dimension generated in dbt from the observed month
+      coverage of trade, PortWatch, Brent, FX, energy, and event sources, with
+      configurable lead and lag month buffers.
+    columns:
+      - name: period
+        description: Integer month key in YYYYMM format.
+        tests:
+          - not_null
+          - unique
+
+      - name: year
+        description: Calendar year as integer.
+
+      - name: month
+        description: Calendar month number from 1 to 12.
+
+      - name: quarter
+        description: Calendar quarter number from 1 to 4.
+
+      - name: year_month
+        description: Canonical month label in YYYY-MM format.
+        tests:
+          - not_null
+          - unique
+
+      - name: month_start_date
+        description: First calendar day of the month generated for the conformed monthly calendar.
+
+  - name: stg_dim_trade_flow
+    description: Trade flow dimension standardized from Comtrade metadata.
+    columns:
+      - name: flow_code
+        description: Short code for trade flow type.
+        tests:
+          - not_null
+
+      - name: flow_desc
+        description: Human-readable trade flow description.
+
+      - name: flow_group
+        description: Group label for related trade flow codes.
+
+  - name: stg_dim_chokepoint
+    description: Routing-backed chokepoint staging model carrying chokepoint points, circular zones of influence, and BigQuery geography conversions.
+    columns:
+      - name: chokepoint_id
+        description: Stable hashed chokepoint identifier derived from the chokepoint name.
+        tests:
+          - not_null
+
+      - name: chokepoint_name
+        description: Business-readable chokepoint name.
+        tests:
+          - not_null
+
+      - name: chokepoint_kind
+        description: Routing classification for the chokepoint, such as canal, strait, or cape.
+
+      - name: longitude
+        description: Chokepoint longitude in decimal degrees.
+
+      - name: latitude
+        description: Chokepoint latitude in decimal degrees.
+
+      - name: zone_of_influence_radius_m
+        description: Radius in meters used to build the chokepoint zone-of-influence polygon.
+
+      - name: chokepoint_point_wkb
+        description: WKB-encoded point geometry for the chokepoint centroid.
+
+      - name: zone_of_influence_wkb
+        description: WKB-encoded polygon representing the chokepoint zone of influence.
+
+      - name: chokepoint_point_geog
+        description: BigQuery geography created from the chokepoint point WKB when the target is BigQuery.
+
+      - name: zone_of_influence_geog
+        description: BigQuery geography created from the chokepoint zone-of-influence WKB when the target is BigQuery.
+
+      - name: geo_point
+        description: BigQuery point geography created from longitude and latitude for GIS usage while preserving the numeric coordinates.
+
+  - name: stg_dim_country_ports
+    description: Routing-backed port staging model carrying selected country ports and point geography for map joins.
+    columns:
+      - name: port_id
+        description: Stable hashed identifier for the selected port within its country context.
+        tests:
+          - not_null
+
+      - name: iso3
+        description: ISO3 code for the country that owns the selected port row.
+        tests:
+          - not_null
+
+      - name: port_name
+        description: Business-readable port name used by the routing engine.
+        tests:
+          - not_null
+
+      - name: longitude
+        description: Port longitude in decimal degrees.
+
+      - name: latitude
+        description: Port latitude in decimal degrees.
+
+      - name: harbor_size
+        description: World Port Index harbor size classification.
+
+      - name: port_score
+        description: Routing score derived from harbor size and facilities.
+
+      - name: port_rank
+        description: Country-level rank for the retained selected port set.
+
+      - name: port_point_wkb
+        description: WKB-encoded point geometry for the port location.
+
+      - name: port_point_geog
+        description: BigQuery geography created from the port point WKB when the target is BigQuery.
+
+      - name: geo_point
+        description: BigQuery point geography created from longitude and latitude for GIS usage while preserving the numeric coordinates.
+
+  - name: stg_dim_trade_route_geography
+    description: Route-level staging model that converts exported route WKB into BigQuery geography without changing the canonical routing outputs.
+    columns:
+      - name: trade_route_id
+        description: Stable hashed identifier for a reporter-partner-partner2-scenario route row.
+        tests:
+          - not_null
+
+      - name: reporter_iso3
+        description: Reporter ISO3 code for the route row.
+        tests:
+          - not_null
+
+      - name: partner_iso3
+        description: Partner ISO3 code for the route row.
+        tests:
+          - not_null
+
+      - name: route_scenario
+        description: Routing scenario label used to generate the route.
+
+      - name: route_path_wkb
+        description: WKB-encoded linestring for the routed maritime path.
+
+      - name: route_path_geog
+        description: BigQuery geography created from the route path WKB when the target is BigQuery.
+
+  - name: stg_route_applicability
+    description: Route applicability bridge for reporter-partner pairs.
+    columns:
+
+
+      - name: row_count
+        description: Number of source records represented by the bridge row.
+
+      - name: trade_value_usd
+        description: Total trade value represented by the bridge row in current USD.
+
+      - name: has_sea
+        description: True when at least one sea route mode is observed.
+
+      - name: has_inland_water
+        description: True when inland waterway mode is observed.
+
+      - name: has_unknown
+        description: True when the mode-of-transport code includes unknown values.
+
+  - name: stg_energy_vulnerability
+    description: >
+      Standardized long-format World Bank energy vulnerability indicators at
+      reporter-year-indicator grain.
+    columns:
+
+
+      - name: year
+        description: Calendar year of the annual indicator value.
+        tests:
+          - not_null
+
+      - name: period
+        description: Synthetic compatibility period as YYYY01 for annual indicators.
+
+      - name: year_month
+        description: Synthetic compatibility month label as YYYY-01 for annual indicators.
+        tests:
+          - not_null
+
+      - name: indicator_code
+        description: Normalized indicator code used for long-format analytics joins.
+        tests:
+          - not_null
+
+      - name: indicator_value
+        description: Numeric indicator value; may be null when source has missing observations.
+
+      - name: grain_key
+        description: Surrogate grain key for reporter + year + indicator_code.
+        tests:
+          - not_null
+
+      - name: has_non_marine
+        description: True when non-marine transport modes are present.
+
+      - name: mot_codes_seen
+        description: Encoded list of mode-of-transport codes seen for the pair.
+
+      - name: route_applicability_status
+        description: Derived status describing route applicability for the pair.
+
+  - name: stg_chokepoint_bridge
+    description: Event-month chokepoint bridge with activity flags.
+    columns:
+      - name: event_id
+        description: Stable identifier for the event record.
+        tests:
+          - not_null
+
+      - name: event_name
+        description: Name of the event associated with the chokepoint.
+
+      - name: year_month
+        description: Canonical month key in YYYY-MM format.
+        tests:
+          - not_null
+
+      - name: month_start_date
+        description: First calendar day of the event month.
+
+      - name: chokepoint_name
+        description: Name of the affected maritime chokepoint.
+
+      - name: event_phase
+        description: Lifecycle phase of the event for the month.
+
+      - name: is_event_active
+        description: True when the event is active in the month.
+
+      - name: is_lead_period
+        description: True when the row belongs to the event lead window.
+
+      - name: is_lag_period
+        description: True when the row belongs to the event lag window.
+
+      - name: severity_weight
+        description: Numeric event severity weight used in exposure calculations.
+
+      - name: is_global_event
+        description: True when the event is treated as globally scoped.
+
+      - name: event_type
+        description: Event taxonomy label.
+
+      - name: event_scope
+        description: Scope label indicating geographic or analytical reach.
+
+      - name: link_role
+        description: Relationship role between event and chokepoint.
+
+  - name: stg_portwatch_stress_metrics
+    description: >
+      Canonical PortWatch stress metrics model derived in dbt from the raw monthly
+      PortWatch fact. Produces expanding point-in-time component z-scores and
+      stress indices, plus rolling 6-month companion metrics for short-horizon
+      monitoring. Backfills automatically change forward-looking rows because the
+      expanding and rolling windows are rebuilt from the raw monthly history.
+    columns:
+      - name: chokepoint_id
+        description: Canonical analytics chokepoint identifier derived from chokepoint_name for consistent joins to event and exposure marts.
+        tests:
+          - not_null
+
+      - name: portwatch_source_chokepoint_id
+        description: Source PortWatch chokepoint identifier carried through from the raw monthly fact for lineage and backfill audits.
+        tests:
+          - not_null
+
+      - name: year_month
+        description: Canonical month key in YYYY-MM format.
+        tests:
+          - not_null
+
+      - name: month_start_date
+        description: First calendar day of the month.
+
+      - name: avg_n_total
+        description: Monthly traffic count intensity from PortWatch.
+
+      - name: avg_capacity
+        description: Monthly throughput proxy from PortWatch.
+
+      - name: z_score_capacity
+        description: Expanding point-in-time z-score for throughput.
+
+      - name: z_score_count
+        description: Expanding point-in-time z-score for traffic count.
+
+      - name: z_score_vessel_size
+        description: Expanding point-in-time z-score for capacity-per-movement.
+
+      - name: stress_index
+        description: Expanding blended stress index computed as 0.5 * z_score_count + 0.5 * z_score_capacity.
+
+      - name: stress_index_weighted
+        description: Expanding stress index weighted by the chokepoint-specific priority vessel share.
+
+      - name: stress_index_rolling_6m
+        description: Rolling 6-month blended stress index using only prior calendar months.
+
+      - name: stress_index_weighted_rolling_6m
+        description: Rolling 6-month weighted stress index using the same vessel-share weighting logic.
+
+  - name: stg_chokepoint_stress_zscore
+    description: >
+      Compatibility projection over stg_portwatch_stress_metrics.
+      Exposes the expanding point-in-time component z-scores used by event-impact
+      analytics while keeping the existing model interface stable.
+    columns:
+      - name: chokepoint_id
+        description: Stable chokepoint identifier derived from the raw monthly PortWatch fact.
+        tests:
+          - not_null
+
+      - name: year_month
+        description: Canonical month key in YYYY-MM format.
+        tests:
+          - not_null
+
+      - name: throughput
+        description: Monthly throughput proxy sourced from PortWatch avg_capacity.
+
+      - name: mean_throughput
+        description: Expanding point-in-time baseline mean throughput by chokepoint using prior months only.
+
+      - name: stddev_throughput
+        description: Expanding point-in-time population standard deviation of throughput by chokepoint using prior months only.
+
+      - name: z_score
+        description: Expanding point-in-time throughput z-score computed as (throughput - mean_throughput) / stddev_throughput.
+
+      - name: z_score_capacity
+        description: Capacity-based z-score alias for throughput signal, computed with the same expanding point-in-time baseline as z_score.
+
+      - name: avg_n_total
+        description: Monthly traffic count intensity from PortWatch avg_n_total.
+
+      - name: z_score_count
+        description: Expanding point-in-time count-based z-score computed from prior months only.
+
+      - name: vessel_size_index
+        description: Capacity-per-movement indicator computed as throughput / avg_n_total with safe zero handling.
+
+      - name: z_score_vessel_size
+        description: Expanding point-in-time z-score of vessel_size_index over prior months only.

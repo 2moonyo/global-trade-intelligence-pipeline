@@ -8,7 +8,7 @@ TFVARS_PATH="${TF_DIR}/terraform.tfvars.json"
 ENV_FILE="${PROJECT_ROOT}/.env"
 
 DEFAULT_BRANCH="$(git -C "${PROJECT_ROOT}" branch --show-current 2>/dev/null || true)"
-DEFAULT_BRANCH="${DEFAULT_BRANCH:-cloud_migration}"
+DEFAULT_BRANCH="${DEFAULT_BRANCH:-main}"
 
 TRANSFER_METHOD="copy"
 BRANCH="${DEFAULT_BRANCH}"

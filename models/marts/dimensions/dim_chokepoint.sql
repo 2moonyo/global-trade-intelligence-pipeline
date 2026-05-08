@@ -47,6 +47,13 @@ portwatch_chokepoints as (
   from {{ ref('stg_portwatch_stress_metrics') }}
   where {{ clean_label_text('chokepoint_name') }} is not null
 ),
+portwatch_daily_chokepoints as (
+  select distinct
+    chokepoint_id,
+    chokepoint_name
+  from {{ ref('stg_portwatch_daily') }}
+  where {{ clean_label_text('chokepoint_name') }} is not null
+),
 base as (
   select
     c.chokepoint_id,
@@ -61,6 +68,8 @@ base as (
     select chokepoint_id, chokepoint_name from event_chokepoints
     union distinct
     select chokepoint_id, chokepoint_name from portwatch_chokepoints
+    union distinct
+    select chokepoint_id, chokepoint_name from portwatch_daily_chokepoints
   ) as c
   left join portwatch_chokepoints as p
     on c.chokepoint_id = p.chokepoint_id

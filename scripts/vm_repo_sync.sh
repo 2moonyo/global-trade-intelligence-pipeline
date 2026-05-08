@@ -16,7 +16,7 @@ Optional:
   --ssh-key-path PATH             Local private SSH key path (default: use ssh agent/default keys)
   --vm-repo-dir PATH              Repo directory on VM (default: /var/lib/pipeline/capstone)
   --repo-url URL                  Git remote URL used when repo is first initialized
-  --branch NAME                   Preferred branch to checkout/pull (default: cloud_migration)
+  --branch NAME                   Preferred branch to checkout/pull (default: main)
   --commit SHA                    Optional commit SHA to checkout (detached HEAD)
   --help                          Show this help
 
@@ -32,7 +32,7 @@ VM_HOST=""
 SSH_KEY_PATH=""
 VM_REPO_DIR="/var/lib/pipeline/capstone"
 REPO_URL=""
-BRANCH="cloud_migration"
+BRANCH="main"
 COMMIT_SHA=""
 
 while [[ $# -gt 0 ]]; do
@@ -144,16 +144,16 @@ else
 
   if git ls-remote --exit-code --heads origin "\$BRANCH" >/dev/null 2>&1; then
     git checkout "\$BRANCH" 2>/dev/null || git checkout -B "\$BRANCH" "origin/\$BRANCH"
-    git pull --ff-only origin "\$BRANCH"
+    git reset --hard "origin/\$BRANCH"
+  elif git ls-remote --exit-code --heads origin main >/dev/null 2>&1; then
+    git checkout main 2>/dev/null || git checkout -B main origin/main
+    git reset --hard origin/main
+  elif git ls-remote --exit-code --heads origin master >/dev/null 2>&1; then
+    git checkout master 2>/dev/null || git checkout -B master origin/master
+    git reset --hard origin/master
   else
-    CURRENT_BRANCH="\$(git branch --show-current || true)"
-    if [[ -n "\$CURRENT_BRANCH" ]]; then
-      git checkout "\$CURRENT_BRANCH"
-      git pull --ff-only origin "\$CURRENT_BRANCH"
-    else
-      echo "Error: Preferred branch '\$BRANCH' not found and current branch is unknown." >&2
-      exit 2
-    fi
+    echo "Error: Could not find branch '\$BRANCH', 'main', or 'master' on origin." >&2
+    exit 2
   fi
 fi
 

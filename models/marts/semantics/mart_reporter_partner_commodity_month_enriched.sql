@@ -51,7 +51,7 @@ aggregated_trade as (
 with_chokepoint_id as (
   select
     a.*,
-    dc.chokepoint_id
+    coalesce(dc.chokepoint_id, {{ canonical_chokepoint_id('a.chokepoint_name') }}) as chokepoint_id
   from aggregated_trade as a
   left join {{ ref('dim_chokepoint') }} as dc
     on a.chokepoint_name = dc.chokepoint_name
